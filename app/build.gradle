@@ -77,7 +77,7 @@ def validateReleaseSigning = tasks.register('validateReleaseSigning') {
     description = 'Checks that release signing credentials are supplied outside the repository.'
     doLast {
         if (!hasReleaseSigning) {
-            throw new GradleException('Release signing is not configured. Copy keystore.properties.example to keystore.properties and fill it locally, or set the STAR_JOURNEY_* environment variables.')
+            throw new GradleException('Release signing is not configured. Supply a local keystore.properties file or set the STAR_JOURNEY_* environment variables.')
         }
         File keystore = rootProject.file(releaseStoreFile)
         if (!keystore.isFile()) {
