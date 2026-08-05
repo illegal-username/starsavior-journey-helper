@@ -40,20 +40,7 @@
 ## 공개 저장소와 여정 데이터
 
 실제 여정 JSON은 이 저장소와 GitHub 소스 압축 파일에 포함하지 않습니다. 저장소에는 실제 게임 정보가 아닌 `journey_choices.example.json`만 있으며, 공개 소스 빌드는 이 예제 DB로 시작합니다. 앱에서 DB 업데이트를 실행하면 호환되는 최신 데이터를 내려받을 수 있습니다.
-
-운영 APK에 DB를 내장하려면 저장소에 커밋하지 않은 상태에서 다음 중 하나를 사용합니다.
-
-```bash
-node tools/generate_journey_data.mjs
-```
-
-또는 허가받은 JSON을 다음 위치에 복사합니다.
-
-```text
-app/src/main/assets/journey_choices.json
-```
-
-이 경로는 `.gitignore`에 포함됩니다. 데이터의 권리와 허가 범위는 [DATA_NOTICE.md](DATA_NOTICE.md)를 확인해 주세요.
+실제 데이터의 권리와 허가 범위는 [DATA_NOTICE.md](DATA_NOTICE.md)를 확인해 주세요.
 
 ## 개발 빌드
 
@@ -61,7 +48,6 @@ app/src/main/assets/journey_choices.json
 
 - JDK 17
 - Android SDK 35
-- Node.js 18 이상(실제 DB 생성 시에만 필요)
 
 ```bash
 ./gradlew testDebugUnitTest lintRelease assembleDebug
@@ -70,16 +56,9 @@ python3 tools/check_public_source.py
 
 Debug APK는 Android의 표준 debug 키로 서명됩니다. 공개 배포용으로 사용하지 마세요.
 
-## 운영 서명
+## 공식 배포본
 
-운영 키와 비밀번호는 저장소에 존재하지 않습니다. `keystore.properties.example`을 `keystore.properties`로 복사하고, 프로젝트 밖에 보관한 운영 키 경로와 비밀번호를 로컬에서만 입력합니다.
-
-```bash
-cp keystore.properties.example keystore.properties
-./gradlew assembleRelease
-```
-
-서명 설정이 없거나 키 파일을 찾을 수 없으면 release 빌드는 의도적으로 실패합니다. 자세한 키 생성·검증·배포 과정은 [docs/RELEASING.md](docs/RELEASING.md)를 따르세요.
+공식 APK는 유지관리자가 별도로 보관하는 고정 운영 키로 서명합니다. 개인키와 비밀번호는 이 저장소, GitHub Actions, 배포 파일에 포함하지 않습니다. 공식 앱 ID와 공개 서명 인증서 지문은 [SECURITY.md](SECURITY.md)에서 확인할 수 있습니다.
 
 ## 저장소 구성
 
