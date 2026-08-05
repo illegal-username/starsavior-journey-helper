@@ -1,0 +1,93 @@
+plugins {
+    id 'com.android.application'
+}
+
+def signingPropertiesFile = rootProject.file('keystore.properties')
+def signingProperties = new Properties()
+if (signingPropertiesFile.isFile()) {
+    signingPropertiesFile.withInputStream { signingProperties.load(it) }
+}
+
+def releaseStoreFile = signingProperties.getProperty('storeFile') ?: System.getenv('STAR_JOURNEY_KEYSTORE')
+def releaseStorePassword = signingProperties.getProperty('storePassword') ?: System.getenv('STAR_JOURNEY_STORE_PASSWORD')
+def releaseKeyAlias = signingProperties.getProperty('keyAlias') ?: System.getenv('STAR_JOURNEY_KEY_ALIAS')
+def releaseKeyPassword = signingProperties.getProperty('keyPassword') ?: System.getenv('STAR_JOURNEY_KEY_PASSWORD')
+def hasReleaseSigning = [releaseStoreFile, releaseStorePassword, releaseKeyAlias, releaseKeyPassword]
+        .every { it != null && !it.trim().isEmpty() }
+
+android {
+    namespace 'helper.journey.starsavior'
+    compileSdk 35
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile rootProject.file(releaseStoreFile)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
+
+    defaultConfig {
+        applicationId 'helper.journey.starsavior'
+        minSdk 26
+        targetSdk 35
+        versionCode 8
+        versionName '2.0.0'
+
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+    }
+
+    buildTypes {
+        release {
+            if (hasReleaseSigning) signingConfig signingConfigs.release
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    packaging {
+        resources {
+            excludes += ['/META-INF/{AL2.0,LGPL2.1}']
+        }
+    }
+}
+
+dependencies {
+    // The Korean OCR model is bundled: recognition works offline on first run.
+    implementation 'com.google.mlkit:text-recognition-korean:16.0.1'
+
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.json:json:20240303'
+}
+
+def validateReleaseSigning = tasks.register('validateReleaseSigning') {
+    group = 'verification'
+    description = 'Checks that release signing credentials are supplied outside the repository.'
+    doLast {
+        if (!hasReleaseSigning) {
+            throw new GradleException('Release signing is not configured. Copy keystore.properties.example to keystore.properties and fill it locally, or set the STAR_JOURNEY_* environment variables.')
+        }
+        File keystore = rootProject.file(releaseStoreFile)
+        if (!keystore.isFile()) {
+            throw new GradleException("Release keystore does not exist: ${keystore}")
+        }
+    }
+}
+
+tasks.configureEach { task ->
+    if (task.name in ['assembleRelease', 'packageRelease', 'bundleRelease', 'signReleaseBundle']) {
+        task.dependsOn(validateReleaseSigning)
+    }
+}

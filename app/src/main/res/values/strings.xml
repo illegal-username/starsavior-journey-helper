@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">스세 여정 도우미</string>
+    <string name="notification_channel">여정 선택지 화면 읽기</string>
+    <string name="source_code_url">https://github.com/illegal-username/starsavior-journey-helper</string>
+</resources>

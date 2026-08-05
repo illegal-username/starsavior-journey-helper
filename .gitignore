@@ -1,0 +1,18 @@
+.gradle/
+.idea/
+local.properties
+**/build/
+
+# Release signing material must stay outside Git.
+/signing/
+/keystore.properties
+*.jks
+*.keystore
+*.p12
+
+# The real journey database is generated or copied locally before a private release build.
+/app/src/main/assets/journey_choices.json
+
+# Distributable binaries are published separately from the source repository.
+*.apk
+*.aab

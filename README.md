@@ -1,0 +1,97 @@
+# 스세 여정 도우미
+
+스타 세이비어의 여정 선택지 화면을 기기 안에서 OCR로 읽고, 이벤트명에 맞는 조건·성공 보상·실패 효과를 플로팅 결과창으로 보여 주는 비공식 Android 앱입니다.
+
+- 앱 ID: `helper.journey.starsavior`
+- 공개판 버전: `2.0.0`
+- 최소 Android: 8.0 (API 26)
+- 패킷 감시·VPN·접근성 서비스·광고 SDK·자체 사용자 추적 서버 없음
+- 화면 이미지와 OCR 결과를 저장하거나 전송하지 않음
+
+개인정보와 권한 처리에 관한 자세한 내용은 [PRIVACY.md](PRIVACY.md)를 확인해 주세요.
+
+## 기존 시험판에서 전환
+
+1.1.0 이하 시험판은 앱 ID와 서명 체계가 다르므로 2.0.0으로 덮어쓸 수 없습니다. 기존 플로팅 아이콘을 종료하고 이전 앱을 삭제한 뒤 새 공개판을 설치해야 합니다. 오버레이·알림·화면 공유 권한도 다시 허용해야 합니다.
+
+## 사용법
+
+1. 앱을 열고 `권한 설정하고 시작`을 누릅니다.
+2. `다른 앱 위에 표시`를 허용합니다.
+3. Android 화면 공유 창에서 가능하면 `앱 하나 → 스타 세이비어`를 선택합니다.
+4. 여정 선택지가 완전히 나타난 뒤 `✦` 아이콘을 누릅니다.
+5. 결과창은 `✦`를 다시 누르거나 `×`를 누를 때까지 유지됩니다.
+6. `✦`를 길게 누르면 DB 업데이트 또는 도우미 종료 메뉴가 열립니다.
+
+화면을 잠가 Android가 화면 공유를 종료하더라도 플로팅 아이콘은 유지됩니다. 회색 아이콘을 누르고 시스템 화면 공유를 다시 허용하면 됩니다.
+
+## 권한
+
+| 권한·기능 | 사용 목적 |
+| --- | --- |
+| 다른 앱 위에 표시 | 플로팅 아이콘과 결과창 |
+| MediaProjection | 사용자가 누른 시점의 화면 한 프레임 OCR |
+| 포그라운드 서비스·알림 | 화면 공유와 플로팅 아이콘 상태 유지 |
+| 인터넷 | 사용자가 실행한 DB 업데이트의 HTTPS 요청 및 ML Kit SDK 통신 가능성(아래 개인정보 안내 참조) |
+| 특정 앱 조회 | 스타 세이비어 실행 버튼 제공 |
+
+저장소·카메라·마이크·연락처·계정 권한은 요청하지 않습니다.
+
+## 공개 저장소와 여정 데이터
+
+실제 여정 JSON은 이 저장소와 GitHub 소스 압축 파일에 포함하지 않습니다. 저장소에는 실제 게임 정보가 아닌 `journey_choices.example.json`만 있으며, 공개 소스 빌드는 이 예제 DB로 시작합니다. 앱에서 DB 업데이트를 실행하면 호환되는 최신 데이터를 내려받을 수 있습니다.
+
+운영 APK에 DB를 내장하려면 저장소에 커밋하지 않은 상태에서 다음 중 하나를 사용합니다.
+
+```bash
+node tools/generate_journey_data.mjs
+```
+
+또는 허가받은 JSON을 다음 위치에 복사합니다.
+
+```text
+app/src/main/assets/journey_choices.json
+```
+
+이 경로는 `.gitignore`에 포함됩니다. 데이터의 권리와 허가 범위는 [DATA_NOTICE.md](DATA_NOTICE.md)를 확인해 주세요.
+
+## 개발 빌드
+
+필요 환경:
+
+- JDK 17
+- Android SDK 35
+- Node.js 18 이상(실제 DB 생성 시에만 필요)
+
+```bash
+./gradlew testDebugUnitTest lintRelease assembleDebug
+python3 tools/check_public_source.py
+```
+
+Debug APK는 Android의 표준 debug 키로 서명됩니다. 공개 배포용으로 사용하지 마세요.
+
+## 운영 서명
+
+운영 키와 비밀번호는 저장소에 존재하지 않습니다. `keystore.properties.example`을 `keystore.properties`로 복사하고, 프로젝트 밖에 보관한 운영 키 경로와 비밀번호를 로컬에서만 입력합니다.
+
+```bash
+cp keystore.properties.example keystore.properties
+./gradlew assembleRelease
+```
+
+서명 설정이 없거나 키 파일을 찾을 수 없으면 release 빌드는 의도적으로 실패합니다. 자세한 키 생성·검증·배포 과정은 [docs/RELEASING.md](docs/RELEASING.md)를 따르세요.
+
+## 저장소 구성
+
+- [PRIVACY.md](PRIVACY.md): 개인정보·화면·네트워크 처리
+- [DATA_NOTICE.md](DATA_NOTICE.md): 여정 DB와 게임 콘텐츠 권리
+- [SECURITY.md](SECURITY.md): 공식 APK 확인과 보안 제보
+- [CONTRIBUTING.md](CONTRIBUTING.md): 기여 시 금지 항목과 검사
+- [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md): 외부 구성요소 고지
+- [CHANGELOG.md](CHANGELOG.md): 변경 기록
+
+## 라이선스와 고지
+
+앱 소스는 [MIT License](LICENSE)로 공개됩니다. 실제 여정 DB, 스타 세이비어의 명칭·텍스트·이미지·게임 데이터에는 이 라이선스가 적용되지 않습니다.
+
+이 프로젝트는 비공식 팬 도우미이며 STUDIOBSIDE 또는 원자료 사이트와 제휴·보증 관계가 없습니다.

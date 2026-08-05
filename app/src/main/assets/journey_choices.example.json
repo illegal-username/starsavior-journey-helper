@@ -1,0 +1,47 @@
+{
+  "schema": 2,
+  "generatedAt": "2026-08-05T00:00:00Z",
+  "source": "public-example",
+  "upstreamRevision": "",
+  "notice": "공개 소스 빌드를 위한 가상 예제입니다. 실제 게임 데이터가 아닙니다.",
+  "recordCount": 2,
+  "choiceCount": 4,
+  "records": [
+    {
+      "event": "공개 예제 - 아침",
+      "context": "가상 테스트 데이터",
+      "choices": [
+        {
+          "text": "첫 번째 예제 선택",
+          "outcomes": [
+            {"label": "", "condition": "", "success": "예제 효과 A", "failure": ""}
+          ]
+        },
+        {
+          "text": "두 번째 예제 선택",
+          "outcomes": [
+            {"label": "", "condition": "", "success": "예제 효과 B", "failure": ""}
+          ]
+        }
+      ]
+    },
+    {
+      "event": "공개 예제 - 저녁",
+      "context": "가상 테스트 데이터",
+      "choices": [
+        {
+          "text": "첫 번째 예제 선택",
+          "outcomes": [
+            {"label": "", "condition": "", "success": "예제 효과 C", "failure": ""}
+          ]
+        },
+        {
+          "text": "두 번째 예제 선택",
+          "outcomes": [
+            {"label": "", "condition": "", "success": "예제 효과 D", "failure": ""}
+          ]
+        }
+      ]
+    }
+  ]
+}
