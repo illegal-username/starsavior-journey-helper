@@ -85,6 +85,47 @@ public class JourneyDataTransformerTest {
     }
 
     @Test
+    public void keepsPotentialDiscountAndDescriptionTogether() throws Exception {
+        Map<String, String> documents = new LinkedHashMap<>();
+        documents.put("journeys.json", """
+                {"merchant":[{"name":{"ko-KR":"정체불명의 상인"},"choices":[
+                  {"name":{"ko-KR":"공격 비술서"},"condition":null,
+                   "success_rewards":[[
+                     {"type":"RT_SE_POTEN","reward_id":21001,"min":1,"max":1},
+                     {"type":"RT_SE_POTEN","reward_id":21001,"min":2,"max":2}
+                   ]],"failure_rewards":null},
+                  {"name":{"ko-KR":"그냥 받기"},"condition":null,
+                   "success_rewards":[[{"type":"RT_SE_POTEN","reward_id":21002}]],
+                   "failure_rewards":null}
+                ]}]}
+                """);
+        documents.put("journey_items.json", "[]");
+        documents.put("potentials.json", """
+                [
+                  {"id":21001,"name":{"ko-KR":"공격의 솜씨"},
+                   "desc":{"ko-KR":"공격력이 2% 증가합니다."}},
+                  {"id":21002,"name":{"ko-KR":"생명의 솜씨"},
+                   "desc":{"ko-KR":"최대 생명력이 2% 증가합니다."}}
+                ]
+                """);
+        documents.put("stat_potentials.json", "[]");
+        documents.put("journey_buffs.json", "[]");
+        documents.put("arcanas.json", "[]");
+
+        JourneyModels.Data data = JourneyRepository.parse(JourneyDataTransformer.transform(
+                documents, "test", "2026-08-07T00:00:00Z"));
+        JourneyRepository.validate(data);
+
+        JourneyModels.Outcome discounted = data.events.get(0).choices.get(0).outcomes.get(0);
+        assertEquals("공격의 솜씨 10% 할인 (공격력이 2% 증가합니다.) 또는 "
+                + "공격의 솜씨 20% 할인 (공격력이 2% 증가합니다.)", discounted.success);
+
+        JourneyModels.Outcome granted = data.events.get(0).choices.get(1).outcomes.get(0);
+        assertEquals("생명의 솜씨 (최대 생명력이 2% 증가합니다.)", granted.success);
+        assertFalse(granted.success.contains("할인"));
+    }
+
+    @Test
     public void keepsDifferentEventTitlesWithSameChoicesSeparate() throws Exception {
         Map<String, String> documents = new LinkedHashMap<>();
         documents.put("journeys.json", """
@@ -109,7 +150,7 @@ public class JourneyDataTransformerTest {
                 documents, "test", "2026-08-03T00:00:00Z"));
         JourneyRepository.validate(data);
 
-        assertEquals(2, data.schema);
+        assertEquals(3, data.schema);
         assertEquals(2, data.recordCount);
         assertEquals(4, data.choiceCount);
         assertTrue(data.events.stream().anyMatch(event -> event.name.equals("공개 예제 - 아침")));

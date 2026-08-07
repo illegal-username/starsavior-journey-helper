@@ -161,7 +161,7 @@ final class JourneyDataTransformer {
         for (JSONObject record : records) recordArray.put(record);
 
         JSONObject result = new JSONObject()
-                .put("schema", 2)
+                .put("schema", 3)
                 .put("generatedAt", generatedAt == null ? "" : generatedAt)
                 .put("source", SOURCE)
                 .put("upstreamRevision", upstreamRevision == null ? "" : upstreamRevision)
@@ -321,7 +321,9 @@ final class JourneyDataTransformer {
                 case "RT_JOURNEY_BUFF_REMOVE_NEG": return "해로운 여정 버프 제거";
                 case "RT_JOURNEY_BUFF_REMOVE_POS": return "이로운 여정 버프 제거";
                 case "RT_JOURNEY_ITEM": return formatItem(reward.optLong("reward_id"));
-                case "RT_SE_POTEN": return formatPotential(potentials, reward.optLong("reward_id"));
+                case "RT_SE_POTEN":
+                    return formatPotential(potentials, reward.optLong("reward_id"),
+                            formatPotentialDiscount(reward));
                 case "RT_STAT_POTEN": return formatPotential(statPotentials, reward.optLong("reward_id"));
                 case "SELECTABLE_CHARM": return "여정 부적 선택";
                 default: return type.isEmpty() ? "알 수 없는 효과" : type + (value.isEmpty() ? "" : " " + value);
@@ -385,11 +387,34 @@ final class JourneyDataTransformer {
         }
 
         private String formatPotential(Map<Long, JSONObject> map, long id) {
+            return formatPotential(map, id, "");
+        }
+
+        private String formatPotential(Map<Long, JSONObject> map, long id, String discount) {
             JSONObject potential = map.get(id);
-            if (potential == null) return "잠재력 획득";
+            if (potential == null) return discount.isEmpty() ? "잠재력 획득" : "잠재력 " + discount;
             String name = local(potential.opt("name"));
             String description = clean(local(potential.opt("desc")));
-            return description.isEmpty() ? name : name + " (" + description + ")";
+            String heading = discount.isEmpty() ? name : name + " " + discount;
+            return description.isEmpty() ? heading : heading + " (" + description + ")";
+        }
+
+        private static String formatPotentialDiscount(JSONObject reward) {
+            Object minimum = reward.opt("min");
+            if (!(minimum instanceof Number)) return "";
+            Object maximum = reward.opt("max");
+            String minPercent = multipliedByTen((Number) minimum);
+            if (!(maximum instanceof Number) || numbersEqual((Number) minimum, (Number) maximum)) {
+                return minPercent + "% 할인";
+            }
+            return minPercent + "~" + multipliedByTen((Number) maximum) + "% 할인";
+        }
+
+        private static String multipliedByTen(Number value) {
+            return BigDecimal.valueOf(value.doubleValue())
+                    .multiply(BigDecimal.TEN)
+                    .stripTrailingZeros()
+                    .toPlainString();
         }
 
         private static Map<Long, JSONObject> byId(JSONArray values) {
