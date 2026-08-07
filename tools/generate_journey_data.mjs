@@ -119,11 +119,21 @@ function formatBuff(rewardId) {
     return detail ? `${local(buff.name)} (${detail})` : local(buff.name);
 }
 
-function formatPotential(map, rewardId) {
+function formatPotentialDiscount(reward) {
+    if (typeof reward?.min !== "number") return "";
+    const percent = (value) => Number((value * 10).toFixed(10)).toString();
+    const maximum = typeof reward.max === "number" ? reward.max : reward.min;
+    return reward.min === maximum
+        ? `${percent(reward.min)}% 할인`
+        : `${percent(reward.min)}~${percent(maximum)}% 할인`;
+}
+
+function formatPotential(map, rewardId, discount = "") {
     const potential = map.get(Number(rewardId));
-    if (!potential) return "잠재력 획득";
+    if (!potential) return discount ? `잠재력 ${discount}` : "잠재력 획득";
     const description = clean(local(potential.desc));
-    return description ? `${local(potential.name)} (${description})` : local(potential.name);
+    const heading = discount ? `${local(potential.name)} ${discount}` : local(potential.name);
+    return description ? `${heading} (${description})` : heading;
 }
 
 function formatReward(reward) {
@@ -152,7 +162,7 @@ function formatReward(reward) {
             return stats ? `${local(item.name)} (${stats})` : local(item.name);
         }
         case "RT_SE_POTEN":
-            return formatPotential(potentialMap, reward.reward_id);
+            return formatPotential(potentialMap, reward.reward_id, formatPotentialDiscount(reward));
         case "RT_STAT_POTEN":
             return formatPotential(statPotentialMap, reward.reward_id);
         case "SELECTABLE_CHARM":
@@ -271,7 +281,7 @@ for (const sources of grouped.values()) {
 records.sort((a, b) => a.event.localeCompare(b.event, "ko"));
 
 const result = {
-    schema: 2,
+    schema: 3,
     generatedAt: new Date().toISOString(),
     source: "https://star-savior-arcana-db.pages.dev/journey",
     notice: "비영리 팬 데이터베이스의 선택지/보상 정보를 가공했습니다. 게임 및 원자료의 권리는 각 권리자에게 있습니다.",
