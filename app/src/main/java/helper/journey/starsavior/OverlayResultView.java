@@ -23,8 +23,15 @@ final class OverlayResultView {
     private OverlayResultView() {}
 
     static View match(Context context, JourneyModels.Match match, Runnable closeAction) {
+        return match(context, match, "", null, closeAction);
+    }
+
+    static View match(Context context, JourneyModels.Match match, String difficulty,
+                      StaminaGaugeDetector.Result stamina, Runnable closeAction) {
         LinearLayout panel = panel(context);
         addHeader(context, panel, match.event.name, closeAction);
+
+        addJourneyStatus(context, panel, stamina);
 
         String detail = match.eventNameUsed
                 ? String.format(Locale.KOREA, "이벤트 %.0f%% · 선택지 %.0f%%",
@@ -44,6 +51,7 @@ final class OverlayResultView {
 
         for (int index = 0; index < match.event.choices.size(); index++) {
             JourneyModels.Choice choice = match.event.choices.get(index);
+            List<JourneyModels.Outcome> visibleOutcomes = choice.outcomesForDifficulty(difficulty);
             LinearLayout choiceCard = new LinearLayout(context);
             choiceCard.setOrientation(LinearLayout.VERTICAL);
             choiceCard.setPadding(Ui.dp(context, 13), Ui.dp(context, 11), Ui.dp(context, 13), Ui.dp(context, 11));
@@ -54,11 +62,19 @@ final class OverlayResultView {
             choiceTitle.setLineSpacing(0, 1.08f);
             choiceCard.addView(choiceTitle, new LinearLayout.LayoutParams(-1, -2));
 
-            for (int outcomeIndex = 0; outcomeIndex < choice.outcomes.size(); outcomeIndex++) {
-                JourneyModels.Outcome outcome = choice.outcomes.get(outcomeIndex);
-                if (choice.outcomes.size() > 1) {
+            if (visibleOutcomes.isEmpty()) {
+                TextView unavailable = Ui.text(context, "감지한 난이도의 결과 정보가 없습니다.", 12, Ui.MUTED);
+                choiceCard.addView(unavailable, margins(context, -1, -2, 0, 7, 0, 0));
+            }
+
+            for (int outcomeIndex = 0; outcomeIndex < visibleOutcomes.size(); outcomeIndex++) {
+                JourneyModels.Outcome outcome = visibleOutcomes.get(outcomeIndex);
+                if (visibleOutcomes.size() > 1) {
+                    String variantText = difficulty == null || difficulty.isEmpty()
+                            ? outcome.label.isEmpty() ? "가능 결과 " + (outcomeIndex + 1) : outcome.label
+                            : "가능 결과 " + (outcomeIndex + 1);
                     TextView variant = Ui.text(context,
-                            outcome.label.isEmpty() ? "가능 결과 " + (outcomeIndex + 1) : outcome.label,
+                            variantText,
                             11, Ui.ORANGE);
                     variant.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
                     choiceCard.addView(variant, margins(context, -1, -2, 0, 8, 0, 2));
@@ -72,6 +88,16 @@ final class OverlayResultView {
         }
 
         panel.addView(scroll, new LinearLayout.LayoutParams(-1, -2));
+        return wrap(context, panel);
+    }
+
+    static View stamina(Context context, StaminaGaugeDetector.Result stamina, Runnable closeAction) {
+        LinearLayout panel = panel(context);
+        addHeader(context, panel, "스태미나", closeAction);
+        addJourneyStatus(context, panel, stamina);
+        TextView hint = Ui.text(context,
+                "상단 게이지의 색 구간을 기준으로 계산한 추정값입니다.", 11, Ui.MUTED);
+        panel.addView(hint, margins(context, -1, -2, 0, 3, 0, 0));
         return wrap(context, panel);
     }
 
@@ -203,6 +229,28 @@ final class OverlayResultView {
         valueView.setLineSpacing(0, 1.13f);
         row.addView(valueView, margins(context, 0, -2, 8, 1, 0, 0, 1));
         parent.addView(row, margins(context, -1, -2, 0, 6, 0, 0));
+    }
+
+    private static void addJourneyStatus(Context context, LinearLayout panel,
+                                         StaminaGaugeDetector.Result stamina) {
+        StringBuilder text = new StringBuilder();
+        if (stamina != null) {
+            if (stamina.hasPreview()) {
+                text.append("행동 후 스태미나 : ")
+                        .append(stamina.current).append(" → ").append(stamina.after);
+            } else {
+                text.append("현재 스태미나 : ").append(stamina.current);
+            }
+        }
+        if (text.length() == 0) return;
+
+        TextView status = Ui.text(context, text.toString(), 13, Ui.GREEN);
+        status.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        status.setLineSpacing(0, 1.18f);
+        status.setPadding(Ui.dp(context, 11), Ui.dp(context, 9), Ui.dp(context, 11), Ui.dp(context, 9));
+        status.setBackground(Ui.roundedStroke(context, Color.argb(42, 86, 219, 171), 10,
+                Color.argb(105, 86, 219, 171), 1));
+        panel.addView(status, margins(context, -1, -2, 0, 3, 0, 9));
     }
 
     private static LinearLayout.LayoutParams margins(Context context, int width, int height,

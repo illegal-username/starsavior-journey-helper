@@ -99,7 +99,7 @@ final class JourneyDataTransformer {
                         : variants.length() > 1 ? "경우 " + (variantIndex + 1) : "";
                 String label = hint.isEmpty() ? event : event + " · " + hint;
                 addRecord(grouped, new RecordSource(
-                        event, "", choiceTexts, formatter.outcomes(rawChoices, label)));
+                        event, "", choiceTexts, formatter.outcomes(rawChoices, label, difficulty)));
             }
         }
 
@@ -117,7 +117,7 @@ final class JourneyDataTransformer {
                 String context = local(arcana.opt("char_name")) + " · " + local(arcana.opt("name"));
                 String label = event + " · " + context;
                 addRecord(grouped, new RecordSource(
-                        event, context, choiceTexts, formatter.outcomes(rawChoices, label)));
+                        event, context, choiceTexts, formatter.outcomes(rawChoices, label, "")));
             }
         }
 
@@ -161,7 +161,7 @@ final class JourneyDataTransformer {
         for (JSONObject record : records) recordArray.put(record);
 
         JSONObject result = new JSONObject()
-                .put("schema", 3)
+                .put("schema", 4)
                 .put("generatedAt", generatedAt == null ? "" : generatedAt)
                 .put("source", SOURCE)
                 .put("upstreamRevision", upstreamRevision == null ? "" : upstreamRevision)
@@ -267,18 +267,19 @@ final class JourneyDataTransformer {
             this.buffs = byId(buffs);
         }
 
-        List<OutcomeData> outcomes(JSONArray choices, String label) {
+        List<OutcomeData> outcomes(JSONArray choices, String label, String difficulty) {
             if (choices == null) return Collections.emptyList();
             List<OutcomeData> result = new ArrayList<>(choices.length());
             for (int index = 0; index < choices.length(); index++) {
                 JSONObject choice = choices.optJSONObject(index);
                 if (choice == null) {
-                    result.add(new OutcomeData(label, "", "효과 없음", ""));
+                    result.add(new OutcomeData(label, difficulty, "", "효과 없음", ""));
                     continue;
                 }
                 JSONArray failure = choice.optJSONArray("failure_rewards");
                 result.add(new OutcomeData(
                         label,
+                        difficulty,
                         formatCondition(choice.optJSONObject("condition")),
                         formatRewardGroups(choice.optJSONArray("success_rewards")),
                         failure == null || failure.length() == 0 ? "" : formatRewardGroups(failure)
@@ -458,24 +459,27 @@ final class JourneyDataTransformer {
 
     private static final class OutcomeData {
         final String label;
+        final String difficulty;
         final String condition;
         final String success;
         final String failure;
 
-        OutcomeData(String label, String condition, String success, String failure) {
+        OutcomeData(String label, String difficulty, String condition, String success, String failure) {
             this.label = label;
+            this.difficulty = difficulty;
             this.condition = condition;
             this.success = success;
             this.failure = failure;
         }
 
         String signature() {
-            return condition + "|" + success + "|" + failure;
+            return difficulty + "|" + condition + "|" + success + "|" + failure;
         }
 
         JSONObject toJson(String outputLabel) throws JSONException {
             return new JSONObject()
                     .put("label", outputLabel)
+                    .put("difficulty", difficulty)
                     .put("condition", condition)
                     .put("success", success)
                     .put("failure", failure);

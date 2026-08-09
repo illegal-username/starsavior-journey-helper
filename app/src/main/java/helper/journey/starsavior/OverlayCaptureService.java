@@ -83,6 +83,8 @@ public final class OverlayCaptureService extends Service {
     private boolean destroying;
     private Runnable captureTimeout;
     private long lastPermissionRequestAt;
+    private StaminaGaugeDetector.Anchor staminaAnchor;
+    private StaminaGaugeDetector.Result lastStamina;
 
     public static boolean isRunning() {
         return running;
@@ -486,9 +488,10 @@ public final class OverlayCaptureService extends Service {
                     capturing.set(false);
                     return;
                 }
+                StaminaGaugeDetector.Result stamina = detectStamina(full);
                 eventCrop = cropEventArea(full);
                 choiceCrop = cropChoiceArea(full);
-                recognizeRegions(eventCrop, choiceCrop, full, generation);
+                recognizeRegions(eventCrop, choiceCrop, full, generation, stamina);
             } catch (Exception error) {
                 try {
                     image.close();
@@ -516,30 +519,37 @@ public final class OverlayCaptureService extends Service {
     private Bitmap cropChoiceArea(Bitmap full) {
         int width = full.getWidth();
         int height = full.getHeight();
-        if (width <= height) return Bitmap.createBitmap(full);
-        int left = Math.max(0, (int) (width * 0.48f));
-        int top = Math.max(0, (int) (height * 0.14f));
-        int right = Math.min(width, (int) (width * 0.995f));
-        int bottom = Math.min(height, (int) (height * 0.88f));
-        return Bitmap.createBitmap(full, left, top, right - left, bottom - top);
+        CaptureRegionPlanner.Region region = CaptureRegionPlanner.choice(width, height);
+        return Bitmap.createBitmap(full, region.left, region.top, region.width(), region.height());
     }
 
     private Bitmap cropEventArea(Bitmap full) {
         int width = full.getWidth();
         int height = full.getHeight();
-        if (width <= height) return Bitmap.createBitmap(full);
-        int left = Math.max(0, (int) (width * 0.095f));
-        int top = Math.max(0, (int) (height * 0.13f));
-        int right = Math.min(width, (int) (width * 0.46f));
-        int bottom = Math.min(height, (int) (height * 0.28f));
-        Bitmap crop = Bitmap.createBitmap(full, left, top, right - left, bottom - top);
+        CaptureRegionPlanner.Region region = CaptureRegionPlanner.event(width, height);
+        Bitmap crop = Bitmap.createBitmap(full, region.left, region.top, region.width(), region.height());
         if (crop.getHeight() >= 280 || crop.getWidth() >= 1200) return crop;
         Bitmap enlarged = Bitmap.createScaledBitmap(crop, crop.getWidth() * 2, crop.getHeight() * 2, true);
         if (enlarged != crop) crop.recycle();
         return enlarged;
     }
 
-    private void recognizeRegions(Bitmap eventBitmap, Bitmap choiceBitmap, Bitmap fullBitmap, int generation) {
+    private StaminaGaugeDetector.Result detectStamina(Bitmap full) {
+        StaminaGaugeDetector.Region region = StaminaGaugeDetector.scanRegion(
+                full.getWidth(), full.getHeight());
+        int[] pixels = new int[region.width * region.height];
+        full.getPixels(pixels, 0, region.width, region.left, region.top, region.width, region.height);
+        StaminaGaugeDetector.Result detected = StaminaGaugeDetector.detect(
+                full.getWidth(), full.getHeight(), region, pixels, staminaAnchor);
+        if (detected == null) return null;
+        detected = detected.stabilize(lastStamina);
+        staminaAnchor = detected.anchor;
+        lastStamina = detected;
+        return detected;
+    }
+
+    private void recognizeRegions(Bitmap eventBitmap, Bitmap choiceBitmap, Bitmap fullBitmap,
+                                  int generation, StaminaGaugeDetector.Result stamina) {
         TextRecognizer currentRecognizer = recognizer;
         if (!isProjectionSessionActive(generation) || currentRecognizer == null) {
             recycleBitmaps(eventBitmap, choiceBitmap, fullBitmap);
@@ -554,7 +564,17 @@ public final class OverlayCaptureService extends Service {
                 return;
             }
             List<String> choiceLines = extractLines(choiceText);
+            String difficulty = DifficultyResolver.fromRecognizedLines(choiceLines);
             if (!choiceBitmap.isRecycled()) choiceBitmap.recycle();
+
+            JourneyMatcher currentMatcher = matcher;
+            if (stamina != null && difficulty.isEmpty() && currentMatcher != null
+                    && !currentMatcher.hasPlausibleChoiceSignal(choiceLines)) {
+                recycleBitmaps(eventBitmap, fullBitmap);
+                capturing.set(false);
+                mainHandler.post(() -> showStamina(stamina));
+                return;
+            }
 
             TextRecognizer eventRecognizer = recognizer;
             if (eventRecognizer == null) {
@@ -571,7 +591,7 @@ public final class OverlayCaptureService extends Service {
                 }
                 List<String> eventLines = extractLines(eventText);
                 if (!eventBitmap.isRecycled()) eventBitmap.recycle();
-                matchOrFallback(eventLines, choiceLines, fullBitmap, generation);
+                matchOrFallback(eventLines, choiceLines, fullBitmap, generation, difficulty, stamina);
             }).addOnFailureListener(worker, ignored -> {
                 if (!eventBitmap.isRecycled()) eventBitmap.recycle();
                 if (!isProjectionSessionActive(generation)) {
@@ -579,7 +599,7 @@ public final class OverlayCaptureService extends Service {
                     capturing.set(false);
                     return;
                 }
-                matchOrFallback(List.of(), choiceLines, fullBitmap, generation);
+                matchOrFallback(List.of(), choiceLines, fullBitmap, generation, difficulty, stamina);
             });
         }).addOnFailureListener(worker, error -> {
             recycleBitmaps(eventBitmap, choiceBitmap);
@@ -588,12 +608,19 @@ public final class OverlayCaptureService extends Service {
                 capturing.set(false);
                 return;
             }
-            recognizeFull(fullBitmap, generation);
+            if (stamina != null) {
+                recycleBitmaps(fullBitmap);
+                capturing.set(false);
+                mainHandler.post(() -> showStamina(stamina));
+            } else {
+                recognizeFull(fullBitmap, generation, "", null);
+            }
         });
     }
 
     private void matchOrFallback(List<String> eventLines, List<String> choiceLines,
-                                 Bitmap fullBitmap, int generation) {
+                                 Bitmap fullBitmap, int generation, String difficulty,
+                                 StaminaGaugeDetector.Result stamina) {
         JourneyMatcher currentMatcher = matcher;
         if (currentMatcher == null) {
             recycleBitmaps(fullBitmap);
@@ -605,13 +632,14 @@ public final class OverlayCaptureService extends Service {
         if (match.isConfident()) {
             recycleBitmaps(fullBitmap);
             capturing.set(false);
-            mainHandler.post(() -> showMatch(match));
+            mainHandler.post(() -> showMatch(match, difficulty, stamina));
         } else {
-            recognizeFull(fullBitmap, generation);
+            recognizeFull(fullBitmap, generation, difficulty, stamina);
         }
     }
 
-    private void recognizeFull(Bitmap fullBitmap, int generation) {
+    private void recognizeFull(Bitmap fullBitmap, int generation, String recognizedDifficulty,
+                               StaminaGaugeDetector.Result stamina) {
         TextRecognizer currentRecognizer = recognizer;
         if (!isProjectionSessionActive(generation) || currentRecognizer == null) {
             recycleBitmaps(fullBitmap);
@@ -626,6 +654,9 @@ public final class OverlayCaptureService extends Service {
                 return;
             }
             List<String> lines = extractLines(text);
+            String difficulty = recognizedDifficulty.isEmpty()
+                    ? DifficultyResolver.fromRecognizedLines(lines)
+                    : recognizedDifficulty;
             JourneyMatcher currentMatcher = matcher;
             if (currentMatcher == null) {
                 recycleBitmaps(fullBitmap);
@@ -637,7 +668,9 @@ public final class OverlayCaptureService extends Service {
             recycleBitmaps(fullBitmap);
             capturing.set(false);
             if (match.isConfident()) {
-                mainHandler.post(() -> showMatch(match));
+                mainHandler.post(() -> showMatch(match, difficulty, stamina));
+            } else if (stamina != null) {
+                mainHandler.post(() -> showStamina(stamina));
             } else if (match.ambiguous) {
                 captureFailed("같은 선택지를 사용하는 이벤트가 있습니다. 왼쪽 이벤트명이 모두 보이도록 한 뒤 다시 눌러 주세요.", lines);
             } else {
@@ -647,7 +680,8 @@ public final class OverlayCaptureService extends Service {
             recycleBitmaps(fullBitmap);
             if (isProjectionSessionActive(generation)) {
                 capturing.set(false);
-                captureFailed("한국어 글자 인식에 실패했습니다: " + error.getMessage(), List.of());
+                if (stamina != null) mainHandler.post(() -> showStamina(stamina));
+                else captureFailed("한국어 글자 인식에 실패했습니다: " + error.getMessage(), List.of());
             } else {
                 capturing.set(false);
             }
@@ -692,12 +726,22 @@ public final class OverlayCaptureService extends Service {
         return result;
     }
 
-    private void showMatch(JourneyModels.Match match) {
+    private void showMatch(JourneyModels.Match match, String difficulty,
+                           StaminaGaugeDetector.Result stamina) {
         if (!captureActive || destroying) return;
         setBubbleGlyph("✓");
         mainHandler.postDelayed(() -> setBubbleGlyph("✦"), 900);
         dismissResult();
-        resultView = OverlayResultView.match(this, match, this::dismissResult);
+        resultView = OverlayResultView.match(this, match, difficulty, stamina, this::dismissResult);
+        addResultView(resultView);
+    }
+
+    private void showStamina(StaminaGaugeDetector.Result stamina) {
+        if (!captureActive || destroying || stamina == null) return;
+        setBubbleGlyph("✓");
+        mainHandler.postDelayed(() -> setBubbleGlyph("✦"), 900);
+        dismissResult();
+        resultView = OverlayResultView.stamina(this, stamina, this::dismissResult);
         addResultView(resultView);
     }
 

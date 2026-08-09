@@ -1,5 +1,5 @@
 {
-  "schema": 3,
+  "schema": 4,
   "generatedAt": "2026-08-05T00:00:00Z",
   "source": "public-example",
   "upstreamRevision": "",
@@ -14,13 +14,13 @@
         {
           "text": "첫 번째 예제 선택",
           "outcomes": [
-            {"label": "", "condition": "", "success": "예제 효과 A", "failure": ""}
+            {"label": "", "difficulty": "", "condition": "", "success": "예제 효과 A", "failure": ""}
           ]
         },
         {
           "text": "두 번째 예제 선택",
           "outcomes": [
-            {"label": "", "condition": "", "success": "예제 효과 B", "failure": ""}
+            {"label": "", "difficulty": "", "condition": "", "success": "예제 효과 B", "failure": ""}
           ]
         }
       ]
@@ -32,13 +32,13 @@
         {
           "text": "첫 번째 예제 선택",
           "outcomes": [
-            {"label": "", "condition": "", "success": "예제 효과 C", "failure": ""}
+            {"label": "", "difficulty": "", "condition": "", "success": "예제 효과 C", "failure": ""}
           ]
         },
         {
           "text": "두 번째 예제 선택",
           "outcomes": [
-            {"label": "", "condition": "", "success": "예제 효과 D", "failure": ""}
+            {"label": "", "difficulty": "", "condition": "", "success": "예제 효과 D", "failure": ""}
           ]
         }
       ]

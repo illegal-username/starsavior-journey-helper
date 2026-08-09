@@ -1,5 +1,6 @@
 package helper.journey.starsavior;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
@@ -47,19 +48,43 @@ public final class JourneyModels {
             this.text = text;
             this.outcomes = Collections.unmodifiableList(outcomes);
         }
+
+        public List<Outcome> outcomesForDifficulty(String difficulty) {
+            if (difficulty == null || difficulty.trim().isEmpty()) return outcomes;
+
+            List<Outcome> matching = new ArrayList<>();
+            List<Outcome> generic = new ArrayList<>();
+            for (Outcome outcome : outcomes) {
+                if (outcome.appliesToDifficulty(difficulty)) matching.add(outcome);
+                else if (outcome.difficulty.isEmpty()) generic.add(outcome);
+            }
+            if (!matching.isEmpty()) return Collections.unmodifiableList(matching);
+            return Collections.unmodifiableList(generic);
+        }
     }
 
     public static final class Outcome {
         public final String label;
+        public final String difficulty;
         public final String condition;
         public final String success;
         public final String failure;
 
-        public Outcome(String label, String condition, String success, String failure) {
+        public Outcome(String label, String difficulty, String condition, String success, String failure) {
             this.label = label;
+            this.difficulty = difficulty == null ? "" : difficulty.trim();
             this.condition = condition;
             this.success = success;
             this.failure = failure;
+        }
+
+        private boolean appliesToDifficulty(String recognizedDifficulty) {
+            String expected = recognizedDifficulty.trim();
+            if (expected.isEmpty() || difficulty.isEmpty()) return false;
+            for (String candidate : difficulty.split("[/,·\\s]+")) {
+                if (candidate.equals(expected)) return true;
+            }
+            return false;
         }
     }
 
