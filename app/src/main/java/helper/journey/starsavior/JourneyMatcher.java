@@ -30,6 +30,15 @@ public final class JourneyMatcher {
         return match(List.of(), recognizedLines);
     }
 
+    /** Fast pre-check used to avoid event/full-screen OCR on stamina-only screens. */
+    public boolean hasPlausibleChoiceSignal(List<String> recognizedLines) {
+        List<Candidate> candidates = makeCandidates(recognizedLines);
+        for (JourneyModels.Event event : events) {
+            if (scoreChoices(event, candidates).score >= 0.40) return true;
+        }
+        return false;
+    }
+
     public JourneyModels.Match match(List<String> recognizedEventLines, List<String> recognizedChoiceLines) {
         List<Candidate> eventCandidates = makeEventCandidates(recognizedEventLines);
         List<Candidate> choiceCandidates = makeCandidates(recognizedChoiceLines);

@@ -74,14 +74,25 @@ public class JourneyDataTransformerTest {
         assertEquals(2, data.choiceCount);
         assertEquals("etag-sha256:test", data.upstreamRevision);
         JourneyModels.Outcome first = data.events.get(0).choices.get(0).outcomes.get(0);
+        assertEquals("이지", first.difficulty);
         assertTrue(first.label.contains("이지"));
         assertFalse(first.label.contains("[object Object]"));
         assertEquals("활력 포션 1개 소모", first.condition);
         assertTrue(first.success.contains("힘 +10"));
         assertTrue(first.success.contains("용기 (훈련 효과가 증가합니다., 3턴)"));
         assertEquals("스태미나 -5", first.failure);
-        assertTrue(data.events.get(0).choices.get(1).outcomes.get(0).success
+        JourneyModels.Choice secondChoice = data.events.get(0).choices.get(1);
+        assertEquals(2, secondChoice.outcomes.size());
+        assertEquals(1, secondChoice.outcomesForDifficulty("이지").size());
+        assertEquals("이지", secondChoice.outcomesForDifficulty("이지").get(0).difficulty);
+        assertEquals(1, secondChoice.outcomesForDifficulty("노말").size());
+        assertEquals("노말", secondChoice.outcomesForDifficulty("노말").get(0).difficulty);
+        assertTrue(secondChoice.outcomesForDifficulty("노말").get(0).success
                 .contains("활력 포션 (스태미나 +5)"));
+
+        JourneyModels.Choice firstChoice = data.events.get(0).choices.get(0);
+        assertTrue(firstChoice.outcomesForDifficulty("이지").get(0).success.contains("힘 +10"));
+        assertTrue(firstChoice.outcomesForDifficulty("노말").get(0).success.contains("힘 +20"));
     }
 
     @Test
@@ -150,7 +161,7 @@ public class JourneyDataTransformerTest {
                 documents, "test", "2026-08-03T00:00:00Z"));
         JourneyRepository.validate(data);
 
-        assertEquals(3, data.schema);
+        assertEquals(4, data.schema);
         assertEquals(2, data.recordCount);
         assertEquals(4, data.choiceCount);
         assertTrue(data.events.stream().anyMatch(event -> event.name.equals("공개 예제 - 아침")));

@@ -200,9 +200,10 @@ function formatCondition(condition) {
     }
 }
 
-function outcomeFromChoice(choice, label) {
+function outcomeFromChoice(choice, label, difficulty = "") {
     return {
         label,
+        difficulty,
         condition: formatCondition(choice.condition),
         success: formatRewardGroups(choice.success_rewards),
         failure:
@@ -236,7 +237,7 @@ for (const [eventKey, variants] of Object.entries(journeys)) {
         addRecord({
             event,
             choiceTexts,
-            outcomes: (variant.choices ?? []).map((choice) => outcomeFromChoice(choice, label)),
+            outcomes: (variant.choices ?? []).map((choice) => outcomeFromChoice(choice, label, difficulty)),
         });
     });
 }
@@ -263,7 +264,7 @@ for (const sources of grouped.values()) {
         const unique = new Map();
         for (const source of sources) {
             const outcome = source.outcomes[choiceIndex];
-            const key = `${outcome.condition}|${outcome.success}|${outcome.failure}`;
+            const key = `${outcome.difficulty}|${outcome.condition}|${outcome.success}|${outcome.failure}`;
             if (!unique.has(key)) unique.set(key, outcome);
         }
         const outcomes = [...unique.values()];
@@ -281,7 +282,7 @@ for (const sources of grouped.values()) {
 records.sort((a, b) => a.event.localeCompare(b.event, "ko"));
 
 const result = {
-    schema: 3,
+    schema: 4,
     generatedAt: new Date().toISOString(),
     source: "https://star-savior-arcana-db.pages.dev/journey",
     notice: "비영리 팬 데이터베이스의 선택지/보상 정보를 가공했습니다. 게임 및 원자료의 권리는 각 권리자에게 있습니다.",

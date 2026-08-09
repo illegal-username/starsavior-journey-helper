@@ -106,6 +106,7 @@ public final class JourneyRepository {
                     JSONObject outcomeJson = outcomesJson.getJSONObject(outcomeIndex);
                     outcomes.add(new JourneyModels.Outcome(
                             outcomeJson.optString("label"),
+                            outcomeJson.optString("difficulty"),
                             outcomeJson.optString("condition"),
                             outcomeJson.optString("success"),
                             outcomeJson.optString("failure")
@@ -134,7 +135,7 @@ public final class JourneyRepository {
     }
 
     static void validate(JourneyModels.Data data) throws JSONException {
-        if (data.schema != 3) throw new JSONException("지원하지 않는 DB 형식입니다.");
+        if (data.schema != 4) throw new JSONException("지원하지 않는 DB 형식입니다.");
         if (data.events.isEmpty()) throw new JSONException("선택지 레코드가 없습니다.");
         if (data.recordCount != data.events.size()) throw new JSONException("레코드 개수가 일치하지 않습니다.");
 
