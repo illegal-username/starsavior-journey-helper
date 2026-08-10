@@ -1,20 +1,23 @@
 package helper.journey.starsavior;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 /**
- * Finds the journey stamina gauge without fixed device-pixel coordinates.
+ * Finds and reads the journey stamina gauge without fixed device-pixel coordinates.
  *
- * <p>The game scales this HUD from the screen width, including on tall foldable
- * screens. Callers copy only {@link #scanRegion(int, int)} into an int array;
- * every subsequent lookup is an ordinary array access rather than a costly
- * Bitmap.getPixel call.</p>
+ * <p>The detector deliberately does not infer the bar width from the capture width.
+ * Gallery zoom, display compatibility scaling, letterboxing and foldable layouts can
+ * all render the same HUD at a different pixel size.  Instead it searches a small top
+ * strip for the rectangular green fill, measures that rectangle's own height, follows
+ * the neutral tail to the physical right edge, and only then divides the measured span
+ * into 100 units.  All expensive pixel access is confined to the copied top strip.</p>
  */
 final class StaminaGaugeDetector {
-    private static final double REFERENCE_WIDTH = 3120.0;
-    private static final double TRACK_WIDTH_AT_REFERENCE = 428.0;
-    private static final double TRACK_HEIGHT_AT_REFERENCE = 33.0;
-    private static final double TRACK_CENTER_Y_AT_REFERENCE = 100.0;
+    private static final double TRACK_ASPECT = 12.8;
 
     enum Direction { NONE, GAIN, LOSS }
 
@@ -77,11 +80,11 @@ final class StaminaGaugeDetector {
     private StaminaGaugeDetector() {}
 
     static Region scanRegion(int screenWidth, int screenHeight) {
-        int left = clamp((int) Math.floor(screenWidth * 0.16), 0, screenWidth - 1);
+        int left = clamp((int) Math.floor(screenWidth * 0.14), 0, screenWidth - 1);
         int right = clamp((int) Math.ceil(screenWidth * 0.62), left + 1, screenWidth);
-        int top = clamp((int) Math.floor(screenWidth * 0.010), 0, screenHeight - 1);
-        int bottom = clamp((int) Math.ceil(screenWidth * 0.056), top + 1, screenHeight);
-        return new Region(left, top, right - left, bottom - top);
+        int bottom = clamp(Math.max(64, (int) Math.ceil(screenWidth * 0.060)),
+                1, screenHeight);
+        return new Region(left, 0, right - left, bottom);
     }
 
     static Result detect(int screenWidth, int screenHeight, Region region, int[] pixels,
@@ -91,229 +94,397 @@ final class StaminaGaugeDetector {
                 || pixels.length < region.width * region.height) return null;
 
         PixelSource source = new PixelSource(region, pixels);
-        double scale = screenWidth / REFERENCE_WIDTH;
-        int trackWidth = Math.max(72, (int) Math.round(TRACK_WIDTH_AT_REFERENCE * scale));
-        int trackHeight = Math.max(8, (int) Math.round(TRACK_HEIGHT_AT_REFERENCE * scale));
-        int expectedY = (int) Math.round(TRACK_CENTER_Y_AT_REFERENCE * scale);
-        int searchY0 = Math.max(region.top + trackHeight / 2 + 1, expectedY - trackHeight);
-        int searchY1 = Math.min(region.top + region.height - trackHeight / 2 - 2,
-                expectedY + trackHeight);
-        int searchX0 = Math.max(region.left, (int) Math.round(screenWidth * 0.18));
-        int searchX1 = Math.min(region.left + region.width - 1,
-                (int) Math.round(screenWidth * 0.56));
-        int xCenter = previousAnchor == null
-                ? (int) Math.round(screenWidth * 0.375)
-                : (int) Math.round(previousAnchor.leftRatio * screenWidth);
-
-        Candidate best = findColoredCandidate(source, screenWidth, scale, trackWidth,
-                trackHeight, expectedY, searchX0, searchX1, searchY0, searchY1, xCenter);
-        boolean usedColoredCandidate = best != null;
-        if (best == null) {
-            best = findStructuralCandidate(source, screenWidth, scale, trackWidth, trackHeight,
-                    expectedY, xCenter, searchX0, searchX1);
-        }
+        Candidate best = findBestCandidate(source, screenWidth, previousAnchor, MaskKind.GAUGE);
+        if (best == null) best = findBestCandidate(source, screenWidth, previousAnchor,
+                MaskKind.NEUTRAL);
         if (best == null) return null;
 
-        Result primary = analyzeCandidate(source, screenWidth, best, scale, trackWidth,
-                trackHeight, searchX0, searchX1, searchY0, searchY1);
-        if (primary == null) return null;
-
-        // When an ordinary partially-filled gauge is resampled by the display
-        // compositor, the sandwich icon or another green HUD detail can beat
-        // the real bar by a small amount.  That false profile has no convincing
-        // fill boundary and therefore looks like a low-confidence 0/100 value.
-        // Re-check such an extreme with the track's dark border structure.
-        if ((primary.current == 0 || primary.current == 100)
-                && primary.direction == Direction.NONE && primary.confidence < 0.80f
-                && usedColoredCandidate
-                && best.runEnd - best.runStart < Math.round(trackWidth * 0.80f)) {
-            Candidate structural = findStructuralCandidate(source, screenWidth, scale,
-                    trackWidth, trackHeight, expectedY, xCenter, searchX0, searchX1);
-            if (structural != null) {
-                Result alternative = analyzeCandidate(source, screenWidth, structural, scale,
-                        trackWidth, trackHeight, searchX0, searchX1, searchY0, searchY1);
-                if (alternative != null && alternative.confidence > primary.confidence + 0.02f) {
-                    return alternative;
-                }
-            }
-        }
-        return primary;
-    }
-
-    private static Result analyzeCandidate(PixelSource source, int screenWidth, Candidate best,
-                                           double scale, int trackWidth, int trackHeight,
-                                           int searchX0, int searchX1, int searchY0, int searchY1) {
-
-        // The captured app can be letterboxed or shifted by a display cutout.
-        // The search already found the vertical center of the colored/structural
-        // track, so forcing it back to the reference row reads background pixels
-        // on those devices and turns a partial gauge into 0 or 100.
-        int centerY = clamp(best.centerY, searchY0, searchY1);
-        int left = refineTrackLeft(source, best.runStart, centerY, scale, trackHeight,
-                searchX0, searchX1);
-        if (!source.contains(left, centerY) || !source.contains(left + trackWidth - 1, centerY)) {
-            return null;
-        }
+        int trackHeight = best.bottom - best.top;
+        int endpointInset = best.empty ? 0 : Math.max(1,
+                (int) Math.round(trackHeight * 0.30));
+        int left = best.left + endpointInset;
+        int right = best.right + endpointInset;
+        int centerY = (best.top + best.bottom - 1) / 2;
+        right = Math.min(right, region.left + region.width - 1);
+        int trackWidth = right - left;
+        if (trackWidth < Math.max(24, trackHeight * 6)
+                || !source.contains(left, centerY)
+                || !source.contains(right - 1, centerY)) return null;
         return analyzeProfile(source, screenWidth, left, centerY, trackWidth, trackHeight);
     }
 
-    private static Candidate findColoredCandidate(PixelSource source, int screenWidth, double scale,
-                                                     int trackWidth, int trackHeight, int expectedY,
-                                                     int searchX0, int searchX1, int searchY0,
-                                                     int searchY1, int expectedX) {
-        Candidate best = null;
-        int yStep = Math.max(1, (int) Math.round(2 * scale));
-        int rowOffset = Math.max(1, (int) Math.round(5 * scale));
-        int maxGap = Math.max(1, (int) Math.round(3 * scale));
-        int minRun = Math.max(5, (int) Math.round(screenWidth * 0.008));
+    private static Candidate findBestCandidate(PixelSource source, int screenWidth,
+                                               Anchor previousAnchor, MaskKind kind) {
+        int maxGap = Math.max(1, (int) Math.round(screenWidth * 0.0012));
+        int minRun = Math.max(6, (int) Math.round(screenWidth * 0.004));
+        int minHeight = Math.max(4, (int) Math.round(screenWidth * 0.0035));
+        int maxHeight = Math.max(minHeight + 1, (int) Math.round(screenWidth * 0.030));
+        int yStep = Math.max(1, (int) Math.round(screenWidth / 1800.0));
 
-        for (int y = searchY0; y <= searchY1; y += yStep) {
-            int runStart = -1;
-            int lastColored = -1;
-            for (int x = searchX0; x <= searchX1; x++) {
-                int votes = 0;
-                if (isGaugeColor(source.get(x, y - rowOffset))) votes++;
-                if (isGaugeColor(source.get(x, y))) votes++;
-                if (isGaugeColor(source.get(x, y + rowOffset))) votes++;
-                boolean colored = votes >= 2;
-                if (colored) {
-                    if (runStart < 0) runStart = x;
-                    lastColored = x;
+        @SuppressWarnings("unchecked")
+        List<Run>[] rows = new List[source.region.height];
+        for (int localY = 0; localY < source.region.height; localY++) {
+            rows[localY] = findRuns(source, source.region.top + localY,
+                    source.region.left, source.region.left + source.region.width,
+                    maxGap, minRun, kind);
+        }
+
+        Candidate best = null;
+        Set<Long> seen = new HashSet<>();
+        for (int localY = 0; localY < rows.length; localY += yStep) {
+            for (Run seed : rows[localY]) {
+                StableBand band = stableBand(rows, localY, seed);
+                int height = band.bottom - band.top;
+                if (height < minHeight || height > maxHeight
+                        || band.starts.length < height * 0.55) continue;
+
+                int left = median(band.starts);
+                int colorEnd = median(band.ends);
+                int measuredEnd = colorEnd;
+                int colorWidth = colorEnd - left;
+                double colorAspect = colorWidth / (double) height;
+                if (colorAspect < 0.9 || colorAspect > 17.0) continue;
+                long key = (((long) (left / 2)) << 42)
+                        ^ (((long) (colorEnd / 2)) << 20)
+                        ^ ((long) band.top << 10) ^ band.bottom;
+                if (!seen.add(key)) continue;
+
+                double density = maskDensity(source, left, colorEnd, band.top, band.bottom, kind);
+                if (density < (kind == MaskKind.GAUGE ? 0.48 : 0.72)) continue;
+
+                Tail tail = kind == MaskKind.GAUGE
+                        ? findNeutralTail(source, left, colorEnd, band.top, band.bottom)
+                        : null;
+                int right;
+                int tailStart;
+                double aspect;
+                double tailBonus;
+                boolean empty = kind == MaskKind.NEUTRAL;
+                if (tail != null) {
+                    right = tail.end;
+                    tailStart = tail.start;
+                    aspect = (right - left) / (double) height;
+                    tailBonus = 36.0;
+                } else if (kind == MaskKind.GAUGE && colorAspect >= 8.0) {
+                    right = colorEnd;
+                    tailStart = -1;
+                    aspect = colorAspect;
+                    tailBonus = 12.0;
+                } else if (kind == MaskKind.NEUTRAL && colorAspect >= 7.5) {
+                    right = colorEnd;
+                    colorEnd = left;
+                    tailStart = left;
+                    aspect = colorAspect;
+                    tailBonus = 20.0;
+                } else {
+                    continue;
                 }
-                boolean close = runStart >= 0 && (!colored && x - lastColored > maxGap);
-                if (close || (x == searchX1 && runStart >= 0)) {
-                    int end = lastColored + 1;
-                    int length = end - runStart;
-                    if (length >= minRun && length <= Math.round(trackWidth * 1.15)) {
-                        int middle = (runStart + end) / 2;
-                        VerticalRun vertical = verticalRun(source, middle, y, searchY0, searchY1,
-                                Math.max(1, (int) Math.round(scale)));
-                        double structure = structuralScore(source, runStart, vertical.center,
-                                trackWidth, trackHeight);
-                        double score = Math.min(length, trackWidth)
-                                // Green scenery and character effects can form a longer run than
-                                // the actual fill.  The stamina track itself has stable dark top
-                                // and bottom borders across HUD layouts, so structural evidence
-                                // must outweigh raw run length.
-                                + structure * 2.0
-                                // A remembered position is only a tie-breaker.
-                                // HUD placement changes between devices and
-                                // captured-content layouts, while the run length
-                                // and height are direct evidence from this frame.
-                                - Math.min(Math.abs(runStart - expectedX) * 4.0 / trackWidth, 4.0)
-                                - Math.min(Math.abs(vertical.center - expectedY) * 4.0
-                                        / trackHeight, 4.0)
-                                - Math.abs(vertical.length - trackHeight) * 0.70;
-                        if (best == null || score > best.score) {
-                            best = new Candidate(score, runStart, end, vertical.center);
-                        }
-                    }
-                    runStart = -1;
-                    lastColored = -1;
+                if (aspect < 7.5 || aspect > 17.0) continue;
+
+                double flatness = endpointFlatness(band.starts, band.ends, left, measuredEnd,
+                        height, empty);
+                double edge = edgeContrast(source, left, right, band.top, band.bottom);
+                double location = (band.top + band.bottom) * 0.5 / screenWidth;
+                double anchorPenalty = Math.min(Math.abs(location - 0.032) * 80.0, 4.0);
+                if (previousAnchor != null) {
+                    int remembered = Math.round(previousAnchor.leftRatio * screenWidth);
+                    anchorPenalty += Math.min(Math.abs(left - remembered) * 2.0
+                            / Math.max(1, right - left), 2.0);
                 }
+                double score = density * 55.0 + flatness * 22.0 + tailBonus
+                        + Math.min(edge, 45.0) * 0.45
+                        - Math.abs(aspect - TRACK_ASPECT) * 4.0 - anchorPenalty;
+                Candidate candidate = new Candidate(score, left, colorEnd, right,
+                        band.top + source.region.top, band.bottom + source.region.top, empty);
+                if (best == null || candidate.score > best.score) best = candidate;
+            }
+        }
+        if (best == null) return null;
+        double minimumScore = kind == MaskKind.GAUGE ? 92.0 : 105.0;
+        return best.score >= minimumScore ? best : null;
+    }
+
+    private static List<Run> findRuns(PixelSource source, int y, int firstX, int lastX,
+                                      int maxGap, int minimum, MaskKind kind) {
+        List<Run> result = new ArrayList<>();
+        int start = -1;
+        int previous = -1;
+        for (int x = firstX; x < lastX; x++) {
+            boolean match = matches(source.get(x, y), kind);
+            if (match) {
+                if (start < 0) start = x;
+                previous = x;
+            }
+            if (start >= 0 && (!match && x - previous > maxGap)) {
+                if (previous + 1 - start >= minimum) result.add(new Run(start, previous + 1));
+                start = -1;
+                previous = -1;
+            }
+        }
+        if (start >= 0 && previous + 1 - start >= minimum) {
+            result.add(new Run(start, previous + 1));
+        }
+        return result;
+    }
+
+    private static StableBand stableBand(List<Run>[] rows, int target, Run seed) {
+        int initialLength = seed.end - seed.start;
+        int tolerance = Math.max(4, (int) Math.round(initialLength * 0.16));
+        List<Integer> starts = new ArrayList<>();
+        List<Integer> ends = new ArrayList<>();
+        List<Integer> rowNumbers = new ArrayList<>();
+        starts.add(seed.start);
+        ends.add(seed.end);
+        rowNumbers.add(target);
+        int top = target;
+        int bottom = target + 1;
+        for (int direction : new int[] {-1, 1}) {
+            int row = target + direction;
+            int misses = 0;
+            Run reference = seed;
+            while (row >= 0 && row < rows.length && misses <= 1) {
+                Run compatible = compatibleRun(rows[row], reference, seed,
+                        initialLength, tolerance);
+                if (compatible == null) {
+                    misses++;
+                } else {
+                    starts.add(compatible.start);
+                    ends.add(compatible.end);
+                    rowNumbers.add(row);
+                    reference = compatible;
+                    top = Math.min(top, row);
+                    bottom = Math.max(bottom, row + 1);
+                    misses = 0;
+                }
+                row += direction;
+            }
+        }
+        // A translucent background can make one adjacent scenery row look green.
+        // Keep the rectangular core and discard endpoint outliers before using
+        // the band height as our scale ruler.
+        int medianStart = median(toArray(starts));
+        int medianEnd = median(toArray(ends));
+        int tightTolerance = Math.max(2, (int) Math.round(initialLength * 0.07));
+        List<Integer> coreStarts = new ArrayList<>();
+        List<Integer> coreEnds = new ArrayList<>();
+        int coreTop = rows.length;
+        int coreBottom = 0;
+        for (int index = 0; index < starts.size(); index++) {
+            if (Math.abs(starts.get(index) - medianStart) <= tightTolerance
+                    && Math.abs(ends.get(index) - medianEnd) <= tightTolerance) {
+                coreStarts.add(starts.get(index));
+                coreEnds.add(ends.get(index));
+                coreTop = Math.min(coreTop, rowNumbers.get(index));
+                coreBottom = Math.max(coreBottom, rowNumbers.get(index) + 1);
+            }
+        }
+        if (coreStarts.size() >= 3) {
+            return new StableBand(coreTop, coreBottom, toArray(coreStarts), toArray(coreEnds));
+        }
+        return new StableBand(top, bottom, toArray(starts), toArray(ends));
+    }
+
+    private static Run compatibleRun(List<Run> choices, Run reference, Run initial,
+                                     int initialLength, int tolerance) {
+        Run best = null;
+        int bestError = Integer.MAX_VALUE;
+        for (Run choice : choices) {
+            int overlap = Math.min(reference.end, choice.end)
+                    - Math.max(reference.start, choice.start);
+            int length = choice.end - choice.start;
+            int referenceLength = reference.end - reference.start;
+            if (overlap <= 0 || overlap < Math.min(initialLength, length) * 0.62
+                    || Math.abs(choice.start - initial.start) > tolerance
+                    || Math.abs(choice.end - initial.end) > tolerance
+                    || length < initialLength * 0.58 || length > initialLength * 1.38) continue;
+            int error = Math.abs(choice.start - reference.start)
+                    + Math.abs(choice.end - reference.end)
+                    + Math.abs(length - referenceLength);
+            if (error < bestError) {
+                bestError = error;
+                best = choice;
             }
         }
         return best;
     }
 
-    private static VerticalRun verticalRun(PixelSource source, int x, int targetY,
-                                           int top, int bottom, int maxGap) {
-        int bestTop = targetY;
-        int bestBottom = targetY + 1;
-        int runTop = -1;
-        int lastColored = -1;
-        for (int y = top; y <= bottom; y++) {
-            boolean colored = isGaugeColor(source.get(x, y));
-            if (colored) {
-                if (runTop < 0) runTop = y;
-                lastColored = y;
+    private static Tail findNeutralTail(PixelSource source, int left, int colorEnd,
+                                        int localTop, int localBottom) {
+        int top = localTop + source.region.top;
+        int bottom = localBottom + source.region.top;
+        int height = bottom - top;
+        int maximum = Math.min(source.region.left + source.region.width,
+                left + (int) Math.round(height * 17.0));
+        int minimum = Math.max(left, colorEnd - (int) Math.round(height * 0.25));
+        int maxGap = Math.max(1, (int) Math.round(height * 0.14));
+        int minRun = Math.max(4, (int) Math.round(height * 0.55));
+        int inset = Math.max(1, (int) Math.round(height * 0.22));
+        int firstY = Math.min(bottom - 1, top + inset);
+        int lastY = Math.max(firstY + 1, bottom - inset);
+        int[] reds = new int[Math.max(1, lastY - firstY)];
+        int[] greens = new int[reds.length];
+        int[] blues = new int[reds.length];
+        int profileLength = Math.max(0, maximum - minimum);
+        int[] profile = new int[profileLength];
+        boolean[] neutralProfile = new boolean[profileLength];
+        for (int offset = 0; offset < profileLength; offset++) {
+            int color = medianColor(source, minimum + offset, firstY, lastY,
+                    reds, greens, blues);
+            profile[offset] = color;
+            neutralProfile[offset] = isNeutralColor(color);
+        }
+
+        Tail best = null;
+        double bestCost = Double.POSITIVE_INFINITY;
+        int runStart = -1;
+        int previous = -1;
+        for (int x = minimum; x <= maximum + maxGap; x++) {
+            boolean neutral = x < maximum && neutralProfile[x - minimum];
+            if (neutral) {
+                if (runStart < 0) runStart = x;
+                previous = x;
             }
-            boolean close = runTop >= 0 && (!colored && y - lastColored > maxGap);
-            if (close || (y == bottom && runTop >= 0)) {
-                int runBottom = lastColored + 1;
-                if (runTop <= targetY && targetY < runBottom) {
-                    bestTop = runTop;
-                    bestBottom = runBottom;
-                    break;
+            if (runStart >= 0 && (!neutral && x - previous > maxGap)) {
+                int end = previous + 1;
+                if (end - runStart >= minRun && end > colorEnd) {
+                    end = refineNeutralEnd(profile, runStart - minimum, end - minimum,
+                            minRun, height) + minimum;
+                    double aspect = (end - left) / (double) height;
+                    if (aspect >= 7.5 && aspect <= 17.0) {
+                        double startGap = Math.abs(runStart - colorEnd) / (double) height;
+                        double cost = Math.abs(aspect - TRACK_ASPECT)
+                                + Math.min(startGap, 3.0) * 0.12;
+                        if (cost < bestCost) {
+                            bestCost = cost;
+                            best = new Tail(runStart, end);
+                        }
+                    }
                 }
-                runTop = -1;
-                lastColored = -1;
+                runStart = -1;
+                previous = -1;
             }
         }
-        return new VerticalRun((bestTop + bestBottom - 1) / 2, bestBottom - bestTop);
+        return best;
     }
 
-    private static Candidate findStructuralCandidate(PixelSource source, int screenWidth,
-                                                       double scale, int trackWidth, int trackHeight,
-                                                       int expectedY, int expectedX,
-                                                       int searchX0, int searchX1) {
-        Candidate best = null;
-        int step = Math.max(1, (int) Math.round(2 * scale));
-        int yRange = Math.max(trackHeight, (int) Math.round(screenWidth * 0.008));
-        int xMin = Math.max(searchX0, (int) Math.round(screenWidth * 0.30));
-        int xMax = Math.min(searchX1 - trackWidth, (int) Math.round(screenWidth * 0.44));
-        for (int y = expectedY - yRange; y <= expectedY + yRange; y += step) {
-            for (int x = xMin; x <= xMax; x += step) {
-                double score = structuralScore(source, x, y, trackWidth, trackHeight)
-                        - Math.min(Math.abs(x - expectedX) * 6.0 / trackWidth, 6.0)
-                        - Math.min(Math.abs(y - expectedY) * 6.0 / trackHeight, 6.0);
-                if (best == null || score > best.score) {
-                    best = new Candidate(score, x, x, y);
-                }
-            }
+    private static int medianColor(PixelSource source, int x, int firstY, int lastY,
+                                   int[] reds, int[] greens, int[] blues) {
+        int count = 0;
+        for (int y = firstY; y < lastY; y++) {
+            int color = source.get(x, y);
+            reds[count] = red(color);
+            greens[count] = green(color);
+            blues[count] = blue(color);
+            count++;
         }
-        return best != null && best.score >= 24.0 ? best : null;
+        Arrays.sort(reds, 0, count);
+        Arrays.sort(greens, 0, count);
+        Arrays.sort(blues, 0, count);
+        int r = reds[count / 2];
+        int g = greens[count / 2];
+        int b = blues[count / 2];
+        return 0xff000000 | (r << 16) | (g << 8) | b;
     }
 
-    private static double structuralScore(PixelSource source, int left, int centerY,
-                                          int trackWidth, int trackHeight) {
-        int half = trackHeight / 2;
-        int innerTop = centerY - half + 2;
-        int innerBottom = centerY + half - 2;
-        int outerTop = centerY - half - 3;
-        int outerBottom = centerY + half + 3;
-        if (!source.contains(left, outerTop)
-                || !source.contains(left + trackWidth - 1, outerBottom)) return -1e9;
-        double edge = 0.0;
-        double rough = 0.0;
-        double light = 0.0;
-        int samples = 12;
-        for (int index = 0; index < samples; index++) {
-            int x = left + (int) Math.round((index + 0.5) * trackWidth / samples);
-            int center = source.get(x, centerY);
-            int top = source.get(x, innerTop);
-            int bottom = source.get(x, innerBottom);
-            edge += colorDistance(top, source.get(x, outerTop));
-            edge += colorDistance(bottom, source.get(x, outerBottom));
-            rough += colorDistance(top, center) + colorDistance(bottom, center);
-            light += brightness(center);
+    private static int refineNeutralEnd(int[] profile, int start, int end,
+                                        int minimumTail, int height) {
+        int window = Math.max(2, (int) Math.round(height * 0.15));
+        int first = Math.max(start + minimumTail, start + window);
+        int last = Math.min(end - window, profile.length - window);
+        Edge best = new Edge(-1e9, end);
+        for (int boundary = first; boundary <= last; boundary++) {
+            double leftR = meanChannel(profile, boundary - window, boundary, 16);
+            double leftG = meanChannel(profile, boundary - window, boundary, 8);
+            double leftB = meanChannel(profile, boundary - window, boundary, 0);
+            double rightR = meanChannel(profile, boundary, boundary + window, 16);
+            double rightG = meanChannel(profile, boundary, boundary + window, 8);
+            double rightB = meanChannel(profile, boundary, boundary + window, 0);
+            double drop = (leftR + leftG + leftB - rightR - rightG - rightB) / 3.0;
+            double distance = vectorDistance(leftR, leftG, leftB, rightR, rightG, rightB);
+            double score = drop + distance * 0.20;
+            if (drop >= 18.0 && score > best.score) best = new Edge(score, boundary);
         }
-        return edge / samples - rough / samples * 0.45 + light / samples * 0.10;
+        return best.score >= 24.0 ? best.position : end;
     }
 
-    private static int refineTrackLeft(PixelSource source, int runStart, int centerY,
-                                       double scale, int trackHeight, int searchX0, int searchX1) {
-        int verticalHalf = Math.max(3, (int) Math.round(trackHeight * 0.45));
-        int required = Math.max(3, (int) Math.round(8 * scale));
-        int start = Math.max(searchX0, runStart - (int) Math.round(10 * scale));
-        int end = Math.min(searchX1 - required, runStart + Math.max(
-                (int) Math.round(30 * scale), (int) Math.round(trackHeight * 2.4)));
-        int rows = verticalHalf * 2 + 1;
-        for (int candidate = start; candidate <= end; candidate++) {
-            boolean continuous = true;
-            for (int x = candidate; x < candidate + required; x++) {
-                int colored = 0;
-                for (int y = centerY - verticalHalf; y <= centerY + verticalHalf; y++) {
-                    if (isGaugeColor(source.get(x, y))) colored++;
-                }
-                if (colored < Math.ceil(rows * 0.78)) {
-                    continuous = false;
-                    break;
-                }
-            }
-            if (continuous) return candidate;
+    private static double meanChannel(int[] colors, int start, int end, int shift) {
+        double sum = 0.0;
+        for (int index = start; index < end; index++) sum += (colors[index] >>> shift) & 0xff;
+        return sum / Math.max(1, end - start);
+    }
+
+    private static double maskDensity(PixelSource source, int left, int right,
+                                      int localTop, int localBottom, MaskKind kind) {
+        int top = localTop + source.region.top;
+        int bottom = localBottom + source.region.top;
+        int matches = 0;
+        int total = Math.max(1, (right - left) * (bottom - top));
+        for (int y = top; y < bottom; y++) {
+            for (int x = left; x < right; x++) if (matches(source.get(x, y), kind)) matches++;
         }
-        return runStart;
+        return matches / (double) total;
+    }
+
+    private static double endpointFlatness(int[] starts, int[] ends, int left, int right,
+                                           int height, boolean empty) {
+        double startMad = medianAbsoluteDeviation(starts, left) / Math.max(1.0, height);
+        double endMad = medianAbsoluteDeviation(ends, right) / Math.max(1.0, height);
+        return Math.max(0.0, 1.0 - (startMad + endMad) * 0.55);
+    }
+
+    private static double edgeContrast(PixelSource source, int left, int right,
+                                       int localTop, int localBottom) {
+        int top = localTop + source.region.top;
+        int bottom = localBottom + source.region.top;
+        if (top < source.region.top + 2 || bottom + 1 >= source.region.top + source.region.height) {
+            return 0.0;
+        }
+        double[] values = new double[5];
+        double[] fractions = {0.18, 0.35, 0.55, 0.75, 0.90};
+        for (int index = 0; index < fractions.length; index++) {
+            int x = clamp(left + (int) Math.round((right - left) * fractions[index]),
+                    source.region.left, source.region.left + source.region.width - 1);
+            int inside = source.get(x, (top + bottom - 1) / 2);
+            values[index] = (colorDistance(inside, source.get(x, top - 2))
+                    + colorDistance(inside, source.get(x, bottom + 1))) * 0.5;
+        }
+        Arrays.sort(values);
+        return values[values.length / 2];
+    }
+
+    private static boolean matches(int color, MaskKind kind) {
+        return kind == MaskKind.GAUGE ? isGaugeColor(color) : isNeutralColor(color);
+    }
+
+    private static boolean isNeutralColor(int color) {
+        int r = red(color);
+        int g = green(color);
+        int b = blue(color);
+        int maximum = Math.max(r, Math.max(g, b));
+        int minimum = Math.min(r, Math.min(g, b));
+        double light = (r + g + b) / 3.0;
+        return light >= 55 && light <= 125 && maximum - minimum <= 20;
+    }
+
+    private static int median(int[] values) {
+        int[] copy = Arrays.copyOf(values, values.length);
+        Arrays.sort(copy);
+        return copy[copy.length / 2];
+    }
+
+    private static double medianAbsoluteDeviation(int[] values, int center) {
+        int[] deviations = new int[values.length];
+        for (int index = 0; index < values.length; index++) {
+            deviations[index] = Math.abs(values[index] - center);
+        }
+        Arrays.sort(deviations);
+        return deviations[deviations.length / 2];
+    }
+
+    private static int[] toArray(List<Integer> values) {
+        int[] result = new int[values.size()];
+        for (int index = 0; index < values.size(); index++) result[index] = values.get(index);
+        return result;
     }
 
     private static Result analyzeProfile(PixelSource source, int screenWidth, int left, int centerY,
@@ -398,9 +569,12 @@ final class StaminaGaugeDetector {
         int internal = -1;
         int finalBoundary = trackWidth;
 
-        int gainZoneStart = Math.min(trackWidth, gain.position + gap + 2);
+        // A +3 preview can be only four or five source pixels wide. Sampling
+        // after the classifier gap skipped the entire bright segment on low
+        // resolution captures, so inspect immediately to the right of the edge.
+        int gainZoneStart = Math.min(trackWidth, gain.position);
         int gainZoneEnd = Math.min(trackWidth,
-                gainZoneStart + Math.max(gainPreviewMin, window * 2));
+                gainZoneStart + Math.max(gainPreviewMin, window));
         double gainZoneLight = mean(luminance, gainZoneStart, gainZoneEnd);
         double gainZoneSaturation = mean(saturation, gainZoneStart, gainZoneEnd);
         if (gain.score >= 24 && gainZoneLight >= 115 && gainZoneSaturation >= 35
@@ -547,7 +721,13 @@ final class StaminaGaugeDetector {
     }
 
     private static int valueForBoundary(int boundary, int trackWidth) {
-        return (int) Math.round(clamp(boundary, 0, trackWidth) * 100.0 / trackWidth);
+        int value = (int) Math.round(clamp(boundary, 0, trackWidth) * 100.0 / trackWidth);
+        // Rounded end caps and resampling can consume one or two visual pixels.
+        // Snap only the extreme two percent so a visibly full/empty gauge is not
+        // reported as 99/1 while ordinary values remain unaltered.
+        if (value >= 98) return 100;
+        if (value <= 2) return 0;
+        return value;
     }
 
     private static double[] smooth(double[] values, int radius) {
@@ -622,18 +802,49 @@ final class StaminaGaugeDetector {
 
     private static final class Candidate {
         final double score;
-        final int runStart;
-        final int runEnd;
-        final int centerY;
-        Candidate(double score, int runStart, int runEnd, int centerY) {
-            this.score = score; this.runStart = runStart; this.runEnd = runEnd; this.centerY = centerY;
+        final int left;
+        final int colorEnd;
+        final int right;
+        final int top;
+        final int bottom;
+        final boolean empty;
+
+        Candidate(double score, int left, int colorEnd, int right,
+                  int top, int bottom, boolean empty) {
+            this.score = score;
+            this.left = left;
+            this.colorEnd = colorEnd;
+            this.right = right;
+            this.top = top;
+            this.bottom = bottom;
+            this.empty = empty;
         }
     }
 
-    private static final class VerticalRun {
-        final int center;
-        final int length;
-        VerticalRun(int center, int length) { this.center = center; this.length = length; }
+    private static final class Run {
+        final int start;
+        final int end;
+        Run(int start, int end) { this.start = start; this.end = end; }
+    }
+
+    private static final class StableBand {
+        final int top;
+        final int bottom;
+        final int[] starts;
+        final int[] ends;
+
+        StableBand(int top, int bottom, int[] starts, int[] ends) {
+            this.top = top;
+            this.bottom = bottom;
+            this.starts = starts;
+            this.ends = ends;
+        }
+    }
+
+    private static final class Tail {
+        final int start;
+        final int end;
+        Tail(int start, int end) { this.start = start; this.end = end; }
     }
 
     private static final class Edge {
@@ -642,5 +853,6 @@ final class StaminaGaugeDetector {
         Edge(double score, int position) { this.score = score; this.position = position; }
     }
 
+    private enum MaskKind { GAUGE, NEUTRAL }
     private enum BoundaryKind { GAIN_START, GAIN_END, LOSS_END, NORMAL_END }
 }
