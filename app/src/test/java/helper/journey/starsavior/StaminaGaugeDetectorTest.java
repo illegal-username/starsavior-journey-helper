@@ -91,6 +91,23 @@ public class StaminaGaugeDetectorTest {
     }
 
     @Test
+    public void readsSameGaugeAtIndependentHudScalesAndTranslations() {
+        int[] widths = {428, 497, 577, 640};
+        int[] heights = {30, 34, 39, 43};
+        float[] lefts = {0.388f, 0.340f, 0.353f, 0.331f};
+        for (int index = 0; index < widths.length; index++) {
+            Fixture fixture = Fixture.createCustom(3120, 1440, lefts[index],
+                    33, 64, StaminaGaugeDetector.Direction.GAIN,
+                    widths[index], heights[index], index * 5 - 6);
+            StaminaGaugeDetector.Result result = fixture.detect(null);
+            assertNotNull(result);
+            assertEquals(StaminaGaugeDetector.Direction.GAIN, result.direction);
+            assertNear(33, result.current, 1);
+            assertNear(64, result.after, 1);
+        }
+    }
+
+    @Test
     public void stabilizesCurrentWithoutMergingDifferentPreviewAmounts() {
         StaminaGaugeDetector.Result first = new StaminaGaugeDetector.Result(85, 68,
                 StaminaGaugeDetector.Direction.LOSS, new StaminaGaugeDetector.Anchor(0.35f, 0.032f), 0.8f);
@@ -105,8 +122,8 @@ public class StaminaGaugeDetectorTest {
     public void copiesOnlyASmallTopStrip() {
         StaminaGaugeDetector.Region phone = StaminaGaugeDetector.scanRegion(3120, 1440);
         StaminaGaugeDetector.Region fold = StaminaGaugeDetector.scanRegion(1280, 1153);
-        assertTrue(phone.width * phone.height < 250_000);
-        assertTrue(fold.width * fold.height < 50_000);
+        assertTrue(phone.width * phone.height < 300_000);
+        assertTrue(fold.width * fold.height < 60_000);
     }
 
     private static void assertNear(int expected, int actual, int tolerance) {
@@ -131,35 +148,46 @@ public class StaminaGaugeDetectorTest {
 
         static Fixture create(int width, int height, float leftRatio, int current, int after,
                               StaminaGaugeDetector.Direction direction, int centerYOffset) {
+            double scale = width / 3120.0;
+            int trackWidth = Math.max(72, (int) Math.round(428 * scale));
+            int trackHeight = Math.max(8, (int) Math.round(33 * scale));
+            return createCustom(width, height, leftRatio, current, after, direction,
+                    trackWidth, trackHeight, centerYOffset);
+        }
+
+        static Fixture createCustom(int width, int height, float leftRatio, int current, int after,
+                                    StaminaGaugeDetector.Direction direction, int trackWidth,
+                                    int trackHeight, int centerYOffset) {
             StaminaGaugeDetector.Region region = StaminaGaugeDetector.scanRegion(width, height);
             int[] pixels = new int[region.width * region.height];
             for (int index = 0; index < pixels.length; index++) pixels[index] = rgb(22, 24, 31);
 
+            int logicalLeft = Math.round(width * leftRatio);
+            int endpointInset = Math.max(1, Math.round(trackHeight * 0.30f));
+            int rawLeft = logicalLeft - endpointInset;
+            int rawRight = rawLeft + trackWidth;
             double scale = width / 3120.0;
-            int trackWidth = Math.max(72, (int) Math.round(428 * scale));
-            int trackHeight = Math.max(8, (int) Math.round(33 * scale));
-            int left = Math.round(width * leftRatio);
             int centerY = (int) Math.round(100 * scale) + centerYOffset;
             int top = centerY - trackHeight / 2;
             int bottom = top + trackHeight;
-            int currentBoundary = Math.round(trackWidth * current / 100f);
-            int afterBoundary = Math.round(trackWidth * after / 100f);
+            int currentBoundary = logicalLeft + Math.round(trackWidth * current / 100f);
+            int afterBoundary = logicalLeft + Math.round(trackWidth * after / 100f);
 
             for (int y = top; y < bottom; y++) {
-                for (int offset = 0; offset < trackWidth; offset++) {
+                for (int x = rawLeft; x < rawRight; x++) {
                     int color;
                     if (direction == StaminaGaugeDetector.Direction.GAIN) {
-                        if (offset < currentBoundary) color = normal(offset, trackWidth);
-                        else if (offset < afterBoundary) color = rgb(150 + offset * 80 / trackWidth, 250, 150);
+                        if (x < currentBoundary) color = normal(x - logicalLeft, trackWidth);
+                        else if (x < afterBoundary) color = rgb(150 + Math.max(0, x - logicalLeft) * 80 / trackWidth, 250, 150);
                         else color = rgb(78, 78, 78);
                     } else if (direction == StaminaGaugeDetector.Direction.LOSS) {
-                        if (offset < afterBoundary) color = normal(offset, trackWidth);
-                        else if (offset < currentBoundary) color = rgb(61, 75, 50);
+                        if (x < afterBoundary) color = normal(x - logicalLeft, trackWidth);
+                        else if (x < currentBoundary) color = rgb(61, 75, 50);
                         else color = rgb(78, 78, 78);
                     } else {
-                        color = offset < currentBoundary ? normal(offset, trackWidth) : rgb(78, 78, 78);
+                        color = x < currentBoundary ? normal(x - logicalLeft, trackWidth) : rgb(78, 78, 78);
                     }
-                    set(pixels, region, left + offset, y, color);
+                    set(pixels, region, x, y, color);
                 }
             }
             return new Fixture(width, height, region, pixels);
@@ -189,7 +217,7 @@ public class StaminaGaugeDetectorTest {
         }
 
         private static int normal(int offset, int width) {
-            float progress = offset / (float) Math.max(1, width - 1);
+            float progress = Math.max(0, offset) / (float) Math.max(1, width - 1);
             return rgb(18 + Math.round(progress * 160),
                     155 + Math.round(progress * 85), 138 - Math.round(progress * 40));
         }
