@@ -173,7 +173,8 @@ final class JourneyDatabaseUpdater {
         connection.setUseCaches(false);
         connection.setRequestProperty("Accept", "application/json");
         connection.setRequestProperty("Accept-Encoding", "identity");
-        connection.setRequestProperty("User-Agent", "StarSaviorJourneyHelper/2.1.0 (Android; manual database update)");
+        connection.setRequestProperty("User-Agent", "StarSaviorJourneyHelper/"
+                + BuildConfig.VERSION_NAME + " (Android; manual database update)");
         return connection;
     }
 

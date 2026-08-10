@@ -107,21 +107,48 @@ final class StaminaGaugeDetector {
 
         Candidate best = findColoredCandidate(source, screenWidth, scale, trackWidth,
                 trackHeight, expectedY, searchX0, searchX1, searchY0, searchY1, xCenter);
-        if (best == null && previousAnchor != null) {
-            int cachedLeft = (int) Math.round(previousAnchor.leftRatio * screenWidth);
-            int cachedY = (int) Math.round(previousAnchor.centerYRatio * screenWidth);
-            if (structuralScore(source, cachedLeft, cachedY, trackWidth, trackHeight) >= 24.0) {
-                best = new Candidate(0.0, cachedLeft, cachedLeft, cachedY);
-            }
-        }
+        boolean usedColoredCandidate = best != null;
         if (best == null) {
             best = findStructuralCandidate(source, screenWidth, scale, trackWidth, trackHeight,
                     expectedY, xCenter, searchX0, searchX1);
         }
         if (best == null) return null;
 
-        int maxCenterShift = Math.max(1, (int) Math.round(2 * scale));
-        int centerY = clamp(best.centerY, expectedY - maxCenterShift, expectedY + maxCenterShift);
+        Result primary = analyzeCandidate(source, screenWidth, best, scale, trackWidth,
+                trackHeight, searchX0, searchX1, searchY0, searchY1);
+        if (primary == null) return null;
+
+        // When an ordinary partially-filled gauge is resampled by the display
+        // compositor, the sandwich icon or another green HUD detail can beat
+        // the real bar by a small amount.  That false profile has no convincing
+        // fill boundary and therefore looks like a low-confidence 0/100 value.
+        // Re-check such an extreme with the track's dark border structure.
+        if ((primary.current == 0 || primary.current == 100)
+                && primary.direction == Direction.NONE && primary.confidence < 0.80f
+                && usedColoredCandidate
+                && best.runEnd - best.runStart < Math.round(trackWidth * 0.80f)) {
+            Candidate structural = findStructuralCandidate(source, screenWidth, scale,
+                    trackWidth, trackHeight, expectedY, xCenter, searchX0, searchX1);
+            if (structural != null) {
+                Result alternative = analyzeCandidate(source, screenWidth, structural, scale,
+                        trackWidth, trackHeight, searchX0, searchX1, searchY0, searchY1);
+                if (alternative != null && alternative.confidence > primary.confidence + 0.02f) {
+                    return alternative;
+                }
+            }
+        }
+        return primary;
+    }
+
+    private static Result analyzeCandidate(PixelSource source, int screenWidth, Candidate best,
+                                           double scale, int trackWidth, int trackHeight,
+                                           int searchX0, int searchX1, int searchY0, int searchY1) {
+
+        // The captured app can be letterboxed or shifted by a display cutout.
+        // The search already found the vertical center of the colored/structural
+        // track, so forcing it back to the reference row reads background pixels
+        // on those devices and turns a partial gauge into 0 or 100.
+        int centerY = clamp(best.centerY, searchY0, searchY1);
         int left = refineTrackLeft(source, best.runStart, centerY, scale, trackHeight,
                 searchX0, searchX1);
         if (!source.contains(left, centerY) || !source.contains(left + trackWidth - 1, centerY)) {
@@ -161,9 +188,21 @@ final class StaminaGaugeDetector {
                         int middle = (runStart + end) / 2;
                         VerticalRun vertical = verticalRun(source, middle, y, searchY0, searchY1,
                                 Math.max(1, (int) Math.round(scale)));
+                        double structure = structuralScore(source, runStart, vertical.center,
+                                trackWidth, trackHeight);
                         double score = Math.min(length, trackWidth)
-                                - Math.abs(runStart - expectedX) * 1.20
-                                - Math.abs(vertical.center - expectedY) * 3.0
+                                // Green scenery and character effects can form a longer run than
+                                // the actual fill.  The stamina track itself has stable dark top
+                                // and bottom borders across HUD layouts, so structural evidence
+                                // must outweigh raw run length.
+                                + structure * 2.0
+                                // A remembered position is only a tie-breaker.
+                                // HUD placement changes between devices and
+                                // captured-content layouts, while the run length
+                                // and height are direct evidence from this frame.
+                                - Math.min(Math.abs(runStart - expectedX) * 4.0 / trackWidth, 4.0)
+                                - Math.min(Math.abs(vertical.center - expectedY) * 4.0
+                                        / trackHeight, 4.0)
                                 - Math.abs(vertical.length - trackHeight) * 0.70;
                         if (best == null || score > best.score) {
                             best = new Candidate(score, runStart, end, vertical.center);
@@ -210,13 +249,14 @@ final class StaminaGaugeDetector {
                                                        int searchX0, int searchX1) {
         Candidate best = null;
         int step = Math.max(1, (int) Math.round(2 * scale));
-        int yRange = Math.max(2, (int) Math.round(screenWidth * 0.006));
+        int yRange = Math.max(trackHeight, (int) Math.round(screenWidth * 0.008));
         int xMin = Math.max(searchX0, (int) Math.round(screenWidth * 0.30));
         int xMax = Math.min(searchX1 - trackWidth, (int) Math.round(screenWidth * 0.44));
         for (int y = expectedY - yRange; y <= expectedY + yRange; y += step) {
             for (int x = xMin; x <= xMax; x += step) {
                 double score = structuralScore(source, x, y, trackWidth, trackHeight)
-                        - Math.abs(x - expectedX) * 0.10 - Math.abs(y - expectedY) * 0.6;
+                        - Math.min(Math.abs(x - expectedX) * 6.0 / trackWidth, 6.0)
+                        - Math.min(Math.abs(y - expectedY) * 6.0 / trackHeight, 6.0);
                 if (best == null || score > best.score) {
                     best = new Candidate(score, x, x, y);
                 }
@@ -256,7 +296,8 @@ final class StaminaGaugeDetector {
         int verticalHalf = Math.max(3, (int) Math.round(trackHeight * 0.45));
         int required = Math.max(3, (int) Math.round(8 * scale));
         int start = Math.max(searchX0, runStart - (int) Math.round(10 * scale));
-        int end = Math.min(searchX1 - required, runStart + (int) Math.round(30 * scale));
+        int end = Math.min(searchX1 - required, runStart + Math.max(
+                (int) Math.round(30 * scale), (int) Math.round(trackHeight * 2.4)));
         int rows = verticalHalf * 2 + 1;
         for (int candidate = start; candidate <= end; candidate++) {
             boolean continuous = true;
