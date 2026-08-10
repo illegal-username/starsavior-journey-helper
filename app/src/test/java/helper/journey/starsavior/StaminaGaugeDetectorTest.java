@@ -63,6 +63,34 @@ public class StaminaGaugeDetectorTest {
     }
 
     @Test
+    public void ignoresStaleAnchorAndGreenScenery() {
+        Fixture fixture = Fixture.create(2400, 1080, 0.387f, 36, 36,
+                StaminaGaugeDetector.Direction.NONE);
+        fixture.paintGreenScenery(0.335f);
+
+        StaminaGaugeDetector.Result result = fixture.detect(
+                new StaminaGaugeDetector.Anchor(0.28f, 0.025f));
+
+        assertNotNull(result);
+        assertNear(36, result.current, 2);
+        assertTrue("detector kept the stale scenery anchor",
+                result.anchor.leftRatio > 0.38f && result.anchor.leftRatio < 0.40f);
+    }
+
+    @Test
+    public void followsVerticallyShiftedGaugeInsteadOfReferenceRow() {
+        Fixture fixture = Fixture.create(2400, 1080, 0.387f, 36, 36,
+                StaminaGaugeDetector.Direction.NONE, 18);
+
+        StaminaGaugeDetector.Result result = fixture.detect(null);
+
+        assertNotNull(result);
+        assertNear(36, result.current, 2);
+        assertTrue("detector forced the gauge back to the reference row",
+                result.anchor.centerYRatio > 0.037f);
+    }
+
+    @Test
     public void stabilizesCurrentWithoutMergingDifferentPreviewAmounts() {
         StaminaGaugeDetector.Result first = new StaminaGaugeDetector.Result(85, 68,
                 StaminaGaugeDetector.Direction.LOSS, new StaminaGaugeDetector.Anchor(0.35f, 0.032f), 0.8f);
@@ -98,6 +126,11 @@ public class StaminaGaugeDetectorTest {
 
         static Fixture create(int width, int height, float leftRatio, int current, int after,
                               StaminaGaugeDetector.Direction direction) {
+            return create(width, height, leftRatio, current, after, direction, 0);
+        }
+
+        static Fixture create(int width, int height, float leftRatio, int current, int after,
+                              StaminaGaugeDetector.Direction direction, int centerYOffset) {
             StaminaGaugeDetector.Region region = StaminaGaugeDetector.scanRegion(width, height);
             int[] pixels = new int[region.width * region.height];
             for (int index = 0; index < pixels.length; index++) pixels[index] = rgb(22, 24, 31);
@@ -106,7 +139,7 @@ public class StaminaGaugeDetectorTest {
             int trackWidth = Math.max(72, (int) Math.round(428 * scale));
             int trackHeight = Math.max(8, (int) Math.round(33 * scale));
             int left = Math.round(width * leftRatio);
-            int centerY = (int) Math.round(100 * scale);
+            int centerY = (int) Math.round(100 * scale) + centerYOffset;
             int top = centerY - trackHeight / 2;
             int bottom = top + trackHeight;
             int currentBoundary = Math.round(trackWidth * current / 100f);
@@ -130,6 +163,25 @@ public class StaminaGaugeDetectorTest {
                 }
             }
             return new Fixture(width, height, region, pixels);
+        }
+
+        void paintGreenScenery(float leftRatio) {
+            double scale = width / 3120.0;
+            int trackHeight = Math.max(8, (int) Math.round(33 * scale));
+            int expectedY = (int) Math.round(100 * scale);
+            int left = Math.round(width * leftRatio);
+            int length = Math.max(20, Math.round(width * 0.073f));
+            int top = expectedY - trackHeight;
+            int baseHeight = Math.max(7, Math.round(trackHeight * 0.56f));
+            for (int offset = 0; offset < length; offset++) {
+                int wobble = ((offset / Math.max(2, trackHeight / 4)) % 5) - 2;
+                int columnTop = top + Math.max(0, wobble);
+                int columnBottom = top + baseHeight + Math.min(0, wobble);
+                for (int y = columnTop; y < columnBottom; y++) {
+                    set(pixels, region, left + offset, y,
+                            rgb(48 + offset % 18, 126 + offset % 27, 67 + offset % 13));
+                }
+            }
         }
 
         StaminaGaugeDetector.Result detect(StaminaGaugeDetector.Anchor anchor) {
