@@ -2,6 +2,7 @@ package helper.journey.starsavior;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
@@ -78,6 +79,29 @@ public class StaminaGaugeDetectorTest {
     }
 
     @Test
+    public void rejectsLowSaturationSceneryWithGaugeGeometry() {
+        Fixture fixture = Fixture.blank(2340, 1080);
+        fixture.paintLowSaturationBand(0.385f);
+
+        assertNull(fixture.detect(null));
+    }
+
+    @Test
+    public void prefersFullGaugeOverSaturatedBannerAboveHud() {
+        Fixture fixture = Fixture.create(2340, 1080, 0.385f, 100, 100,
+                StaminaGaugeDetector.Direction.NONE);
+        fixture.paintUpperBannerDecoy();
+
+        StaminaGaugeDetector.Result result = fixture.detect(null);
+
+        assertNotNull(result);
+        assertEquals(StaminaGaugeDetector.Direction.NONE, result.direction);
+        assertEquals(100, result.current);
+        assertTrue("detector selected the upper banner instead of the gauge",
+                result.anchor.leftRatio > 0.37f && result.anchor.leftRatio < 0.40f);
+    }
+
+    @Test
     public void followsVerticallyShiftedGaugeInsteadOfReferenceRow() {
         Fixture fixture = Fixture.create(2400, 1080, 0.387f, 36, 36,
                 StaminaGaugeDetector.Direction.NONE, 18);
@@ -88,6 +112,19 @@ public class StaminaGaugeDetectorTest {
         assertNear(36, result.current, 2);
         assertTrue("detector forced the gauge back to the reference row",
                 result.anchor.centerYRatio > 0.037f);
+    }
+
+    @Test
+    public void fallsBackToGaugeBelowPreferredHudBand() {
+        Fixture fixture = Fixture.create(2400, 1080, 0.387f, 52, 52,
+                StaminaGaugeDetector.Direction.NONE, 50);
+
+        StaminaGaugeDetector.Result result = fixture.detect(null);
+
+        assertNotNull(result);
+        assertNear(52, result.current, 2);
+        assertTrue("detector rejected a vertically translated gauge",
+                result.anchor.centerYRatio > 0.050f);
     }
 
     @Test
@@ -193,6 +230,13 @@ public class StaminaGaugeDetectorTest {
             return new Fixture(width, height, region, pixels);
         }
 
+        static Fixture blank(int width, int height) {
+            StaminaGaugeDetector.Region region = StaminaGaugeDetector.scanRegion(width, height);
+            int[] pixels = new int[region.width * region.height];
+            for (int index = 0; index < pixels.length; index++) pixels[index] = rgb(22, 24, 31);
+            return new Fixture(width, height, region, pixels);
+        }
+
         void paintGreenScenery(float leftRatio) {
             double scale = width / 3120.0;
             int trackHeight = Math.max(8, (int) Math.round(33 * scale));
@@ -208,6 +252,40 @@ public class StaminaGaugeDetectorTest {
                 for (int y = columnTop; y < columnBottom; y++) {
                     set(pixels, region, left + offset, y,
                             rgb(48 + offset % 18, 126 + offset % 27, 67 + offset % 13));
+                }
+            }
+        }
+
+        void paintLowSaturationBand(float leftRatio) {
+            double scale = width / 3120.0;
+            int trackWidth = Math.max(72, (int) Math.round(428 * scale));
+            int trackHeight = Math.max(8, (int) Math.round(33 * scale));
+            int endpointInset = Math.max(1, Math.round(trackHeight * 0.30f));
+            int left = Math.round(width * leftRatio) - endpointInset;
+            int centerY = (int) Math.round(width * 0.032);
+            int top = centerY - trackHeight / 2;
+            for (int y = top; y < top + trackHeight; y++) {
+                for (int x = left; x < left + trackWidth; x++) {
+                    set(pixels, region, x, y, rgb(108, 124, 133));
+                }
+            }
+        }
+
+        void paintUpperBannerDecoy() {
+            int trackHeight = Math.max(8, (int) Math.round(width * 0.0085));
+            int trackWidth = (int) Math.round(trackHeight * 12.8);
+            int endpointInset = Math.max(1, Math.round(trackHeight * 0.30f));
+            int rawLeft = region.left + Math.max(24, trackHeight * 3);
+            int logicalLeft = rawLeft + endpointInset;
+            int filledEnd = logicalLeft + Math.round(trackWidth * 0.38f);
+            int centerY = (int) Math.round(width * 0.015);
+            int top = centerY - trackHeight / 2;
+            for (int y = top; y < top + trackHeight; y++) {
+                for (int x = rawLeft; x < rawLeft + trackWidth; x++) {
+                    int color = x < filledEnd
+                            ? normal(x - logicalLeft, trackWidth)
+                            : rgb(78, 78, 78);
+                    set(pixels, region, x, y, color);
                 }
             }
         }

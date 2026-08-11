@@ -18,6 +18,8 @@ import java.util.Set;
  */
 final class StaminaGaugeDetector {
     private static final double TRACK_ASPECT = 12.8;
+    private static final double PREFERRED_CENTER_MIN = 0.022;
+    private static final double PREFERRED_CENTER_MAX = 0.050;
 
     enum Direction { NONE, GAIN, LOSS }
 
@@ -130,6 +132,7 @@ final class StaminaGaugeDetector {
         }
 
         Candidate best = null;
+        Candidate bestInHudBand = null;
         Set<Long> seen = new HashSet<>();
         for (int localY = 0; localY < rows.length; localY += yStep) {
             for (Run seed : rows[localY]) {
@@ -197,10 +200,20 @@ final class StaminaGaugeDetector {
                 Candidate candidate = new Candidate(score, left, colorEnd, right,
                         band.top + source.region.top, band.bottom + source.region.top, empty);
                 if (best == null || candidate.score > best.score) best = candidate;
+                if (location >= PREFERRED_CENTER_MIN && location <= PREFERRED_CENTER_MAX
+                        && (bestInHudBand == null || candidate.score > bestInHudBand.score)) {
+                    bestInHudBand = candidate;
+                }
             }
         }
-        if (best == null) return null;
         double minimumScore = kind == MaskKind.GAUGE ? 92.0 : 105.0;
+        // Date banners and goal badges can contain long saturated strips above the HUD.
+        // Prefer a qualified candidate in the broad gauge band, but retain the full
+        // scan as a fallback for letterboxed or vertically translated layouts.
+        if (bestInHudBand != null && bestInHudBand.score >= minimumScore) {
+            return bestInHudBand;
+        }
+        if (best == null) return null;
         return best.score >= minimumScore ? best : null;
     }
 
@@ -761,7 +774,9 @@ final class StaminaGaugeDetector {
         int b = blue(color);
         int maximum = Math.max(r, Math.max(g, b));
         int minimum = Math.min(r, Math.min(g, b));
-        return g >= 65 && g - r >= 7 && g - b >= -22 && maximum - minimum >= 13;
+        // The translucent HUD inherits a slight green cast from bright scenery.
+        // Real fill colors remain strongly chromatic even in compressed captures.
+        return g >= 65 && g - r >= 7 && g - b >= -22 && maximum - minimum >= 35;
     }
 
     private static int red(int color) { return (color >>> 16) & 0xff; }
