@@ -564,11 +564,10 @@ public final class OverlayCaptureService extends Service {
                 return;
             }
             List<String> choiceLines = extractLines(choiceText);
-            String difficulty = DifficultyResolver.fromRecognizedLines(choiceLines);
             if (!choiceBitmap.isRecycled()) choiceBitmap.recycle();
 
             JourneyMatcher currentMatcher = matcher;
-            if (stamina != null && difficulty.isEmpty() && currentMatcher != null
+            if (stamina != null && currentMatcher != null
                     && !currentMatcher.hasPlausibleChoiceSignal(choiceLines)) {
                 recycleBitmaps(eventBitmap, fullBitmap);
                 capturing.set(false);
@@ -591,7 +590,7 @@ public final class OverlayCaptureService extends Service {
                 }
                 List<String> eventLines = extractLines(eventText);
                 if (!eventBitmap.isRecycled()) eventBitmap.recycle();
-                matchOrFallback(eventLines, choiceLines, fullBitmap, generation, difficulty, stamina);
+                matchOrFallback(eventLines, choiceLines, fullBitmap, generation, stamina);
             }).addOnFailureListener(worker, ignored -> {
                 if (!eventBitmap.isRecycled()) eventBitmap.recycle();
                 if (!isProjectionSessionActive(generation)) {
@@ -599,7 +598,7 @@ public final class OverlayCaptureService extends Service {
                     capturing.set(false);
                     return;
                 }
-                matchOrFallback(List.of(), choiceLines, fullBitmap, generation, difficulty, stamina);
+                matchOrFallback(List.of(), choiceLines, fullBitmap, generation, stamina);
             });
         }).addOnFailureListener(worker, error -> {
             recycleBitmaps(eventBitmap, choiceBitmap);
@@ -613,13 +612,13 @@ public final class OverlayCaptureService extends Service {
                 capturing.set(false);
                 mainHandler.post(() -> showStamina(stamina));
             } else {
-                recognizeFull(fullBitmap, generation, "", null);
+                recognizeFull(fullBitmap, generation, List.of(), null);
             }
         });
     }
 
     private void matchOrFallback(List<String> eventLines, List<String> choiceLines,
-                                 Bitmap fullBitmap, int generation, String difficulty,
+                                 Bitmap fullBitmap, int generation,
                                  StaminaGaugeDetector.Result stamina) {
         JourneyMatcher currentMatcher = matcher;
         if (currentMatcher == null) {
@@ -630,15 +629,16 @@ public final class OverlayCaptureService extends Service {
         }
         JourneyModels.Match match = currentMatcher.match(eventLines, choiceLines);
         if (match.isConfident()) {
+            String difficulty = DifficultyResolver.fromRecognizedLines(match.event, choiceLines);
             recycleBitmaps(fullBitmap);
             capturing.set(false);
             mainHandler.post(() -> showMatch(match, difficulty, stamina));
         } else {
-            recognizeFull(fullBitmap, generation, difficulty, stamina);
+            recognizeFull(fullBitmap, generation, choiceLines, stamina);
         }
     }
 
-    private void recognizeFull(Bitmap fullBitmap, int generation, String recognizedDifficulty,
+    private void recognizeFull(Bitmap fullBitmap, int generation, List<String> regionalChoiceLines,
                                StaminaGaugeDetector.Result stamina) {
         TextRecognizer currentRecognizer = recognizer;
         if (!isProjectionSessionActive(generation) || currentRecognizer == null) {
@@ -654,9 +654,6 @@ public final class OverlayCaptureService extends Service {
                 return;
             }
             List<String> lines = extractLines(text);
-            String difficulty = recognizedDifficulty.isEmpty()
-                    ? DifficultyResolver.fromRecognizedLines(lines)
-                    : recognizedDifficulty;
             JourneyMatcher currentMatcher = matcher;
             if (currentMatcher == null) {
                 recycleBitmaps(fullBitmap);
@@ -668,7 +665,13 @@ public final class OverlayCaptureService extends Service {
             recycleBitmaps(fullBitmap);
             capturing.set(false);
             if (match.isConfident()) {
-                mainHandler.post(() -> showMatch(match, difficulty, stamina));
+                String difficulty = DifficultyResolver.fromRecognizedLines(
+                        match.event, regionalChoiceLines);
+                if (difficulty.isEmpty()) {
+                    difficulty = DifficultyResolver.fromRecognizedLines(match.event, lines);
+                }
+                String resolvedDifficulty = difficulty;
+                mainHandler.post(() -> showMatch(match, resolvedDifficulty, stamina));
             } else if (stamina != null) {
                 mainHandler.post(() -> showStamina(stamina));
             } else if (match.ambiguous) {
