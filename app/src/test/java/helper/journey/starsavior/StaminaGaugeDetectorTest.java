@@ -41,6 +41,46 @@ public class StaminaGaugeDetectorTest {
     }
 
     @Test
+    public void separatesRecoveryPreviewFromCompletelyEmptyGauge() {
+        Fixture fixture = Fixture.create(2340, 1080, 0.385f, 0, 17,
+                StaminaGaugeDetector.Direction.GAIN);
+
+        StaminaGaugeDetector.Result result = fixture.detect(null);
+
+        assertNotNull(result);
+        assertEquals(StaminaGaugeDetector.Direction.GAIN, result.direction);
+        assertEquals(0, result.current);
+        assertNear(17, result.after, 2);
+    }
+
+    @Test
+    public void separatesRecoveryPreviewEndingAtFullGauge() {
+        Fixture fixture = Fixture.create(2340, 1080, 0.385f, 83, 100,
+                StaminaGaugeDetector.Direction.GAIN);
+
+        StaminaGaugeDetector.Result result = fixture.detect(null);
+
+        assertNotNull(result);
+        assertEquals(StaminaGaugeDetector.Direction.GAIN, result.direction);
+        assertNear(83, result.current, 2);
+        assertEquals(100, result.after);
+    }
+
+    @Test
+    public void keepsFullWidthWhenRecoveryPreviewFadesToPaleYellow() {
+        Fixture fixture = Fixture.create(3120, 1440, 0.385f, 37, 100,
+                StaminaGaugeDetector.Direction.GAIN);
+        fixture.paintPaleYellowGainPreview(0.385f, 37, 100);
+
+        StaminaGaugeDetector.Result result = fixture.detect(null);
+
+        assertNotNull(result);
+        assertEquals(StaminaGaugeDetector.Direction.GAIN, result.direction);
+        assertNear(37, result.current, 2);
+        assertEquals(100, result.after);
+    }
+
+    @Test
     public void separatesConsumptionPreviewOnFoldableRatio() {
         Fixture fixture = Fixture.create(1280, 1153, 0.368f, 85, 68,
                 StaminaGaugeDetector.Direction.LOSS);
@@ -49,6 +89,58 @@ public class StaminaGaugeDetectorTest {
         assertEquals(StaminaGaugeDetector.Direction.LOSS, result.direction);
         assertNear(85, result.current, 3);
         assertNear(68, result.after, 3);
+    }
+
+    @Test
+    public void separatesConsumptionPreviewFromCompletelyFullGauge() {
+        Fixture fixture = Fixture.create(2340, 1080, 0.385f, 100, 83,
+                StaminaGaugeDetector.Direction.LOSS);
+
+        StaminaGaugeDetector.Result result = fixture.detect(null);
+
+        assertNotNull(result);
+        assertEquals(StaminaGaugeDetector.Direction.LOSS, result.direction);
+        assertEquals(100, result.current);
+        assertNear(83, result.after, 2);
+    }
+
+    @Test
+    public void separatesConsumptionPreviewEndingAtEmptyGauge() {
+        Fixture fixture = Fixture.create(2340, 1080, 0.385f, 17, 0,
+                StaminaGaugeDetector.Direction.LOSS);
+
+        StaminaGaugeDetector.Result result = fixture.detect(null);
+
+        assertNotNull(result);
+        assertEquals(StaminaGaugeDetector.Direction.LOSS, result.direction);
+        assertNear(17, result.current, 2);
+        assertEquals(0, result.after);
+    }
+
+    @Test
+    public void separatesDimConsumptionPreviewEndingAtEmptyGauge() {
+        Fixture fixture = Fixture.createWithLossColor(2340, 1080, 0.385f, 17, 0,
+                Fixture.rgb(40, 56, 53));
+
+        StaminaGaugeDetector.Result result = fixture.detect(null);
+
+        assertNotNull(result);
+        assertEquals(StaminaGaugeDetector.Direction.LOSS, result.direction);
+        assertNear(17, result.current, 2);
+        assertEquals(0, result.after);
+    }
+
+    @Test
+    public void separatesBlueShiftedConsumptionPreviewEndingAtEmptyGauge() {
+        Fixture fixture = Fixture.createWithLossColor(2340, 1080, 0.385f, 17, 0,
+                Fixture.rgb(40, 55, 61));
+
+        StaminaGaugeDetector.Result result = fixture.detect(null);
+
+        assertNotNull(result);
+        assertEquals(StaminaGaugeDetector.Direction.LOSS, result.direction);
+        assertNear(17, result.current, 2);
+        assertEquals(0, result.after);
     }
 
     @Test
@@ -82,6 +174,37 @@ public class StaminaGaugeDetectorTest {
     public void rejectsLowSaturationSceneryWithGaugeGeometry() {
         Fixture fixture = Fixture.blank(2340, 1080);
         fixture.paintLowSaturationBand(0.385f);
+
+        assertNull(fixture.detect(null));
+    }
+
+    @Test
+    public void rejectsColoredCandidateClippedByScanRegion() {
+        Fixture fixture = Fixture.blank(2340, 1080);
+        fixture.paintClippedGaugeBand();
+
+        assertNull(fixture.detect(null));
+    }
+
+    @Test
+    public void prefersPartialGaugeOverThinSameRowStatusText() {
+        Fixture fixture = Fixture.create(2340, 1080, 0.385f, 17, 17,
+                StaminaGaugeDetector.Direction.NONE);
+        fixture.paintThinSameRowDecoy();
+
+        StaminaGaugeDetector.Result result = fixture.detect(null);
+
+        assertNotNull(result);
+        assertEquals(StaminaGaugeDetector.Direction.NONE, result.direction);
+        assertNear(17, result.current, 2);
+        assertTrue("detector selected thin status text instead of the gauge",
+                result.anchor.leftRatio > 0.37f && result.anchor.leftRatio < 0.40f);
+    }
+
+    @Test
+    public void rejectsThinSameRowStatusTextWithoutGauge() {
+        Fixture fixture = Fixture.blank(2340, 1080);
+        fixture.paintThinSameRowDecoy();
 
         assertNull(fixture.detect(null));
     }
@@ -145,6 +268,20 @@ public class StaminaGaugeDetectorTest {
     }
 
     @Test
+    public void keepsPhysicalWidthWhenColoredCoreIsVerticallyCompressed() {
+        Fixture fixture = Fixture.createCustom(2340, 1080, 0.385f,
+                17, 50, StaminaGaugeDetector.Direction.GAIN,
+                320, 16, 0);
+
+        StaminaGaugeDetector.Result result = fixture.detect(null);
+
+        assertNotNull(result);
+        assertEquals(StaminaGaugeDetector.Direction.GAIN, result.direction);
+        assertNear(17, result.current, 3);
+        assertNear(50, result.after, 3);
+    }
+
+    @Test
     public void stabilizesCurrentWithoutMergingDifferentPreviewAmounts() {
         StaminaGaugeDetector.Result first = new StaminaGaugeDetector.Result(85, 68,
                 StaminaGaugeDetector.Direction.LOSS, new StaminaGaugeDetector.Anchor(0.35f, 0.032f), 0.8f);
@@ -192,9 +329,26 @@ public class StaminaGaugeDetectorTest {
                     trackWidth, trackHeight, centerYOffset);
         }
 
+        static Fixture createWithLossColor(int width, int height, float leftRatio,
+                                           int current, int after, int lossColor) {
+            double scale = width / 3120.0;
+            int trackWidth = Math.max(72, (int) Math.round(428 * scale));
+            int trackHeight = Math.max(8, (int) Math.round(33 * scale));
+            return createCustom(width, height, leftRatio, current, after,
+                    StaminaGaugeDetector.Direction.LOSS,
+                    trackWidth, trackHeight, 0, lossColor);
+        }
+
         static Fixture createCustom(int width, int height, float leftRatio, int current, int after,
                                     StaminaGaugeDetector.Direction direction, int trackWidth,
                                     int trackHeight, int centerYOffset) {
+            return createCustom(width, height, leftRatio, current, after, direction,
+                    trackWidth, trackHeight, centerYOffset, rgb(61, 75, 50));
+        }
+
+        static Fixture createCustom(int width, int height, float leftRatio, int current, int after,
+                                    StaminaGaugeDetector.Direction direction, int trackWidth,
+                                    int trackHeight, int centerYOffset, int lossColor) {
             StaminaGaugeDetector.Region region = StaminaGaugeDetector.scanRegion(width, height);
             int[] pixels = new int[region.width * region.height];
             for (int index = 0; index < pixels.length; index++) pixels[index] = rgb(22, 24, 31);
@@ -219,7 +373,7 @@ public class StaminaGaugeDetectorTest {
                         else color = rgb(78, 78, 78);
                     } else if (direction == StaminaGaugeDetector.Direction.LOSS) {
                         if (x < afterBoundary) color = normal(x - logicalLeft, trackWidth);
-                        else if (x < currentBoundary) color = rgb(61, 75, 50);
+                        else if (x < currentBoundary) color = lossColor;
                         else color = rgb(78, 78, 78);
                     } else {
                         color = x < currentBoundary ? normal(x - logicalLeft, trackWidth) : rgb(78, 78, 78);
@@ -267,6 +421,57 @@ public class StaminaGaugeDetectorTest {
             for (int y = top; y < top + trackHeight; y++) {
                 for (int x = left; x < left + trackWidth; x++) {
                     set(pixels, region, x, y, rgb(108, 124, 133));
+                }
+            }
+        }
+
+        void paintPaleYellowGainPreview(float leftRatio, int current, int after) {
+            double scale = width / 3120.0;
+            int trackWidth = Math.max(72, (int) Math.round(428 * scale));
+            int trackHeight = Math.max(8, (int) Math.round(33 * scale));
+            int logicalLeft = Math.round(width * leftRatio);
+            int currentBoundary = logicalLeft + Math.round(trackWidth * current / 100f);
+            int afterBoundary = logicalLeft + Math.round(trackWidth * after / 100f);
+            int centerY = (int) Math.round(100 * scale);
+            int top = centerY - trackHeight / 2;
+            int previewWidth = Math.max(1, afterBoundary - currentBoundary);
+            for (int y = top; y < top + trackHeight; y++) {
+                for (int x = currentBoundary; x < afterBoundary; x++) {
+                    float progress = (x - currentBoundary) / (float) previewWidth;
+                    float transition = Math.min(1f, progress / 0.67f);
+                    set(pixels, region, x, y, rgb(
+                            121 + Math.round(transition * 134),
+                            250 + Math.round(transition * 5),
+                            150 + Math.round(transition * 23)));
+                }
+            }
+        }
+
+        void paintClippedGaugeBand() {
+            int trackHeight = Math.max(8, (int) Math.round(width * 0.0085));
+            int trackWidth = (int) Math.round(trackHeight * 12.8);
+            int centerY = (int) Math.round(width * 0.032);
+            int top = centerY - trackHeight / 2;
+            for (int y = top; y < top + trackHeight; y++) {
+                for (int x = region.left; x < region.left + trackWidth; x++) {
+                    set(pixels, region, x, y, normal(x - region.left, trackWidth));
+                }
+            }
+        }
+
+        void paintThinSameRowDecoy() {
+            int trackHeight = Math.max(6, (int) Math.round(width * 0.0034));
+            int trackWidth = (int) Math.round(trackHeight * 11.8);
+            int left = Math.round(width * 0.575f);
+            int colorEnd = left + Math.max(8, (int) Math.round(trackHeight * 1.5));
+            int centerY = (int) Math.round(width * 0.032);
+            int top = centerY - trackHeight / 2;
+            for (int y = top; y < top + trackHeight; y++) {
+                for (int x = left; x < left + trackWidth; x++) {
+                    int color = x < colorEnd
+                            ? rgb(35, 202, 148)
+                            : rgb(61, 75, 50);
+                    set(pixels, region, x, y, color);
                 }
             }
         }
