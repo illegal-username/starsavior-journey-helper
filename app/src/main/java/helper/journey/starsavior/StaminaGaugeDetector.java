@@ -98,13 +98,21 @@ final class StaminaGaugeDetector {
         PixelSource source = new PixelSource(region, pixels);
         Candidate best = findBestCandidate(source, screenWidth, previousAnchor, MaskKind.GAUGE);
         if (best == null) best = findBestCandidate(source, screenWidth, previousAnchor,
+                MaskKind.LOSS_PREVIEW);
+        if (best == null) best = findBestCandidate(source, screenWidth, previousAnchor,
                 MaskKind.NEUTRAL);
         if (best == null) return null;
 
         int trackHeight = best.bottom - best.top;
         int endpointInset = best.empty ? 0 : Math.max(1,
                 (int) Math.round(trackHeight * 0.30));
-        int left = best.left + endpointInset;
+        // Normal fill reaches into the rounded left cap, while a loss preview
+        // that ends at zero starts at the logical zero point. Applying the cap
+        // inset a second time to a LOSS_PREVIEW candidate shortened both its
+        // numerator and the recovered track, and could move its head onto a
+        // background-tinted pixel that failed classification.
+        int leftInset = best.kind == MaskKind.LOSS_PREVIEW ? 0 : endpointInset;
+        int left = best.left + leftInset;
         int right = best.right + endpointInset;
         int centerY = (best.top + best.bottom - 1) / 2;
         right = Math.min(right, region.left + region.width - 1);
@@ -112,15 +120,20 @@ final class StaminaGaugeDetector {
         if (trackWidth < Math.max(24, trackHeight * 6)
                 || !source.contains(left, centerY)
                 || !source.contains(right - 1, centerY)) return null;
-        return analyzeProfile(source, screenWidth, left, centerY, trackWidth, trackHeight);
+        return analyzeProfile(source, screenWidth, left, centerY, trackWidth, trackHeight,
+                best.hasNeutralTail, best.kind);
     }
 
     private static Candidate findBestCandidate(PixelSource source, int screenWidth,
                                                Anchor previousAnchor, MaskKind kind) {
         int maxGap = Math.max(1, (int) Math.round(screenWidth * 0.0012));
         int minRun = Math.max(6, (int) Math.round(screenWidth * 0.004));
-        int minHeight = Math.max(4, (int) Math.round(screenWidth * 0.0035));
-        int maxHeight = Math.max(minHeight + 1, (int) Math.round(screenWidth * 0.030));
+        // The physical gauge interior stays near one percent of the capture width
+        // across the supplied phone, foldable and gallery-scaled captures. Thin
+        // strokes from the GOOD/NORMAL status text can have a gauge-like aspect
+        // ratio on the same row, but are less than half the track's height.
+        int minHeight = Math.max(4, (int) Math.round(screenWidth * 0.0055));
+        int maxHeight = Math.max(minHeight + 1, (int) Math.round(screenWidth * 0.020));
         int yStep = Math.max(1, (int) Math.round(screenWidth / 1800.0));
 
         @SuppressWarnings("unchecked")
@@ -140,12 +153,18 @@ final class StaminaGaugeDetector {
                 int height = band.bottom - band.top;
                 if (height < minHeight || height > maxHeight
                         || band.starts.length < height * 0.55) continue;
+                int geometryHeight = Math.max(height,
+                        (int) Math.round(screenWidth * 0.0085));
 
                 int left = median(band.starts);
                 int colorEnd = median(band.ends);
                 int measuredEnd = colorEnd;
                 int colorWidth = colorEnd - left;
-                double colorAspect = colorWidth / (double) height;
+                double colorAspect = colorWidth / (double) geometryHeight;
+                // A real track has a visible left cap inside the deliberately broad scan
+                // region.  Runs touching that region's artificial boundary are clipped UI
+                // decorations or scenery, so their apparent width/profile is unknowable.
+                if (left - source.region.left < Math.max(3, height)) continue;
                 if (colorAspect < 0.9 || colorAspect > 17.0) continue;
                 long key = (((long) (left / 2)) << 42)
                         ^ (((long) (colorEnd / 2)) << 20)
@@ -153,10 +172,13 @@ final class StaminaGaugeDetector {
                 if (!seen.add(key)) continue;
 
                 double density = maskDensity(source, left, colorEnd, band.top, band.bottom, kind);
-                if (density < (kind == MaskKind.GAUGE ? 0.48 : 0.72)) continue;
+                double minimumDensity = kind == MaskKind.GAUGE ? 0.48
+                        : kind == MaskKind.LOSS_PREVIEW ? 0.62 : 0.72;
+                if (density < minimumDensity) continue;
 
-                Tail tail = kind == MaskKind.GAUGE
-                        ? findNeutralTail(source, left, colorEnd, band.top, band.bottom)
+                Tail tail = kind != MaskKind.NEUTRAL
+                        ? findTrackTail(source, left, colorEnd, band.top, band.bottom,
+                        geometryHeight)
                         : null;
                 int right;
                 int tailStart;
@@ -166,13 +188,17 @@ final class StaminaGaugeDetector {
                 if (tail != null) {
                     right = tail.end;
                     tailStart = tail.start;
-                    aspect = (right - left) / (double) height;
+                    aspect = (right - left) / (double) geometryHeight;
                     tailBonus = 36.0;
-                } else if (kind == MaskKind.GAUGE && colorAspect >= 8.0) {
+                } else if (kind != MaskKind.NEUTRAL
+                        && colorAspect >= (kind == MaskKind.LOSS_PREVIEW ? 10.0 : 8.0)) {
                     right = colorEnd;
                     tailStart = -1;
                     aspect = colorAspect;
-                    tailBonus = 12.0;
+                    // A completely filled normal/recovery track has no gray tail.
+                    // Give its full-width rectangular core enough margin for small
+                    // JPEG-decoder color differences at the rounded end cap.
+                    tailBonus = kind == MaskKind.LOSS_PREVIEW ? 24.0 : 16.0;
                 } else if (kind == MaskKind.NEUTRAL && colorAspect >= 7.5) {
                     right = colorEnd;
                     colorEnd = left;
@@ -198,7 +224,8 @@ final class StaminaGaugeDetector {
                         + Math.min(edge, 45.0) * 0.45
                         - Math.abs(aspect - TRACK_ASPECT) * 4.0 - anchorPenalty;
                 Candidate candidate = new Candidate(score, left, colorEnd, right,
-                        band.top + source.region.top, band.bottom + source.region.top, empty);
+                        band.top + source.region.top, band.bottom + source.region.top, empty,
+                        tail != null && tail.hasNeutral, kind);
                 if (best == null || candidate.score > best.score) best = candidate;
                 if (location >= PREFERRED_CENTER_MIN && location <= PREFERRED_CENTER_MAX
                         && (bestInHudBand == null || candidate.score > bestInHudBand.score)) {
@@ -206,7 +233,8 @@ final class StaminaGaugeDetector {
                 }
             }
         }
-        double minimumScore = kind == MaskKind.GAUGE ? 92.0 : 105.0;
+        double minimumScore = kind == MaskKind.GAUGE ? 92.0
+                : kind == MaskKind.LOSS_PREVIEW ? 98.0 : 105.0;
         // Date banners and goal badges can contain long saturated strips above the HUD.
         // Prefer a qualified candidate in the broad gauge band, but retain the full
         // scan as a fallback for letterboxed or vertically translated layouts.
@@ -321,13 +349,13 @@ final class StaminaGaugeDetector {
         return best;
     }
 
-    private static Tail findNeutralTail(PixelSource source, int left, int colorEnd,
-                                        int localTop, int localBottom) {
+    private static Tail findTrackTail(PixelSource source, int left, int colorEnd,
+                                      int localTop, int localBottom, int geometryHeight) {
         int top = localTop + source.region.top;
         int bottom = localBottom + source.region.top;
         int height = bottom - top;
         int maximum = Math.min(source.region.left + source.region.width,
-                left + (int) Math.round(height * 17.0));
+                left + (int) Math.round(geometryHeight * 17.0));
         int minimum = Math.max(left, colorEnd - (int) Math.round(height * 0.25));
         int maxGap = Math.max(1, (int) Math.round(height * 0.14));
         int minRun = Math.max(4, (int) Math.round(height * 0.55));
@@ -339,12 +367,12 @@ final class StaminaGaugeDetector {
         int[] blues = new int[reds.length];
         int profileLength = Math.max(0, maximum - minimum);
         int[] profile = new int[profileLength];
-        boolean[] neutralProfile = new boolean[profileLength];
+        boolean[] tailProfile = new boolean[profileLength];
         for (int offset = 0; offset < profileLength; offset++) {
             int color = medianColor(source, minimum + offset, firstY, lastY,
                     reds, greens, blues);
             profile[offset] = color;
-            neutralProfile[offset] = isNeutralColor(color);
+            tailProfile[offset] = isTrackTailColor(color);
         }
 
         Tail best = null;
@@ -352,24 +380,26 @@ final class StaminaGaugeDetector {
         int runStart = -1;
         int previous = -1;
         for (int x = minimum; x <= maximum + maxGap; x++) {
-            boolean neutral = x < maximum && neutralProfile[x - minimum];
-            if (neutral) {
+            boolean tail = x < maximum && tailProfile[x - minimum];
+            if (tail) {
                 if (runStart < 0) runStart = x;
                 previous = x;
             }
-            if (runStart >= 0 && (!neutral && x - previous > maxGap)) {
+            if (runStart >= 0 && (!tail && x - previous > maxGap)) {
                 int end = previous + 1;
                 if (end - runStart >= minRun && end > colorEnd) {
                     end = refineNeutralEnd(profile, runStart - minimum, end - minimum,
                             minRun, height) + minimum;
-                    double aspect = (end - left) / (double) height;
+                    double aspect = (end - left) / (double) geometryHeight;
                     if (aspect >= 7.5 && aspect <= 17.0) {
                         double startGap = Math.abs(runStart - colorEnd) / (double) height;
                         double cost = Math.abs(aspect - TRACK_ASPECT)
                                 + Math.min(startGap, 3.0) * 0.12;
                         if (cost < bestCost) {
                             bestCost = cost;
-                            best = new Tail(runStart, end);
+                            int neutralWidth = longestNeutralRun(profile,
+                                    runStart - minimum, end - minimum);
+                            best = new Tail(runStart, end, neutralWidth >= minRun);
                         }
                     }
                 }
@@ -378,6 +408,22 @@ final class StaminaGaugeDetector {
             }
         }
         return best;
+    }
+
+    private static int longestNeutralRun(int[] profile, int start, int end) {
+        start = clamp(start, 0, profile.length);
+        end = clamp(end, start, profile.length);
+        int longest = 0;
+        int current = 0;
+        for (int index = start; index < end; index++) {
+            if (isNeutralColor(profile[index])) {
+                current++;
+                longest = Math.max(longest, current);
+            } else {
+                current = 0;
+            }
+        }
+        return longest;
     }
 
     private static int medianColor(PixelSource source, int x, int firstY, int lastY,
@@ -466,7 +512,15 @@ final class StaminaGaugeDetector {
     }
 
     private static boolean matches(int color, MaskKind kind) {
-        return kind == MaskKind.GAUGE ? isGaugeColor(color) : isNeutralColor(color);
+        switch (kind) {
+            case GAUGE:
+                return isGaugeColor(color);
+            case LOSS_PREVIEW:
+                return isDimLossPreviewColor(color);
+            case NEUTRAL:
+            default:
+                return isNeutralColor(color);
+        }
     }
 
     private static boolean isNeutralColor(int color) {
@@ -477,6 +531,47 @@ final class StaminaGaugeDetector {
         int minimum = Math.min(r, Math.min(g, b));
         double light = (r + g + b) / 3.0;
         return light >= 55 && light <= 125 && maximum - minimum <= 20;
+    }
+
+    private static boolean isTrackTailColor(int color) {
+        if (isNeutralColor(color)) return true;
+        return isLossPreviewColor(color);
+    }
+
+    private static boolean isLossPreviewColor(int color) {
+        return isLossPreviewColor(red(color), green(color), blue(color));
+    }
+
+    private static boolean isLossPreviewColor(double r, double g, double b) {
+        double maximum = Math.max(r, Math.max(g, b));
+        double minimum = Math.min(r, Math.min(g, b));
+        double light = (r + g + b) / 3.0;
+        // A loss preview is an olive, low-luminance segment. When current stamina
+        // is 100 it reaches the physical right cap, so there is no neutral tail
+        // after it. Treating only gray as track made the bright pre-loss segment
+        // look like an independently full bar and erased the preview entirely.
+        return light >= 48 && light <= 125
+                && g >= 58 && g - b >= 8 && Math.abs(g - r) <= 32
+                && maximum - minimum >= 17 && maximum - minimum <= 55;
+    }
+
+    private static boolean isDimLossPreviewColor(double r, double g, double b) {
+        double maximum = Math.max(r, Math.max(g, b));
+        double minimum = Math.min(r, Math.min(g, b));
+        double light = (r + g + b) / 3.0;
+        // On dark training backgrounds the translucent loss preview can be much
+        // dimmer and less olive than it is over a bright scene. This broader mask
+        // is only used to seed a loss candidate and classify the track head; it is
+        // deliberately not allowed to extend the physical right edge of a track.
+        boolean darkBlueShift = light <= 85 && g - b >= -10;
+        return light >= 38 && light <= 125
+                && g >= 45 && g - r >= 3 && (g - b >= 0 || darkBlueShift)
+                && Math.abs(g - r) <= 40
+                && maximum - minimum >= 10 && maximum - minimum <= 55;
+    }
+
+    private static boolean isDimLossPreviewColor(int color) {
+        return isDimLossPreviewColor(red(color), green(color), blue(color));
     }
 
     private static int median(int[] values) {
@@ -501,7 +596,8 @@ final class StaminaGaugeDetector {
     }
 
     private static Result analyzeProfile(PixelSource source, int screenWidth, int left, int centerY,
-                                         int trackWidth, int trackHeight) {
+                                         int trackWidth, int trackHeight,
+                                         boolean hasNeutralTail, MaskKind candidateKind) {
         int innerRadius = Math.max(1, (int) Math.round(trackHeight * 0.24));
         int rowCount = innerRadius * 2 + 1;
         int[] reds = new int[rowCount];
@@ -539,6 +635,18 @@ final class StaminaGaugeDetector {
             saturation[index] = Math.max(r[index], Math.max(g[index], b[index]))
                     - Math.min(r[index], Math.min(g[index], b[index]));
         }
+
+        int headWindow = Math.max(4, (int) Math.round(trackWidth * 0.025));
+        double headR = mean(r, 0, headWindow);
+        double headG = mean(g, 0, headWindow);
+        double headB = mean(b, 0, headWindow);
+        double headLight = (headR + headG + headB) / 3.0;
+        double headSaturation = Math.max(headR, Math.max(headG, headB))
+                - Math.min(headR, Math.min(headG, headB));
+        boolean startsWithGainPreview = headLight >= 125 && headR >= 90
+                && headG - headB >= 20 && headSaturation >= 35;
+        boolean startsWithLossPreview = isDimLossPreviewColor(headR, headG, headB);
+        if (candidateKind == MaskKind.LOSS_PREVIEW && !startsWithLossPreview) return null;
 
         int initial = Math.max(4, (int) Math.round(trackWidth * 0.08));
         double initialSaturation = mean(saturation, 0, initial);
@@ -582,6 +690,22 @@ final class StaminaGaugeDetector {
         int internal = -1;
         int finalBoundary = trackWidth;
 
+        // At either endpoint a preview can be the first and only colored segment:
+        // recovery from zero has no normal fill before it, and consumption to zero
+        // has no normal fill after it. Those states have no internal normal/preview
+        // edge, so classify the short head of the measured track by its absolute
+        // preview color and use the preview-to-neutral edge as the other boundary.
+        if (startsWithGainPreview || startsWithLossPreview) {
+            direction = startsWithGainPreview ? Direction.GAIN : Direction.LOSS;
+            internal = 0;
+            int minimumPreview = startsWithGainPreview ? gainPreviewMin : lossPreviewMin;
+            Edge neutral = hasNeutralTail
+                    ? findNeutralBoundary(r, g, b, luminance, saturation,
+                    minimumPreview, trackWidth, window, gap)
+                    : new Edge(-1e9, -1);
+            finalBoundary = neutral.score >= 8 ? neutral.position : trackWidth;
+        }
+
         // A +3 preview can be only four or five source pixels wide. Sampling
         // after the classifier gap skipped the entire bright segment on low
         // resolution captures, so inspect immediately to the right of the edge.
@@ -590,24 +714,27 @@ final class StaminaGaugeDetector {
                 gainZoneStart + Math.max(gainPreviewMin, window));
         double gainZoneLight = mean(luminance, gainZoneStart, gainZoneEnd);
         double gainZoneSaturation = mean(saturation, gainZoneStart, gainZoneEnd);
-        if (gain.score >= 24 && gainZoneLight >= 115 && gainZoneSaturation >= 35
+        if (direction == Direction.NONE && gain.score >= 24
+                && gainZoneLight >= 115 && gainZoneSaturation >= 35
                 && trackWidth - gain.position >= gainPreviewMin) {
             direction = Direction.GAIN;
             internal = gain.position;
             Edge tail = new Edge(-1e9, -1);
-            for (int boundary = internal + gainPreviewMin;
-                 boundary <= trackWidth - window - gap; boundary++) {
-                int leftStart = boundary - gap - window;
-                int leftEnd = boundary - gap;
-                int rightStart = boundary + gap;
-                int rightEnd = boundary + gap + window;
-                double deltaLight = mean(luminance, rightStart, rightEnd)
-                        - mean(luminance, leftStart, leftEnd);
-                double deltaSat = mean(saturation, leftStart, leftEnd)
-                        - mean(saturation, rightStart, rightEnd);
-                double deltaRed = mean(r, leftStart, leftEnd) - mean(r, rightStart, rightEnd);
-                double score = -deltaLight + 0.25 * deltaSat + 0.15 * deltaRed;
-                if (score > tail.score) tail = new Edge(score, boundary);
+            if (hasNeutralTail) {
+                for (int boundary = internal + gainPreviewMin;
+                     boundary <= trackWidth - window - gap; boundary++) {
+                    int leftStart = boundary - gap - window;
+                    int leftEnd = boundary - gap;
+                    int rightStart = boundary + gap;
+                    int rightEnd = boundary + gap + window;
+                    double deltaLight = mean(luminance, rightStart, rightEnd)
+                            - mean(luminance, leftStart, leftEnd);
+                    double deltaSat = mean(saturation, leftStart, leftEnd)
+                            - mean(saturation, rightStart, rightEnd);
+                    double deltaRed = mean(r, leftStart, leftEnd) - mean(r, rightStart, rightEnd);
+                    double score = -deltaLight + 0.25 * deltaSat + 0.15 * deltaRed;
+                    if (score > tail.score) tail = new Edge(score, boundary);
+                }
             }
             if (tail.score >= 24) finalBoundary = tail.position;
         }
@@ -619,23 +746,10 @@ final class StaminaGaugeDetector {
                     zoneStart + Math.max(lossPreviewMin, window * 2));
             double rightSat = mean(saturation, zoneStart, zoneEnd);
             double rightGreen = meanDifference(g, b, zoneStart, zoneEnd);
-            Edge neutral = new Edge(-1e9, -1);
-            if (trackWidth - boundary >= lossPreviewMin) {
-                for (int point = boundary + lossPreviewMin;
-                     point <= trackWidth - window - gap; point++) {
-                    int leftStart = point - gap - window;
-                    int leftEnd = point - gap;
-                    int rightStart = point + gap;
-                    int rightEnd = point + gap + window;
-                    double deltaSat = mean(saturation, leftStart, leftEnd)
-                            - mean(saturation, rightStart, rightEnd);
-                    double distance = vectorDistance(
-                            mean(r, leftStart, leftEnd), mean(g, leftStart, leftEnd), mean(b, leftStart, leftEnd),
-                            mean(r, rightStart, rightEnd), mean(g, rightStart, rightEnd), mean(b, rightStart, rightEnd));
-                    double score = deltaSat + 0.20 * distance;
-                    if (score > neutral.score) neutral = new Edge(score, point);
-                }
-            }
+            Edge neutral = hasNeutralTail
+                    ? findNeutralBoundary(r, g, b, luminance, saturation,
+                    boundary + lossPreviewMin, trackWidth, window, gap)
+                    : new Edge(-1e9, -1);
             if (rightSat >= 17 && rightGreen >= 8) {
                 direction = Direction.LOSS;
                 internal = boundary;
@@ -651,8 +765,10 @@ final class StaminaGaugeDetector {
         // small local comparison; this preserves the robust classification but
         // measures the actual filled length.
         if (direction == Direction.GAIN) {
-            internal = refineBoundary(r, g, b, luminance, saturation, internal,
-                    trackWidth, BoundaryKind.GAIN_START);
+            if (internal > 0) {
+                internal = refineBoundary(r, g, b, luminance, saturation, internal,
+                        trackWidth, BoundaryKind.GAIN_START);
+            }
             if (finalBoundary < trackWidth) {
                 finalBoundary = refineBoundary(r, g, b, luminance, saturation, finalBoundary,
                         trackWidth, BoundaryKind.GAIN_END);
@@ -687,6 +803,37 @@ final class StaminaGaugeDetector {
         float confidence = (float) Math.min(0.99, 0.72 + Math.max(gain.score, loss.score) / 500.0);
         return new Result(current, after, direction,
                 new Anchor(left / (float) screenWidth, centerY / (float) screenWidth), confidence);
+    }
+
+    private static Edge findNeutralBoundary(double[] r, double[] g, double[] b,
+                                            double[] luminance, double[] saturation,
+                                            int firstPoint, int trackWidth,
+                                            int window, int gap) {
+        Edge neutral = new Edge(-1e9, -1);
+        int first = Math.max(firstPoint, window + gap);
+        for (int point = first; point <= trackWidth - window - gap; point++) {
+            int leftStart = point - gap - window;
+            int leftEnd = point - gap;
+            int rightStart = point + gap;
+            int rightEnd = point + gap + window;
+            double rightLight = mean(luminance, rightStart, rightEnd);
+            double rightSat = mean(saturation, rightStart, rightEnd);
+            // The endpoint inset contains scenery beyond a completely full track.
+            // A dark background edge is not the preview-to-neutral boundary that
+            // marks a partial current value.
+            if (rightLight < 58 || rightLight > 135 || rightSat > 25
+                    || minimum(luminance, rightStart, rightEnd) < 50) {
+                continue;
+            }
+            double deltaSat = mean(saturation, leftStart, leftEnd) - rightSat;
+            double distance = vectorDistance(
+                    mean(r, leftStart, leftEnd), mean(g, leftStart, leftEnd),
+                    mean(b, leftStart, leftEnd), mean(r, rightStart, rightEnd),
+                    mean(g, rightStart, rightEnd), mean(b, rightStart, rightEnd));
+            double score = deltaSat + 0.20 * distance;
+            if (score > neutral.score) neutral = new Edge(score, point);
+        }
+        return neutral;
     }
 
     private static int refineBoundary(double[] r, double[] g, double[] b,
@@ -764,6 +911,15 @@ final class StaminaGaugeDetector {
         return sum / (end - start);
     }
 
+    private static double minimum(double[] values, int start, int end) {
+        start = clamp(start, 0, values.length);
+        end = clamp(end, start, values.length);
+        if (end <= start) return 0.0;
+        double result = Double.POSITIVE_INFINITY;
+        for (int index = start; index < end; index++) result = Math.min(result, values[index]);
+        return result;
+    }
+
     private static double meanDifference(double[] left, double[] right, int start, int end) {
         return mean(left, start, end) - mean(right, start, end);
     }
@@ -776,7 +932,16 @@ final class StaminaGaugeDetector {
         int minimum = Math.min(r, Math.min(g, b));
         // The translucent HUD inherits a slight green cast from bright scenery.
         // Real fill colors remain strongly chromatic even in compressed captures.
-        return g >= 65 && g - r >= 7 && g - b >= -22 && maximum - minimum >= 35;
+        boolean normalFill = g >= 65 && g - r >= 7 && g - b >= -22
+                && maximum - minimum >= 35;
+        // A recovery preview is lime at its first edge but fades through yellow
+        // as it approaches the full cap. Requiring green to stay above red cut
+        // that pale-yellow tail off and made the shortened run look like 100%,
+        // inflating the measured current value. Keep the yellow family narrow:
+        // green may only trail red slightly and must remain well above blue.
+        boolean gainPreview = r >= 90 && g >= 145 && g - r >= -8
+                && g - b >= 35 && maximum - minimum >= 35;
+        return normalFill || gainPreview;
     }
 
     private static int red(int color) { return (color >>> 16) & 0xff; }
@@ -823,9 +988,11 @@ final class StaminaGaugeDetector {
         final int top;
         final int bottom;
         final boolean empty;
+        final boolean hasNeutralTail;
+        final MaskKind kind;
 
         Candidate(double score, int left, int colorEnd, int right,
-                  int top, int bottom, boolean empty) {
+                  int top, int bottom, boolean empty, boolean hasNeutralTail, MaskKind kind) {
             this.score = score;
             this.left = left;
             this.colorEnd = colorEnd;
@@ -833,6 +1000,8 @@ final class StaminaGaugeDetector {
             this.top = top;
             this.bottom = bottom;
             this.empty = empty;
+            this.hasNeutralTail = hasNeutralTail;
+            this.kind = kind;
         }
     }
 
@@ -859,7 +1028,12 @@ final class StaminaGaugeDetector {
     private static final class Tail {
         final int start;
         final int end;
-        Tail(int start, int end) { this.start = start; this.end = end; }
+        final boolean hasNeutral;
+        Tail(int start, int end, boolean hasNeutral) {
+            this.start = start;
+            this.end = end;
+            this.hasNeutral = hasNeutral;
+        }
     }
 
     private static final class Edge {
@@ -868,6 +1042,6 @@ final class StaminaGaugeDetector {
         Edge(double score, int position) { this.score = score; this.position = position; }
     }
 
-    private enum MaskKind { GAUGE, NEUTRAL }
+    private enum MaskKind { GAUGE, LOSS_PREVIEW, NEUTRAL }
     private enum BoundaryKind { GAIN_START, GAIN_END, LOSS_END, NORMAL_END }
 }
