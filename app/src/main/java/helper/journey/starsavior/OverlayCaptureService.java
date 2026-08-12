@@ -23,6 +23,7 @@ import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.Looper;
 import android.provider.Settings;
+import android.util.DisplayMetrics;
 import android.view.Gravity;
 import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
@@ -430,7 +431,58 @@ public final class OverlayCaptureService extends Service {
         }
         if (!capturing.compareAndSet(false, true)) return;
         if (bubbleView != null) bubbleView.setVisibility(View.INVISIBLE);
-        mainHandler.postDelayed(() -> captureHandler.post(this::attachCaptureSurface), 130);
+        if (Build.VERSION.SDK_INT >= 34) {
+            // Android 14+ reports the exact shared-content size through
+            // onCapturedContentResize(). Keep that established path untouched.
+            mainHandler.postDelayed(() -> captureHandler.post(this::attachCaptureSurface), 130);
+        } else {
+            // Older releases have no captured-content resize callback. The helper
+            // grants projection while its activity is portrait, then launches a
+            // landscape game, so refresh the physical display size just before the
+            // user requests a frame.
+            mainHandler.postDelayed(this::attachLegacyCaptureSurface, 130);
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    private void attachLegacyCaptureSurface() {
+        DisplayMetrics metrics = new DisplayMetrics();
+        windowManager.getDefaultDisplay().getRealMetrics(metrics);
+        int displayWidth = metrics.widthPixels;
+        int displayHeight = metrics.heightPixels;
+        captureHandler.post(() -> {
+            resizeLegacyPipelineForOrientation(displayWidth, displayHeight);
+            attachCaptureSurface();
+        });
+    }
+
+    private void resizeLegacyPipelineForOrientation(int displayWidth, int displayHeight) {
+        synchronized (pipelineLock) {
+            if (virtualDisplay == null || imageReader == null
+                    || !LegacyCaptureResizePolicy.shouldResize(
+                    Build.VERSION.SDK_INT, captureWidth, captureHeight,
+                    displayWidth, displayHeight)) {
+                return;
+            }
+
+            ImageReader replacement = ImageReader.newInstance(
+                    displayWidth, displayHeight, PixelFormat.RGBA_8888, 3);
+            try {
+                virtualDisplay.setSurface(null);
+                virtualDisplay.resize(displayWidth, displayHeight, densityDpi);
+            } catch (RuntimeException resizeFailure) {
+                replacement.close();
+                return;
+            }
+
+            imageReader.setOnImageAvailableListener(null, null);
+            imageReader.close();
+            imageReader = replacement;
+            captureWidth = displayWidth;
+            captureHeight = displayHeight;
+            staminaAnchor = null;
+            lastStamina = null;
+        }
     }
 
     private void attachCaptureSurface() {
