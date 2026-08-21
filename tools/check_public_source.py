@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -18,10 +19,21 @@ TEXT_SUFFIXES = {
 PRODUCTION_DB = Path("app/src/main/assets/journey_choices.json")
 LEGACY_APP_ID = ".".join(("dev", "starjourney", "overlay"))
 LEGACY_KEY_NAME = "star-journey" + "-dev"
+PRIVATE_WORKSPACE_MARKER = "starsavior-journey-helper" + "-private"
+PRIVATE_FILENAME_MARKER = "KEEP" + "_PRIVATE"
 
 LITERAL_SECRET_PATTERNS = (
     re.compile(r"\bstorePassword\s+['\"][^'\"]+['\"]"),
     re.compile(r"\bkeyPassword\s+['\"][^'\"]+['\"]"),
+)
+TRACKED_MARKDOWN_PRIVATE_PATTERNS = (
+    ("local drive path", re.compile(r"(?<![A-Za-z0-9])[A-Za-z]:[\\\\/]")),
+    ("local home path", re.compile(r"(?i)(?<![A-Za-z0-9])/(?:Users|home)/[^/\\s`\"')]+/")),
+    ("local file URI", re.compile(r"(?i)\\bfile://")),
+    ("private workspace reference", re.compile(
+        rf"(?i){re.escape(PRIVATE_WORKSPACE_MARKER)}|{PRIVATE_FILENAME_MARKER}"
+    )),
+    ("private share link", re.compile(r"(?i)quickshare\\.samsungcloud\\.com")),
 )
 
 
@@ -30,8 +42,40 @@ def skipped(path: Path) -> bool:
     return any(part in SKIP_DIRECTORIES for part in relative.parts)
 
 
+def tracked_markdown_files() -> list[Path]:
+    """Return only Markdown files that can be published from this checkout."""
+    command = [
+        "git", "-c", f"safe.directory={ROOT.as_posix()}",
+        "ls-files", "-z", "--", "*.md",
+    ]
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=False,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return [path for path in ROOT.rglob("*.md") if not skipped(path)]
+    return [ROOT / Path(raw.decode("utf-8"))
+            for raw in completed.stdout.split(b"\0") if raw]
+
+
 def main() -> int:
     failures: list[str] = []
+
+    for path in tracked_markdown_files():
+        relative = path.relative_to(ROOT)
+        try:
+            content = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        for description, pattern in TRACKED_MARKDOWN_PRIVATE_PATTERNS:
+            if pattern.search(content):
+                failures.append(
+                    f"{description} is present in published Markdown: {relative}"
+                )
 
     for path in ROOT.rglob("*"):
         if not path.is_file() or skipped(path):
@@ -66,7 +110,7 @@ def main() -> int:
             print(f"- {failure}", file=sys.stderr)
         return 1
 
-    print("Public source check passed: no production DB, private key container, or literal signing password found.")
+    print("Public source check passed: no private release material or local paths found.")
     return 0
 
 
