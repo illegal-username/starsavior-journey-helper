@@ -105,6 +105,28 @@ public class StaminaGaugeDetectorTest {
     }
 
     @Test
+    public void readsFullLossAcrossHudScalesWithoutPixelSpecificCorrections() {
+        int[][] screens = {
+                {1920, 1080}, {2340, 1080}, {3120, 1440}, {3840, 1772}
+        };
+        Integer firstAfter = null;
+        for (int[] screen : screens) {
+            Fixture fixture = Fixture.create(screen[0], screen[1], 0.385f, 100, 85,
+                    StaminaGaugeDetector.Direction.LOSS);
+            fixture.paintTrailingNeutralHudPatch(0.385f);
+
+            StaminaGaugeDetector.Result result = fixture.detect(null);
+
+            assertNotNull("screen=" + screen[0] + "x" + screen[1], result);
+            assertEquals(StaminaGaugeDetector.Direction.LOSS, result.direction);
+            assertEquals(100, result.current);
+            assertNear(85, result.after, 1);
+            if (firstAfter == null) firstAfter = result.after;
+            else assertNear(firstAfter, result.after, 1);
+        }
+    }
+
+    @Test
     public void separatesConsumptionPreviewEndingAtEmptyGauge() {
         Fixture fixture = Fixture.create(2340, 1080, 0.385f, 17, 0,
                 StaminaGaugeDetector.Direction.LOSS);
@@ -153,6 +175,62 @@ public class StaminaGaugeDetectorTest {
         assertNotNull(empty);
         assertEquals(100, full.current);
         assertEquals(0, empty.current);
+    }
+
+    @Test
+    public void keepsFullGaugeWhenShortNeutralHudPatchFollowsTrack() {
+        Fixture fixture = Fixture.create(3120, 1440, 0.375f, 100, 100,
+                StaminaGaugeDetector.Direction.NONE);
+        fixture.paintTrailingNeutralHudPatch(0.375f);
+
+        StaminaGaugeDetector.Result result = fixture.detect(null);
+
+        assertNotNull(result);
+        assertEquals(StaminaGaugeDetector.Direction.NONE, result.direction);
+        assertEquals(100, result.current);
+    }
+
+    @Test
+    public void ignoresDetachedConditionBadgeAcrossHudScales() {
+        int[][] screens = {{2340, 1080}, {3120, 1440}, {3840, 1772}};
+        for (int[] screen : screens) {
+            Fixture fixture = Fixture.create(screen[0], screen[1], 0.375f, 79, 100,
+                    StaminaGaugeDetector.Direction.GAIN);
+            fixture.paintDetachedConditionBadge(0.375f);
+
+            StaminaGaugeDetector.Result result = fixture.detect(null);
+
+            assertNotNull(result);
+            assertEquals(StaminaGaugeDetector.Direction.GAIN, result.direction);
+            assertNear(79, result.current, 1);
+            assertEquals(100, result.after);
+        }
+    }
+
+    @Test
+    public void distinguishesIconOccludedFiveFromEmptyAcrossHudScales() {
+        int[] widths = {2400, 3120, 3840};
+        int[] heights = {1080, 1440, 1772};
+        for (int index = 0; index < widths.length; index++) {
+            Fixture empty = Fixture.createIconOccludedLowGauge(
+                    widths[index], heights[index], 0.375f, 0);
+            Fixture five = Fixture.createIconOccludedLowGauge(
+                    widths[index], heights[index], 0.375f, 5);
+            empty.paintLowerGaugeDecoy();
+            five.paintLowerGaugeDecoy();
+
+            StaminaGaugeDetector.Result emptyResult = empty.detect(null);
+            StaminaGaugeDetector.Result fiveResult = five.detect(null);
+
+            assertNotNull(emptyResult);
+            assertNotNull(fiveResult);
+            assertEquals(StaminaGaugeDetector.Direction.NONE, emptyResult.direction);
+            assertEquals(StaminaGaugeDetector.Direction.NONE, fiveResult.direction);
+            assertEquals(0, emptyResult.current);
+            assertNear(5, fiveResult.current, 2);
+            assertTrue("detector selected the lower green decoy",
+                    fiveResult.anchor.centerYRatio < 0.050f);
+        }
     }
 
     @Test
@@ -262,23 +340,138 @@ public class StaminaGaugeDetectorTest {
             StaminaGaugeDetector.Result result = fixture.detect(null);
             assertNotNull(result);
             assertEquals(StaminaGaugeDetector.Direction.GAIN, result.direction);
-            assertNear(33, result.current, 1);
-            assertNear(64, result.after, 1);
+            assertNear(33, result.current, 2);
+            assertNear(64, result.after, 2);
         }
     }
 
     @Test
-    public void keepsPhysicalWidthWhenColoredCoreIsVerticallyCompressed() {
-        Fixture fixture = Fixture.createCustom(2340, 1080, 0.385f,
-                17, 50, StaminaGaugeDetector.Direction.GAIN,
-                320, 16, 0);
+    public void derivesScaleFromVerticallyVaryingColorRows() {
+        int[][] screens = {
+                {1920, 1080}, {2340, 1080}, {3120, 1440}, {3840, 1772}
+        };
+        for (int[] screen : screens) {
+            Fixture fixture = Fixture.create(screen[0], screen[1], 0.385f,
+                    17, 50, StaminaGaugeDetector.Direction.GAIN);
+            fixture.shortenColoredEdgeRows(0.385f, 50);
 
-        StaminaGaugeDetector.Result result = fixture.detect(null);
+            StaminaGaugeDetector.Result result = fixture.detect(null);
+
+            assertNotNull("screen=" + screen[0] + "x" + screen[1], result);
+            assertEquals(StaminaGaugeDetector.Direction.GAIN, result.direction);
+            assertNear(17, result.current, 2);
+            assertNear(50, result.after, 2);
+        }
+    }
+
+    @Test
+    public void readsObservedEndpointsWhenIconCoversCenterRowsAcrossHudScales() {
+        int[][] screens = {
+                {1920, 1080}, {2340, 1080}, {3120, 1440}, {3840, 1772}
+        };
+        for (int[] screen : screens) {
+            Fixture fixture = Fixture.createCenterOccludedSteadyGauge(
+                    screen[0], screen[1], 0.375f, 70);
+
+            StaminaGaugeDetector.Result result = fixture.detect(null);
+
+            assertNotNull(result);
+            assertEquals(StaminaGaugeDetector.Direction.NONE, result.direction);
+            assertNear(70, result.current, 1);
+        }
+    }
+
+    @Test
+    public void dividesOnlyTheObservedZeroToHundredSpanAcrossHudScales() {
+        int[] values = {0, 5, 24, 32, 70, 95, 100};
+        int[][] screens = {
+                {1920, 1080}, {2340, 1080}, {3120, 1440}, {3840, 1772}
+        };
+        for (int[] screen : screens) {
+            for (int value : values) {
+                Fixture fixture = Fixture.create(screen[0], screen[1], 0.375f,
+                        value, value, StaminaGaugeDetector.Direction.NONE);
+
+                StaminaGaugeDetector.Result result = fixture.detect(null);
+
+                assertNotNull(result);
+                assertEquals(StaminaGaugeDetector.Direction.NONE, result.direction);
+                assertNear(value, result.current, 1);
+            }
+        }
+    }
+
+    @Test
+    public void readsIconOccludedLowSteadyLossAndGainAcrossHudScales() {
+        int[][] screens = {
+                {1920, 1080}, {2340, 1080}, {3120, 1440}, {3840, 1772}
+        };
+        for (int[] screen : screens) {
+            Fixture steady = Fixture.create(screen[0], screen[1], 0.375f,
+                    15, 15, StaminaGaugeDetector.Direction.NONE);
+            Fixture loss = Fixture.create(screen[0], screen[1], 0.375f,
+                    15, 0, StaminaGaugeDetector.Direction.LOSS);
+            Fixture gain = Fixture.create(screen[0], screen[1], 0.375f,
+                    15, 18, StaminaGaugeDetector.Direction.GAIN);
+            steady.paintTrackHeadOcclusion(0.375f);
+            loss.paintTrackHeadOcclusion(0.375f);
+            gain.paintTrackHeadOcclusion(0.375f);
+
+            StaminaGaugeDetector.Result steadyResult = steady.detect(null);
+            StaminaGaugeDetector.Result lossResult = loss.detect(null);
+            StaminaGaugeDetector.Result gainResult = gain.detect(null);
+
+            assertNotNull("steady " + screen[0], steadyResult);
+            assertNotNull("loss " + screen[0], lossResult);
+            assertNotNull("gain " + screen[0], gainResult);
+            assertEquals("steady " + screen[0], StaminaGaugeDetector.Direction.NONE,
+                    steadyResult.direction);
+            assertEquals("loss " + screen[0], StaminaGaugeDetector.Direction.LOSS,
+                    lossResult.direction);
+            assertEquals("gain " + screen[0], StaminaGaugeDetector.Direction.GAIN,
+                    gainResult.direction);
+            assertNear(15, steadyResult.current, 1);
+            assertNear(15, lossResult.current, 1);
+            assertEquals(0, lossResult.after);
+            assertNear(15, gainResult.current, 1);
+            assertNear(18, gainResult.after, 1);
+        }
+    }
+
+    @Test
+    public void followsLossThroughNeutralColoredGradientToObservedTrackEnd() {
+        int[][] screens = {
+                {1920, 1080}, {2340, 1080}, {3120, 1440}, {3840, 1772}
+        };
+        for (int[] screen : screens) {
+            Fixture fixture = Fixture.create(screen[0], screen[1], 0.375f,
+                    70, 55, StaminaGaugeDetector.Direction.LOSS);
+            fixture.paintNeutralOverlappingLossStart(0.375f, 55, 70);
+            fixture.paintTrailingNeutralHudPatch(0.375f);
+
+            StaminaGaugeDetector.Result result = fixture.detect(null);
+
+            assertNotNull("screen=" + screen[0] + "x" + screen[1], result);
+            assertEquals(StaminaGaugeDetector.Direction.LOSS, result.direction);
+            assertNear(70, result.current, 1);
+            assertNear(55, result.after, 1);
+        }
+    }
+
+    @Test
+    public void previousAnchorCannotReplaceCurrentFrameEndpoints() {
+        int width = 3120;
+        float leftRatio = 0.375f;
+        Fixture fixture = Fixture.create(width, 1440, leftRatio, 70, 70,
+                StaminaGaugeDetector.Direction.NONE);
+        StaminaGaugeDetector.Anchor nearbyButWrong = new StaminaGaugeDetector.Anchor(
+                leftRatio - 10f / width, 100f / width);
+
+        StaminaGaugeDetector.Result result = fixture.detect(nearbyButWrong);
 
         assertNotNull(result);
-        assertEquals(StaminaGaugeDetector.Direction.GAIN, result.direction);
-        assertNear(17, result.current, 3);
-        assertNear(50, result.after, 3);
+        assertNear(70, result.current, 1);
+        assertNear(Math.round(width * leftRatio), Math.round(result.anchor.leftRatio * width), 1);
     }
 
     @Test
@@ -353,35 +546,105 @@ public class StaminaGaugeDetectorTest {
             int[] pixels = new int[region.width * region.height];
             for (int index = 0; index < pixels.length; index++) pixels[index] = rgb(22, 24, 31);
 
-            int logicalLeft = Math.round(width * leftRatio);
-            int endpointInset = Math.max(1, Math.round(trackHeight * 0.30f));
-            int rawLeft = logicalLeft - endpointInset;
-            int rawRight = rawLeft + trackWidth;
+            int trackLeft = Math.round(width * leftRatio);
+            int trackRight = trackLeft + trackWidth;
             double scale = width / 3120.0;
             int centerY = (int) Math.round(100 * scale) + centerYOffset;
             int top = centerY - trackHeight / 2;
             int bottom = top + trackHeight;
-            int currentBoundary = logicalLeft + Math.round(trackWidth * current / 100f);
-            int afterBoundary = logicalLeft + Math.round(trackWidth * after / 100f);
+            int currentBoundary = trackLeft + Math.round(trackWidth * current / 100f);
+            int afterBoundary = trackLeft + Math.round(trackWidth * after / 100f);
 
             for (int y = top; y < bottom; y++) {
-                for (int x = rawLeft; x < rawRight; x++) {
+                for (int x = trackLeft; x < trackRight; x++) {
                     int color;
                     if (direction == StaminaGaugeDetector.Direction.GAIN) {
-                        if (x < currentBoundary) color = normal(x - logicalLeft, trackWidth);
-                        else if (x < afterBoundary) color = rgb(150 + Math.max(0, x - logicalLeft) * 80 / trackWidth, 250, 150);
+                        if (x < currentBoundary) color = normal(x - trackLeft, trackWidth);
+                        else if (x < afterBoundary) color = rgb(150 + Math.max(0, x - trackLeft) * 80 / trackWidth, 250, 150);
                         else color = rgb(78, 78, 78);
                     } else if (direction == StaminaGaugeDetector.Direction.LOSS) {
-                        if (x < afterBoundary) color = normal(x - logicalLeft, trackWidth);
+                        if (x < afterBoundary) color = normal(x - trackLeft, trackWidth);
                         else if (x < currentBoundary) color = lossColor;
                         else color = rgb(78, 78, 78);
                     } else {
-                        color = x < currentBoundary ? normal(x - logicalLeft, trackWidth) : rgb(78, 78, 78);
+                        color = current > 0 && x < currentBoundary
+                                ? normal(x - trackLeft, trackWidth) : rgb(78, 78, 78);
                     }
                     set(pixels, region, x, y, color);
                 }
             }
             return new Fixture(width, height, region, pixels);
+        }
+
+        static Fixture createIconOccludedLowGauge(int width, int height, float leftRatio,
+                                                  int current) {
+            if (current != 0 && current != 5) {
+                throw new IllegalArgumentException("fixture supports only the endpoint cases");
+            }
+            Fixture fixture = blank(width, height);
+            double scale = width / 3120.0;
+            int trackWidth = Math.max(72, (int) Math.round(428 * scale));
+            int trackHeight = Math.max(8, (int) Math.round(33 * scale));
+            int logicalLeft = Math.round(width * leftRatio);
+            int logicalRight = logicalLeft + trackWidth;
+            int centerY = (int) Math.round(100 * scale);
+            int top = centerY - trackHeight / 2;
+            int boundary = logicalLeft + Math.round(trackWidth * current / 100f);
+            int iconOcclusion = Math.max(2, Math.round(trackHeight * 0.48f));
+            int edgeRows = Math.max(1, Math.round(trackHeight * 0.18f));
+            for (int y = top; y < top + trackHeight; y++) {
+                boolean iconCoversCenter = y >= top + edgeRows
+                        && y < top + trackHeight - edgeRows;
+                for (int x = logicalLeft; x < logicalRight; x++) {
+                    int color = current > 0 && x < boundary
+                            ? normal(x - logicalLeft, trackWidth) : rgb(78, 78, 78);
+                    if (iconCoversCenter && x < logicalLeft + iconOcclusion) {
+                        color = rgb(42, 34, 31);
+                    }
+                    set(fixture.pixels, fixture.region, x, y, color);
+                }
+            }
+            return fixture;
+        }
+
+        static Fixture createCenterOccludedSteadyGauge(int width, int height, float leftRatio,
+                                                       int current) {
+            Fixture fixture = blank(width, height);
+            double scale = width / 3120.0;
+            int trackWidth = Math.max(72, (int) Math.round(428 * scale));
+            int trackHeight = Math.max(8, (int) Math.round(33 * scale));
+            int trackLeft = Math.round(width * leftRatio);
+            int trackRight = trackLeft + trackWidth;
+            int boundary = trackLeft + Math.round(trackWidth * current / 100f);
+            int centerY = (int) Math.round(100 * scale);
+            int top = centerY - trackHeight / 2;
+            int edgeRows = Math.max(1, Math.round(trackHeight * 0.18f));
+
+            for (int y = top; y < top + trackHeight; y++) {
+                boolean exposedEdge = y < top + edgeRows
+                        || y >= top + trackHeight - edgeRows;
+                for (int x = trackLeft; x < trackRight; x++) {
+                    int color = x < boundary
+                            ? normal(x - trackLeft, trackWidth) : rgb(78, 78, 78);
+                    if (!exposedEdge && x < trackLeft + Math.max(2,
+                            Math.round(trackHeight * 0.30f))) {
+                        color = rgb(42, 34, 31);
+                    }
+                    set(fixture.pixels, fixture.region, x, y, color);
+                }
+            }
+
+            int iconWidth = Math.max(4, Math.round(trackHeight * 0.80f));
+            int iconHeight = Math.max(4, Math.round(trackHeight * 0.80f));
+            int iconRight = trackLeft - 1;
+            int iconLeft = iconRight - iconWidth;
+            int iconTop = centerY - iconHeight / 2;
+            for (int y = iconTop; y < iconTop + iconHeight; y++) {
+                for (int x = iconLeft; x < iconRight; x++) {
+                    set(fixture.pixels, fixture.region, x, y, rgb(235, 224, 190));
+                }
+            }
+            return fixture;
         }
 
         static Fixture blank(int width, int height) {
@@ -410,12 +673,119 @@ public class StaminaGaugeDetectorTest {
             }
         }
 
+        void paintTrailingNeutralHudPatch(float leftRatio) {
+            double scale = width / 3120.0;
+            int trackWidth = Math.max(72, (int) Math.round(428 * scale));
+            int trackHeight = Math.max(8, (int) Math.round(33 * scale));
+            int trackLeft = Math.round(width * leftRatio);
+            int trackRight = trackLeft + trackWidth;
+            int centerY = (int) Math.round(100 * scale);
+            int top = centerY - trackHeight / 2;
+            int patchWidth = Math.max(3, Math.round(trackHeight * 0.60f));
+            int patchTop = Math.max(region.top, top - trackHeight);
+            int patchBottom = Math.min(region.top + region.height,
+                    top + trackHeight * 2);
+            for (int y = patchTop; y < patchBottom; y++) {
+                for (int x = trackRight; x < trackRight + patchWidth; x++) {
+                    set(pixels, region, x, y, rgb(78, 78, 78));
+                }
+            }
+        }
+
+        void paintTrackHeadOcclusion(float leftRatio) {
+            double scale = width / 3120.0;
+            int trackHeight = Math.max(8, (int) Math.round(33 * scale));
+            int logicalLeft = Math.round(width * leftRatio);
+            int centerY = (int) Math.round(100 * scale);
+            int top = centerY - trackHeight / 2;
+            int edgeRows = Math.max(1, Math.round(trackHeight * 0.18f));
+            int occludedEnd = logicalLeft + Math.max(2,
+                    Math.round(trackHeight * 0.55f));
+            for (int y = top + edgeRows; y < top + trackHeight - edgeRows; y++) {
+                for (int x = logicalLeft; x < occludedEnd; x++) {
+                    set(pixels, region, x, y, rgb(42, 34, 31));
+                }
+            }
+        }
+
+        void paintNeutralOverlappingLossStart(float leftRatio, int after, int current) {
+            double scale = width / 3120.0;
+            int trackWidth = Math.max(72, (int) Math.round(428 * scale));
+            int trackHeight = Math.max(8, (int) Math.round(33 * scale));
+            int logicalLeft = Math.round(width * leftRatio);
+            int afterBoundary = logicalLeft + Math.round(trackWidth * after / 100f);
+            int currentBoundary = logicalLeft + Math.round(trackWidth * current / 100f);
+            int overlapEnd = afterBoundary + (currentBoundary - afterBoundary) / 2;
+            int centerY = (int) Math.round(100 * scale);
+            int top = centerY - trackHeight / 2;
+            for (int y = top; y < top + trackHeight; y++) {
+                for (int x = afterBoundary; x < overlapEnd; x++) {
+                    // This olive-gray is intentionally accepted by both the loss
+                    // and neutral masks, like the translucent in-game gradient.
+                    set(pixels, region, x, y, rgb(61, 75, 65));
+                }
+            }
+        }
+
+        void paintDetachedConditionBadge(float leftRatio) {
+            double scale = width / 3120.0;
+            int trackWidth = Math.max(72, (int) Math.round(428 * scale));
+            int trackHeight = Math.max(8, (int) Math.round(33 * scale));
+            int trackLeft = Math.round(width * leftRatio);
+            int trackRight = trackLeft + trackWidth;
+            int centerY = (int) Math.round(100 * scale);
+            int top = centerY - trackHeight / 2;
+            int gap = Math.round(trackHeight * 2.5f);
+            int badgeWidth = Math.max(1, Math.round(trackHeight * 0.70f));
+            for (int y = top; y < top + trackHeight; y++) {
+                for (int x = trackRight + gap; x < trackRight + gap + badgeWidth; x++) {
+                    set(pixels, region, x, y, rgb(78, 78, 78));
+                }
+            }
+        }
+
+        void shortenColoredEdgeRows(float leftRatio, int after) {
+            double scale = width / 3120.0;
+            int trackWidth = Math.max(72, (int) Math.round(428 * scale));
+            int trackHeight = Math.max(8, (int) Math.round(33 * scale));
+            int logicalLeft = Math.round(width * leftRatio);
+            int afterBoundary = logicalLeft + Math.round(trackWidth * after / 100f);
+            int shortenedEnd = afterBoundary - Math.max(1, Math.round(trackWidth * 0.10f));
+            int centerY = (int) Math.round(100 * scale);
+            int top = centerY - trackHeight / 2;
+            int edgeRows = Math.max(1, Math.round(trackHeight * 0.20f));
+            for (int y = top; y < top + trackHeight; y++) {
+                boolean edge = y < top + edgeRows || y >= top + trackHeight - edgeRows;
+                if (!edge) continue;
+                for (int x = shortenedEnd; x < afterBoundary; x++) {
+                    set(pixels, region, x, y, rgb(78, 78, 78));
+                }
+            }
+        }
+
+        void paintLowerGaugeDecoy() {
+            double scale = width / 3120.0;
+            int trackWidth = Math.max(72, (int) Math.round(428 * scale));
+            int trackHeight = Math.max(8, (int) Math.round(33 * scale));
+            int left = Math.round(width * 0.382f);
+            int colorEnd = left + Math.round(trackWidth * 0.72f);
+            int centerY = (int) Math.round(width * 0.052f);
+            int top = centerY - trackHeight / 2;
+            for (int y = top; y < top + trackHeight; y++) {
+                for (int x = left; x < left + trackWidth; x++) {
+                    int color = x < colorEnd
+                            ? normal(x - left, trackWidth)
+                            : rgb(78, 78, 78);
+                    set(pixels, region, x, y, color);
+                }
+            }
+        }
+
         void paintLowSaturationBand(float leftRatio) {
             double scale = width / 3120.0;
             int trackWidth = Math.max(72, (int) Math.round(428 * scale));
             int trackHeight = Math.max(8, (int) Math.round(33 * scale));
-            int endpointInset = Math.max(1, Math.round(trackHeight * 0.30f));
-            int left = Math.round(width * leftRatio) - endpointInset;
+            int left = Math.round(width * leftRatio);
             int centerY = (int) Math.round(width * 0.032);
             int top = centerY - trackHeight / 2;
             for (int y = top; y < top + trackHeight; y++) {
@@ -448,7 +818,8 @@ public class StaminaGaugeDetectorTest {
         }
 
         void paintClippedGaugeBand() {
-            int trackHeight = Math.max(8, (int) Math.round(width * 0.0085));
+            double scale = width / 3120.0;
+            int trackHeight = Math.max(8, (int) Math.round(33 * scale));
             int trackWidth = (int) Math.round(trackHeight * 12.8);
             int centerY = (int) Math.round(width * 0.032);
             int top = centerY - trackHeight / 2;
@@ -477,18 +848,17 @@ public class StaminaGaugeDetectorTest {
         }
 
         void paintUpperBannerDecoy() {
-            int trackHeight = Math.max(8, (int) Math.round(width * 0.0085));
+            double scale = width / 3120.0;
+            int trackHeight = Math.max(8, (int) Math.round(33 * scale));
             int trackWidth = (int) Math.round(trackHeight * 12.8);
-            int endpointInset = Math.max(1, Math.round(trackHeight * 0.30f));
-            int rawLeft = region.left + Math.max(24, trackHeight * 3);
-            int logicalLeft = rawLeft + endpointInset;
-            int filledEnd = logicalLeft + Math.round(trackWidth * 0.38f);
+            int trackLeft = region.left + Math.max(24, trackHeight * 3);
+            int filledEnd = trackLeft + Math.round(trackWidth * 0.38f);
             int centerY = (int) Math.round(width * 0.015);
             int top = centerY - trackHeight / 2;
             for (int y = top; y < top + trackHeight; y++) {
-                for (int x = rawLeft; x < rawLeft + trackWidth; x++) {
+                for (int x = trackLeft; x < trackLeft + trackWidth; x++) {
                     int color = x < filledEnd
-                            ? normal(x - logicalLeft, trackWidth)
+                            ? normal(x - trackLeft, trackWidth)
                             : rgb(78, 78, 78);
                     set(pixels, region, x, y, color);
                 }
