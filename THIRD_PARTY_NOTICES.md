@@ -5,6 +5,7 @@
 실제 여정 데이터는 공개 소스 저장소에 포함되지 않습니다. 운영 APK 또는 사용자가 실행한 DB 업데이트에는 프로젝트 운영자가 별도로 생성·배포하는 다음 데이터가 사용될 수 있습니다.
 
 https://starsavior-journey-data.pages.dev/journey_choices.json
+https://starsavior-journey-data.pages.dev/journey_choices.meta.json
 
 게임 콘텐츠와 변환 데이터에는 저장소의 MIT 라이선스가 적용되지 않습니다. 자세한 내용은 `DATA_NOTICE.md`를 확인하세요.
 

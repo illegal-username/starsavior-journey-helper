@@ -56,6 +56,8 @@ public final class MainActivity extends Activity {
     private BubbleIconView bubblePreview;
     private boolean continueAfterOverlaySettings;
     private boolean requestCaptureOnResume;
+    private boolean databaseUpdateAvailable;
+    private boolean databaseAppUpdateRequired;
     private volatile boolean destroyed;
     private final Runnable appearanceUpdate = this::notifyBubbleAppearanceChanged;
     private final Runnable captureRequest = this::consumeCaptureRequest;
@@ -67,6 +69,7 @@ public final class MainActivity extends Activity {
             setContentView(buildContent());
             configureSystemBars();
             loadDataSummary();
+            checkDatabaseUpdateOnLaunch();
             handleLaunchIntent(getIntent());
         } catch (Throwable error) {
             showStartupRecovery(error);
@@ -237,7 +240,7 @@ public final class MainActivity extends Activity {
         TextView privacyTitle = Ui.text(this, "화면 내용은 기기 안에서만 처리", 16, Ui.GREEN);
         privacyTitle.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         privacy.addView(privacyTitle, marginParams(-1, -2, 0, 0, 0, 7));
-        TextView privacyBody = body("캡처 이미지와 인식한 글자는 저장하거나 전송하지 않습니다. 광고·자체 추적 서버는 없습니다. DB 업데이트 시 데이터 배포 서버에 접속하며, ML Kit SDK는 호환성 정보와 성능 지표를 위해 Google과 통신할 수 있습니다.");
+        TextView privacyBody = body("캡처 이미지와 인식한 글자는 저장하거나 전송하지 않습니다. 광고·자체 추적 서버는 없습니다. 앱을 열면 최신 DB 여부를 확인하고, 사용자가 DB 업데이트를 누르면 데이터를 받기 위해 배포 서버에 접속합니다. ML Kit SDK는 호환성 정보와 성능 지표를 위해 Google과 통신할 수 있습니다.");
         privacy.addView(privacyBody);
         root.addView(privacy, marginParams(-1, -2, 0, 0, 0, 14));
 
@@ -403,6 +406,39 @@ public final class MainActivity extends Activity {
         });
     }
 
+    private void checkDatabaseUpdateOnLaunch() {
+        loader.execute(() -> {
+            try {
+                JourneyDatabaseUpdater.CheckResult result =
+                        JourneyDatabaseUpdater.checkForUpdate(this, false);
+                mainHandler.post(() -> showUpdateCheckResult(result));
+            } catch (Exception ignored) {
+                // Automatic checks never interrupt startup or replace the usable local DB state.
+            }
+        });
+    }
+
+    private void showUpdateCheckResult(JourneyDatabaseUpdater.CheckResult result) {
+        if (destroyed || result == null || result.busy || dataState == null) return;
+        databaseUpdateAvailable = result.available;
+        databaseAppUpdateRequired = result.incompatible;
+        if (result.incompatible) {
+            setStatus(dataState, "새 DB는 앱 업데이트 필요", false);
+            dataState.setTextColor(Ui.ORANGE);
+        } else if (result.available && result.manifest != null) {
+            String summary = String.format(
+                    Locale.KOREA,
+                    "새 DB 있음 · 선택지 %,d개 · %s 기준",
+                    result.manifest.choiceCount,
+                    formatDatabaseDate(result.manifest.generatedAt));
+            setStatus(dataState, summary, false);
+            dataState.setTextColor(Ui.ORANGE);
+        } else if (result.networkChecked && result.current != null) {
+            showDataSummary(result.current);
+        }
+        setUpdateBusy(false);
+    }
+
     private void showDataSummary(JourneyModels.Data data) {
         if (destroyed || dataState == null) return;
         if (JourneyRepository.isExampleDatabase(data)) {
@@ -410,16 +446,21 @@ public final class MainActivity extends Activity {
             dataState.setTextColor(Ui.ORANGE);
             return;
         }
-        String date = data.generatedAt == null || data.generatedAt.isEmpty() ? "날짜 미상" : data.generatedAt;
+        String date = formatDatabaseDate(data.generatedAt);
+        String kind = JourneyRepository.hasDownloadedDatabase(this) ? "업데이트 DB" : "내장 DB";
+        String summary = String.format(Locale.KOREA, "%s · 선택지 %,d개 · %s 기준", kind, data.choiceCount, date);
+        setStatus(dataState, summary, true);
+    }
+
+    private String formatDatabaseDate(String generatedAt) {
+        String date = generatedAt == null || generatedAt.isEmpty() ? "날짜 미상" : generatedAt;
         try {
-            Instant instant = Instant.parse(data.generatedAt);
+            Instant instant = Instant.parse(generatedAt);
             date = DateTimeFormatter.ofPattern("yyyy.MM.dd")
                     .withZone(ZoneId.of("Asia/Seoul"))
                     .format(instant);
         } catch (Exception ignored) {}
-        String kind = JourneyRepository.hasDownloadedDatabase(this) ? "업데이트 DB" : "내장 DB";
-        String summary = String.format(Locale.KOREA, "%s · 선택지 %,d개 · %s 기준", kind, data.choiceCount, date);
-        setStatus(dataState, summary, true);
+        return date;
     }
 
     private void updateDatabase() {
@@ -443,8 +484,20 @@ public final class MainActivity extends Activity {
                 }
                 mainHandler.post(() -> {
                     if (destroyed) return;
+                    if (result.incompatible) {
+                        databaseUpdateAvailable = false;
+                        databaseAppUpdateRequired = true;
+                    } else {
+                        databaseUpdateAvailable = false;
+                        databaseAppUpdateRequired = false;
+                    }
                     setUpdateBusy(false);
-                    if (result.data != null) showDataSummary(result.data);
+                    if (result.incompatible) {
+                        setStatus(dataState, "새 DB는 앱 업데이트 필요", false);
+                        dataState.setTextColor(Ui.ORANGE);
+                    } else if (result.data != null) {
+                        showDataSummary(result.data);
+                    }
                     new AlertDialog.Builder(this)
                             .setTitle(result.changed ? "DB 업데이트 완료" : "DB 업데이트")
                             .setMessage(result.message)
@@ -470,7 +523,20 @@ public final class MainActivity extends Activity {
         if (updateButton == null) return;
         updateButton.setEnabled(!busy);
         updateButton.setAlpha(busy ? 0.55f : 1f);
-        updateButton.setText(busy ? "DB 업데이트 중…" : "DB 업데이트");
+        if (!busy && (databaseUpdateAvailable || databaseAppUpdateRequired)) {
+            Ui.styleAttentionButton(this, updateButton);
+        } else {
+            Ui.styleSecondaryButton(this, updateButton);
+        }
+        if (busy) {
+            updateButton.setText("DB 업데이트 중…");
+        } else if (databaseAppUpdateRequired) {
+            updateButton.setText("앱 업데이트 필요");
+        } else if (databaseUpdateAvailable) {
+            updateButton.setText("새 DB 받기");
+        } else {
+            updateButton.setText("DB 업데이트");
+        }
     }
 
     private String friendlyUpdateError(Exception error) {

@@ -17,6 +17,9 @@ public class JourneyDatabaseUpdaterTest {
         assertEquals(
                 "https://starsavior-journey-data.pages.dev/journey_choices.json",
                 JourneyDatabaseUpdater.DATABASE_URL);
+        assertEquals(
+                "https://starsavior-journey-data.pages.dev/journey_choices.meta.json",
+                JourneyDatabaseUpdater.MANIFEST_URL);
     }
 
     @Test
@@ -32,6 +35,12 @@ public class JourneyDatabaseUpdaterTest {
         assertFalse(JourneyDatabaseUpdater.sameDatabase(
                 data(20, JourneyDatabaseUpdater.DATABASE_URL, ""),
                 data(20, JourneyDatabaseUpdater.DATABASE_URL, "")));
+
+        JourneyModels.Data hashOne = data(
+                20, JourneyDatabaseUpdater.DATABASE_URL, "revision-1", "1".repeat(64));
+        JourneyModels.Data hashTwo = data(
+                20, JourneyDatabaseUpdater.DATABASE_URL, "revision-1", "2".repeat(64));
+        assertFalse(JourneyDatabaseUpdater.sameDatabase(hashOne, hashTwo));
     }
 
     @Test
@@ -48,9 +57,22 @@ public class JourneyDatabaseUpdaterTest {
                 emptyCurrent, data(20, JourneyDatabaseUpdater.DATABASE_URL, " ")));
         assertThrows(JSONException.class, () -> JourneyDatabaseUpdater.validateRemoteDatabase(
                 data(80, JourneyDatabaseUpdater.DATABASE_URL, "old"), candidate));
+
+        JourneyDatabaseManifest manifest = new JourneyDatabaseManifest(
+                1, 4, "1".repeat(64), 1000, "revision-2",
+                "2026-09-02T00:00:00Z", 20, 40, 36);
+        JourneyDatabaseUpdater.validateManifestAgainstCurrent(emptyCurrent, manifest);
+        assertThrows(JSONException.class, () ->
+                JourneyDatabaseUpdater.validateManifestAgainstCurrent(
+                        data(80, JourneyDatabaseUpdater.DATABASE_URL, "old"), manifest));
     }
 
     private static JourneyModels.Data data(int recordCount, String source, String revision) {
+        return data(recordCount, source, revision, "");
+    }
+
+    private static JourneyModels.Data data(
+            int recordCount, String source, String revision, String contentSha256) {
         List<JourneyModels.Event> events = new ArrayList<>();
         int choices = 0;
         for (int index = 0; index < recordCount; index++) {
@@ -64,6 +86,6 @@ public class JourneyDatabaseUpdaterTest {
         }
         return new JourneyModels.Data(
                 4, "2026-09-02T00:00:00Z", source, revision,
-                events.size(), choices, events);
+                events.size(), choices, contentSha256, 1000, events);
     }
 }

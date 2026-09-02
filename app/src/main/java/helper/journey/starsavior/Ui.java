@@ -20,6 +20,7 @@ final class Ui {
     static final int RED = Color.rgb(255, 129, 145);
     static final int ORANGE = Color.rgb(255, 190, 112);
     static final int BLUE = Color.rgb(142, 200, 255);
+    private static final int BUTTON_STROKE = Color.rgb(79, 74, 111);
 
     private Ui() {}
 
@@ -55,13 +56,28 @@ final class Ui {
         button.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         button.setMinHeight(dp(context, 52));
         button.setPadding(dp(context, 18), dp(context, 12), dp(context, 18), dp(context, 12));
-        button.setBackground(primary
-                ? rounded(context, PRIMARY_DARK, 16)
-                : roundedStroke(context, Color.TRANSPARENT, 16, Color.rgb(79, 74, 111), 1));
+        if (primary) {
+            button.setBackground(rounded(context, PRIMARY_DARK, 16));
+            button.setElevation(dp(context, 3));
+        } else {
+            styleSecondaryButton(context, button);
+        }
         button.setClickable(true);
         button.setFocusable(true);
-        button.setElevation(dp(context, primary ? 3 : 0));
         return button;
+    }
+
+    static void styleSecondaryButton(Context context, TextView button) {
+        button.setTextColor(TEXT);
+        button.setBackground(roundedStroke(
+                context, Color.TRANSPARENT, 16, BUTTON_STROKE, 1));
+        button.setElevation(0);
+    }
+
+    static void styleAttentionButton(Context context, TextView button) {
+        button.setTextColor(BG);
+        button.setBackground(rounded(context, ORANGE, 16));
+        button.setElevation(dp(context, 3));
     }
 
     static void setVisible(View view, boolean visible) {

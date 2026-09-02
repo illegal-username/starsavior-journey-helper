@@ -14,9 +14,10 @@
 
 ## 네트워크
 
-앱이 직접 구현한 네트워크 요청은 사용자가 `DB 업데이트`를 실행했을 때 다음 공개 데이터 호스트에 보내는 HTTPS 요청뿐입니다.
+앱은 실행 시 로컬 DB를 바로 사용하면서 작은 릴리스 정보로 최신 여부를 확인합니다. 이전 확인의 성공·실패와 관계없이 앱을 새로 열 때마다 다시 확인합니다. 사용자가 `DB 업데이트` 또는 `새 DB 받기`를 실행한 경우에만 전체 선택지 DB를 내려받습니다. 요청 대상은 다음 공개 데이터 호스트입니다.
 
 ```text
+https://starsavior-journey-data.pages.dev/journey_choices.meta.json
 https://starsavior-journey-data.pages.dev/journey_choices.json
 ```
 
@@ -31,7 +32,7 @@ OCR에 사용하는 Google ML Kit의 약관에 따르면 입력 이미지와 OCR
 - `SYSTEM_ALERT_WINDOW`: 다른 앱 위의 플로팅 아이콘과 결과창
 - `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MEDIA_PROJECTION`, `FOREGROUND_SERVICE_SPECIAL_USE`: 사용자가 시작한 화면 공유와 플로팅 상태 유지
 - `POST_NOTIFICATIONS`: 포그라운드 서비스 실행 상태와 종료 버튼 표시
-- `INTERNET`: 사용자가 요청한 DB 업데이트 및 위에 설명한 ML Kit SDK 통신 가능성
+- `INTERNET`: 앱 실행 시 DB 버전 확인, 사용자가 요청한 DB 다운로드 및 위에 설명한 ML Kit SDK 통신 가능성
 - 패키지 조회 선언: 설치된 스타 세이비어를 실행하기 위한 단일 패키지 조회
 
 앱은 저장소, 사진, 카메라, 마이크, 연락처, 위치, 전화, SMS, 계정, 접근성 서비스, VPN 권한을 요청하지 않습니다.

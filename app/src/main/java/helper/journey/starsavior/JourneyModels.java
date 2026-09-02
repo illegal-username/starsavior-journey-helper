@@ -14,16 +14,27 @@ public final class JourneyModels {
         public final String upstreamRevision;
         public final int recordCount;
         public final int choiceCount;
+        public final String contentSha256;
+        public final int contentLength;
         public final List<Event> events;
 
         public Data(int schema, String generatedAt, String source, String upstreamRevision,
                     int recordCount, int choiceCount, List<Event> events) {
+            this(schema, generatedAt, source, upstreamRevision, recordCount, choiceCount,
+                    "", -1, events);
+        }
+
+        public Data(int schema, String generatedAt, String source, String upstreamRevision,
+                    int recordCount, int choiceCount, String contentSha256, int contentLength,
+                    List<Event> events) {
             this.schema = schema;
             this.generatedAt = generatedAt;
             this.source = source;
             this.upstreamRevision = upstreamRevision;
             this.recordCount = recordCount;
             this.choiceCount = choiceCount;
+            this.contentSha256 = contentSha256 == null ? "" : contentSha256;
+            this.contentLength = contentLength;
             this.events = Collections.unmodifiableList(events);
         }
     }

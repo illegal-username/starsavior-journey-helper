@@ -13,6 +13,8 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -88,6 +90,7 @@ public final class JourneyRepository {
     }
 
     static JourneyModels.Data parse(String json) throws JSONException {
+        byte[] content = json.getBytes(StandardCharsets.UTF_8);
         JSONObject root = new JSONObject(json);
         JSONArray records = root.getJSONArray("records");
         List<JourneyModels.Event> events = new ArrayList<>(records.length());
@@ -138,8 +141,21 @@ public final class JourneyRepository {
                 root.optString("upstreamRevision"),
                 root.optInt("recordCount", events.size()),
                 root.optInt("choiceCount", countChoices(events)),
+                sha256(content),
+                content.length,
                 events
         );
+    }
+
+    static String sha256(byte[] content) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(content);
+            StringBuilder result = new StringBuilder(digest.length * 2);
+            for (byte value : digest) result.append(String.format("%02x", value & 0xff));
+            return result.toString();
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException("SHA-256 is unavailable.", impossible);
+        }
     }
 
     static void validate(JourneyModels.Data data) throws JSONException {
