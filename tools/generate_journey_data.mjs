@@ -6,7 +6,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 const KO = "ko-KR";
-const BASE_URL = "https://star-savior-arcana-db.pages.dev/data";
+const DATABASE_URL = "https://starsavior-journey-data.pages.dev/journey_choices.json";
 const FILES = [
     "journeys.json",
     "journey_items.json",
@@ -23,14 +23,23 @@ const outputPath = path.join(projectDir, "app/src/main/assets/journey_choices.js
 const inputArgIndex = process.argv.indexOf("--input-dir");
 const inputDir = inputArgIndex >= 0 ? path.resolve(process.argv[inputArgIndex + 1]) : null;
 
-async function readJson(name) {
-    if (inputDir) {
-        return JSON.parse(await fs.readFile(path.join(inputDir, name), "utf8"));
+if (!inputDir) {
+    const response = await fetch(DATABASE_URL);
+    if (!response.ok) throw new Error(`journey_choices.json: HTTP ${response.status}`);
+    const body = await response.text();
+    const parsed = JSON.parse(body);
+    if (parsed.schema !== 4 || parsed.source !== DATABASE_URL || !Array.isArray(parsed.records)) {
+        throw new Error("Published journey database has an unexpected format or source.");
     }
+    await fs.mkdir(path.dirname(outputPath), { recursive: true });
+    await fs.writeFile(outputPath, body.endsWith("\n") ? body : `${body}\n`, "utf8");
+    console.log(`Downloaded ${parsed.recordCount} records / ${parsed.choiceCount} choices -> ${outputPath}`);
+    console.log("The production database is ignored by Git. Do not commit it to the public repository.");
+    process.exit(0);
+}
 
-    const response = await fetch(`${BASE_URL}/${name}`);
-    if (!response.ok) throw new Error(`${name}: HTTP ${response.status}`);
-    return response.json();
+async function readJson(name) {
+    return JSON.parse(await fs.readFile(path.join(inputDir, name), "utf8"));
 }
 
 function local(value) {
@@ -284,7 +293,8 @@ records.sort((a, b) => a.event.localeCompare(b.event, "ko"));
 const result = {
     schema: 4,
     generatedAt: new Date().toISOString(),
-    source: "https://star-savior-arcana-db.pages.dev/journey",
+    source: DATABASE_URL,
+    upstreamRevision: "manual-local-input",
     notice: "비영리 팬 데이터베이스의 선택지/보상 정보를 가공했습니다. 게임 및 원자료의 권리는 각 권리자에게 있습니다.",
     recordCount: records.length,
     choiceCount: records.reduce((sum, record) => sum + record.choices.length, 0),

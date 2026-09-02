@@ -93,14 +93,18 @@ public final class JourneyMatcher {
             double total = 0.0;
 
             for (JourneyModels.Choice choice : event.choices) {
-                String expected = normalize(choice.text);
+                List<String> expectedTexts = new ArrayList<>();
+                expectedTexts.add(normalize(choice.text));
+                for (String alias : choice.aliases) expectedTexts.add(normalize(alias));
                 double choiceBest = 0.0;
                 int choiceIndex = -1;
                 for (Candidate candidate : candidates) {
-                    double score = similarity(expected, candidate.normalized);
-                    if (score > choiceBest) {
-                        choiceBest = score;
-                        choiceIndex = candidate.lineIndex;
+                    for (String expected : expectedTexts) {
+                        double score = similarity(expected, candidate.normalized);
+                        if (score > choiceBest) {
+                            choiceBest = score;
+                            choiceIndex = candidate.lineIndex;
+                        }
                     }
                 }
                 scores.add(choiceBest);

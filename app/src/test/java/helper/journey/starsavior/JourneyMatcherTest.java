@@ -93,4 +93,27 @@ public class JourneyMatcherTest {
         assertFalse(match.isConfident());
         assertTrue(match.ambiguous);
     }
+
+    @Test
+    public void shortenedChoiceAliasesMatchTheSameEventOutcomes() {
+        JourneyModels.Event weather = new JourneyModels.Event("오늘의 날씨 - 낙뢰", "", List.of(
+                new JourneyModels.Choice(
+                        "고작 천둥번개를 겁낼 수는 없지!",
+                        List.of("훈련을 이어나간다."),
+                        List.of()),
+                new JourneyModels.Choice(
+                        "무리하지 말고 대피하자.",
+                        List.of("숙소로 돌아간다."),
+                        List.of())
+        ));
+        JourneyMatcher matcher = new JourneyMatcher(List.of(weather));
+
+        JourneyModels.Match match = matcher.match(
+                List.of("여정 이벤트", "오늘의 날씨 - 낙뢰"),
+                List.of("훈련을 이어나간다.", "숙소로 돌아간다."));
+
+        assertTrue(match.isConfident());
+        assertEquals("오늘의 날씨 - 낙뢰", match.event.name);
+        assertEquals(1.0, match.choiceConfidence, 0.0001);
+    }
 }

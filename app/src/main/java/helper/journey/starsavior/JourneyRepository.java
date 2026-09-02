@@ -100,6 +100,13 @@ public final class JourneyRepository {
             for (int choiceIndex = 0; choiceIndex < choicesJson.length(); choiceIndex++) {
                 JSONObject choiceJson = choicesJson.getJSONObject(choiceIndex);
                 JSONArray outcomesJson = choiceJson.getJSONArray("outcomes");
+                JSONArray aliasesJson = choiceJson.optJSONArray("aliases");
+                List<String> aliases = new ArrayList<>();
+                if (aliasesJson != null) {
+                    for (int aliasIndex = 0; aliasIndex < aliasesJson.length(); aliasIndex++) {
+                        aliases.add(aliasesJson.getString(aliasIndex));
+                    }
+                }
                 List<JourneyModels.Outcome> outcomes = new ArrayList<>(outcomesJson.length());
 
                 for (int outcomeIndex = 0; outcomeIndex < outcomesJson.length(); outcomeIndex++) {
@@ -113,7 +120,8 @@ public final class JourneyRepository {
                     ));
                 }
 
-                choices.add(new JourneyModels.Choice(choiceJson.getString("text"), outcomes));
+                choices.add(new JourneyModels.Choice(
+                        choiceJson.getString("text"), aliases, outcomes));
             }
 
             events.add(new JourneyModels.Event(
@@ -149,6 +157,15 @@ public final class JourneyRepository {
                 String normalized = JourneyMatcher.normalize(choice.text);
                 if (normalized.isEmpty()) throw new JSONException("선택지 문구가 비어 있습니다.");
                 if (choice.outcomes.isEmpty()) throw new JSONException("선택지 결과가 비어 있습니다.");
+                Set<String> choiceTexts = new HashSet<>();
+                choiceTexts.add(normalized);
+                for (String alias : choice.aliases) {
+                    String normalizedAlias = JourneyMatcher.normalize(alias);
+                    if (normalizedAlias.isEmpty()) throw new JSONException("선택지 별칭이 비어 있습니다.");
+                    if (!choiceTexts.add(normalizedAlias)) {
+                        throw new JSONException("선택지 별칭이 중복되었습니다.");
+                    }
+                }
                 signature.append('|');
                 signature.append(normalized);
                 actualChoices++;

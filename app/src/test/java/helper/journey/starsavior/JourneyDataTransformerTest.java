@@ -3,6 +3,7 @@ package helper.journey.starsavior;
 import org.junit.Test;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
@@ -20,6 +21,7 @@ public class JourneyDataTransformerTest {
                   "choices":[
                     {
                       "name":{"ko-KR":"첫 번째 선택"},
+                      "aliases":[{"ko-KR":"단축 첫 번째 선택"}],
                       "condition":{"type":"RR_ITEM_USE","target":10,"value":1},
                       "success_rewards":[
                         [{"type":"RT_STAT","reward_stat":"JST_POWER","min":10,"max":10}],
@@ -91,6 +93,7 @@ public class JourneyDataTransformerTest {
                 .contains("활력 포션 (스태미나 +5)"));
 
         JourneyModels.Choice firstChoice = data.events.get(0).choices.get(0);
+        assertEquals(List.of("단축 첫 번째 선택"), firstChoice.aliases);
         assertTrue(firstChoice.outcomesForDifficulty("이지").get(0).success.contains("힘 +10"));
         assertTrue(firstChoice.outcomesForDifficulty("노말").get(0).success.contains("힘 +20"));
     }

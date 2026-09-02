@@ -42,10 +42,16 @@ public final class JourneyModels {
 
     public static final class Choice {
         public final String text;
+        public final List<String> aliases;
         public final List<Outcome> outcomes;
 
         public Choice(String text, List<Outcome> outcomes) {
+            this(text, List.of(), outcomes);
+        }
+
+        public Choice(String text, List<String> aliases, List<Outcome> outcomes) {
             this.text = text;
+            this.aliases = Collections.unmodifiableList(aliases);
             this.outcomes = Collections.unmodifiableList(outcomes);
         }
 
