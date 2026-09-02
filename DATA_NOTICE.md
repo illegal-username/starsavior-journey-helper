@@ -15,6 +15,7 @@
 ## 원자료와 권리
 
 - 앱용 선택지 DB: https://starsavior-journey-data.pages.dev/journey_choices.json
+- 앱용 DB 릴리스 정보: https://starsavior-journey-data.pages.dev/journey_choices.meta.json
 - 스타 세이비어의 게임 명칭, 텍스트, 이미지, 데이터 및 기타 게임 콘텐츠의 권리는 각 권리자에게 있습니다.
 - 저장소의 MIT 라이선스는 앱 자체 소스 코드에만 적용됩니다.
 - 게임 이미지, 캐릭터 그림, 음원, 패킷 데이터는 저장소에 포함하지 않습니다.
