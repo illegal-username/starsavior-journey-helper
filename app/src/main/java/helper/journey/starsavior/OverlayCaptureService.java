@@ -905,7 +905,7 @@ public final class OverlayCaptureService extends Service {
     private String friendlyUpdateError(Exception error) {
         String detail = error.getMessage();
         if (detail == null || detail.trim().isEmpty()) detail = error.getClass().getSimpleName();
-        return "현재 DB는 그대로 유지했습니다. 인터넷 연결과 원자료 사이트 상태를 확인한 뒤 다시 시도해 주세요.\n\n" + detail;
+        return "현재 DB는 그대로 유지했습니다. 인터넷 연결과 DB 배포 서버 상태를 확인한 뒤 다시 시도해 주세요.\n\n" + detail;
     }
 
     private void addResultView(View view) {

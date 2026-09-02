@@ -10,19 +10,15 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.time.Instant;
-import java.util.LinkedHashMap;
 import java.util.Locale;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 final class JourneyDatabaseUpdater {
-    private static final String BASE_URL = "https://star-savior-arcana-db.pages.dev/data/";
+    static final String DATABASE_URL =
+            "https://starsavior-journey-data.pages.dev/journey_choices.json";
     private static final int CONNECT_TIMEOUT_MS = 10_000;
     private static final int READ_TIMEOUT_MS = 25_000;
     private static final int MAX_FILE_BYTES = 8 * 1024 * 1024;
-    private static final int MAX_TOTAL_BYTES = 24 * 1024 * 1024;
     private static final AtomicBoolean UPDATING = new AtomicBoolean(false);
 
     interface ProgressListener {
@@ -71,51 +67,38 @@ final class JourneyDatabaseUpdater {
             JourneyModels.Data current = JourneyRepository.load(context.getApplicationContext());
             progress(listener, "최신 버전을 확인하고 있습니다…");
 
-            Map<String, String> headEtags = fetchHeadEtags();
-            if (headEtags != null) {
-                String headRevision = revisionFromValues("etag", headEtags);
-                if (!current.upstreamRevision.isEmpty() && headRevision.equals(current.upstreamRevision)) {
-                    return UpdateResult.current(current);
-                }
-            }
-
-            Map<String, String> documents = new LinkedHashMap<>();
-            Map<String, String> getEtags = new LinkedHashMap<>();
-            int[] totalBytes = {0};
-            for (int index = 0; index < JourneyDataTransformer.FILES.size(); index++) {
-                ensureNotInterrupted();
-                String file = JourneyDataTransformer.FILES.get(index);
-                progress(listener, String.format(Locale.KOREA, "원본 데이터 받는 중… (%d/%d)",
-                        index + 1, JourneyDataTransformer.FILES.size()));
-                Download download = download(file, totalBytes);
-                documents.put(file, download.body);
-                if (!download.etag.isEmpty()) getEtags.put(file, download.etag);
-            }
-
-            String revision = getEtags.size() == JourneyDataTransformer.FILES.size()
-                    ? revisionFromValues("etag", getEtags)
-                    : revisionFromValues("content", documents);
-            if (!current.upstreamRevision.isEmpty() && revision.equals(current.upstreamRevision)) {
-                return UpdateResult.current(current);
-            }
-
-            progress(listener, "선택지와 보상을 정리하고 있습니다…");
+            progress(listener, "선택지 DB를 받고 있습니다…");
             ensureNotInterrupted();
-            String normalized = JourneyDataTransformer.transform(documents, revision, Instant.now().toString());
-            JourneyModels.Data candidate = JourneyRepository.parse(normalized);
-            JourneyRepository.validate(candidate);
-            validateSize(current, candidate);
+            String downloaded = download();
+            JourneyModels.Data candidate = JourneyRepository.parse(downloaded);
+            validateRemoteDatabase(current, candidate);
+            if (sameDatabase(current, candidate)) return UpdateResult.current(current);
 
             progress(listener, "검증된 DB를 적용하고 있습니다…");
             ensureNotInterrupted();
-            JourneyModels.Data installed = JourneyRepository.installUpdated(context.getApplicationContext(), normalized);
+            JourneyModels.Data installed = JourneyRepository.installUpdated(
+                    context.getApplicationContext(), downloaded);
             return UpdateResult.installed(installed);
         } finally {
             UPDATING.set(false);
         }
     }
 
-    private static void validateSize(JourneyModels.Data current, JourneyModels.Data candidate) throws JSONException {
+    static boolean sameDatabase(JourneyModels.Data current, JourneyModels.Data candidate) {
+        return !current.upstreamRevision.isEmpty()
+                && current.upstreamRevision.equals(candidate.upstreamRevision)
+                && current.source.equals(candidate.source);
+    }
+
+    static void validateRemoteDatabase(JourneyModels.Data current, JourneyModels.Data candidate)
+            throws JSONException {
+        JourneyRepository.validate(candidate);
+        if (!DATABASE_URL.equals(candidate.source)) {
+            throw new JSONException("DB 출처 주소가 일치하지 않습니다.");
+        }
+        if (candidate.upstreamRevision.trim().isEmpty()) {
+            throw new JSONException("DB 원본 버전이 비어 있습니다.");
+        }
         int minimumRecords = Math.max(20, current.recordCount / 2);
         int minimumChoices = Math.max(40, current.choiceCount / 2);
         if (candidate.recordCount < minimumRecords || candidate.choiceCount < minimumChoices) {
@@ -123,50 +106,34 @@ final class JourneyDatabaseUpdater {
         }
     }
 
-    private static Map<String, String> fetchHeadEtags() {
-        Map<String, String> result = new LinkedHashMap<>();
-        for (String file : JourneyDataTransformer.FILES) {
-            HttpURLConnection connection = null;
-            try {
-                connection = open(file);
-                connection.setRequestMethod("HEAD");
-                int status = connection.getResponseCode();
-                String etag = cleanEtag(connection.getHeaderField("ETag"));
-                if (status < 200 || status >= 300 || etag.isEmpty()) return null;
-                result.put(file, etag);
-            } catch (IOException ignored) {
-                return null;
-            } finally {
-                if (connection != null) connection.disconnect();
-            }
-        }
-        return result;
-    }
-
-    private static Download download(String file, int[] totalBytes) throws IOException {
-        HttpURLConnection connection = open(file);
+    private static String download() throws IOException {
+        HttpURLConnection connection = open();
         try {
             connection.setRequestMethod("GET");
             int status = connection.getResponseCode();
             if (status < 200 || status >= 300) {
-                throw new IOException(file + " 다운로드 실패 (HTTP " + status + ")");
+                throw new IOException("선택지 DB 다운로드 실패 (HTTP " + status + ")");
             }
             int declared = connection.getContentLength();
-            if (declared > MAX_FILE_BYTES) throw new IOException(file + " 응답이 너무 큽니다.");
+            if (declared > MAX_FILE_BYTES) throw new IOException("선택지 DB 응답이 너무 큽니다.");
+            String contentType = connection.getContentType();
+            if (contentType == null
+                    || !contentType.toLowerCase(Locale.ROOT).startsWith("application/json")) {
+                throw new IOException("선택지 DB가 JSON으로 응답하지 않았습니다.");
+            }
 
             byte[] bytes;
             try (InputStream input = connection.getInputStream()) {
-                bytes = readLimited(input, file, totalBytes);
+                bytes = readLimited(input);
             }
-            return new Download(new String(bytes, StandardCharsets.UTF_8),
-                    cleanEtag(connection.getHeaderField("ETag")));
+            return new String(bytes, StandardCharsets.UTF_8);
         } finally {
             connection.disconnect();
         }
     }
 
-    private static HttpURLConnection open(String file) throws IOException {
-        HttpURLConnection connection = (HttpURLConnection) new URL(BASE_URL + file).openConnection();
+    private static HttpURLConnection open() throws IOException {
+        HttpURLConnection connection = (HttpURLConnection) new URL(DATABASE_URL).openConnection();
         connection.setConnectTimeout(CONNECT_TIMEOUT_MS);
         connection.setReadTimeout(READ_TIMEOUT_MS);
         connection.setInstanceFollowRedirects(true);
@@ -178,7 +145,7 @@ final class JourneyDatabaseUpdater {
         return connection;
     }
 
-    private static byte[] readLimited(InputStream input, String file, int[] totalBytes) throws IOException {
+    private static byte[] readLimited(InputStream input) throws IOException {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         byte[] buffer = new byte[16 * 1024];
         int fileBytes = 0;
@@ -186,9 +153,8 @@ final class JourneyDatabaseUpdater {
         while ((count = input.read(buffer)) != -1) {
             ensureNotInterrupted();
             fileBytes += count;
-            totalBytes[0] += count;
-            if (fileBytes > MAX_FILE_BYTES || totalBytes[0] > MAX_TOTAL_BYTES) {
-                throw new IOException(file + " 응답 크기가 안전 제한을 넘었습니다.");
+            if (fileBytes > MAX_FILE_BYTES) {
+                throw new IOException("선택지 DB 응답 크기가 안전 제한을 넘었습니다.");
             }
             output.write(buffer, 0, count);
         }
@@ -199,39 +165,10 @@ final class JourneyDatabaseUpdater {
         if (Thread.currentThread().isInterrupted()) throw new IOException("DB 업데이트가 취소되었습니다.");
     }
 
-    private static String revisionFromValues(String kind, Map<String, String> values) throws Exception {
-        MessageDigest digest = MessageDigest.getInstance("SHA-256");
-        digest.update(kind.getBytes(StandardCharsets.UTF_8));
-        digest.update((byte) 0);
-        for (String file : JourneyDataTransformer.FILES) {
-            digest.update(file.getBytes(StandardCharsets.UTF_8));
-            digest.update((byte) 0);
-            digest.update(values.get(file).getBytes(StandardCharsets.UTF_8));
-            digest.update((byte) 0);
-        }
-        StringBuilder hex = new StringBuilder();
-        for (byte value : digest.digest()) hex.append(String.format(Locale.ROOT, "%02x", value & 0xff));
-        return kind + "-sha256:" + hex;
-    }
-
-    private static String cleanEtag(String value) {
-        return value == null ? "" : value.trim();
-    }
-
     private static void progress(ProgressListener listener, String message) {
         if (listener == null) return;
         try {
             listener.onProgress(message);
         } catch (RuntimeException ignored) {}
-    }
-
-    private static final class Download {
-        final String body;
-        final String etag;
-
-        Download(String body, String etag) {
-            this.body = body;
-            this.etag = etag;
-        }
     }
 }

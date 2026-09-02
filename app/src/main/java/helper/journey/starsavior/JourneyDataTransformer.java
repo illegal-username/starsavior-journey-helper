@@ -21,7 +21,7 @@ import java.util.regex.Pattern;
 
 /** Converts the public Star Savior DB documents into the compact matcher database. */
 final class JourneyDataTransformer {
-    static final String SOURCE = "https://star-savior-arcana-db.pages.dev/journey";
+    static final String SOURCE = JourneyDatabaseUpdater.DATABASE_URL;
     static final List<String> FILES = List.of(
             "journeys.json",
             "journey_items.json",
@@ -99,7 +99,8 @@ final class JourneyDataTransformer {
                         : variants.length() > 1 ? "경우 " + (variantIndex + 1) : "";
                 String label = hint.isEmpty() ? event : event + " · " + hint;
                 addRecord(grouped, new RecordSource(
-                        event, "", choiceTexts, formatter.outcomes(rawChoices, label, difficulty)));
+                        event, "", choiceTexts, choiceAliases(rawChoices),
+                        formatter.outcomes(rawChoices, label, difficulty)));
             }
         }
 
@@ -117,7 +118,8 @@ final class JourneyDataTransformer {
                 String context = local(arcana.opt("char_name")) + " · " + local(arcana.opt("name"));
                 String label = event + " · " + context;
                 addRecord(grouped, new RecordSource(
-                        event, context, choiceTexts, formatter.outcomes(rawChoices, label, "")));
+                        event, context, choiceTexts, choiceAliases(rawChoices),
+                        formatter.outcomes(rawChoices, label, "")));
             }
         }
 
@@ -142,9 +144,21 @@ final class JourneyDataTransformer {
                 JSONArray outcomes = new JSONArray();
                 boolean single = unique.size() == 1;
                 for (OutcomeData outcome : unique.values()) outcomes.put(outcome.toJson(single ? "" : outcome.label));
-                choices.put(new JSONObject()
+                JSONObject choice = new JSONObject()
                         .put("text", first.choiceTexts.get(choiceIndex))
-                        .put("outcomes", outcomes));
+                        .put("outcomes", outcomes);
+                JSONArray aliases = new JSONArray();
+                Set<String> seenAliases = new LinkedHashSet<>();
+                seenAliases.add(normalize(first.choiceTexts.get(choiceIndex)));
+                for (RecordSource source : sources) {
+                    if (choiceIndex >= source.choiceAliases.size()) continue;
+                    for (String alias : source.choiceAliases.get(choiceIndex)) {
+                        String normalized = normalize(alias);
+                        if (!normalized.isEmpty() && seenAliases.add(normalized)) aliases.put(alias);
+                    }
+                }
+                if (aliases.length() > 0) choice.put("aliases", aliases);
+                choices.put(choice);
                 choiceCount++;
             }
 
@@ -190,6 +204,24 @@ final class JourneyDataTransformer {
         for (int index = 0; index < choices.length(); index++) {
             JSONObject choice = choices.optJSONObject(index);
             result.add(choice == null ? "" : local(choice.opt("name")));
+        }
+        return result;
+    }
+
+    private static List<List<String>> choiceAliases(JSONArray choices) {
+        if (choices == null) return Collections.emptyList();
+        List<List<String>> result = new ArrayList<>(choices.length());
+        for (int choiceIndex = 0; choiceIndex < choices.length(); choiceIndex++) {
+            JSONObject choice = choices.optJSONObject(choiceIndex);
+            JSONArray aliases = choice == null ? null : choice.optJSONArray("aliases");
+            List<String> values = new ArrayList<>();
+            if (aliases != null) {
+                for (int aliasIndex = 0; aliasIndex < aliases.length(); aliasIndex++) {
+                    String value = local(aliases.opt(aliasIndex));
+                    if (!value.isEmpty()) values.add(value);
+                }
+            }
+            result.add(values);
         }
         return result;
     }
@@ -447,12 +479,15 @@ final class JourneyDataTransformer {
         final String event;
         final String context;
         final List<String> choiceTexts;
+        final List<List<String>> choiceAliases;
         final List<OutcomeData> outcomes;
 
-        RecordSource(String event, String context, List<String> choiceTexts, List<OutcomeData> outcomes) {
+        RecordSource(String event, String context, List<String> choiceTexts,
+                     List<List<String>> choiceAliases, List<OutcomeData> outcomes) {
             this.event = event;
             this.context = context;
             this.choiceTexts = choiceTexts;
+            this.choiceAliases = choiceAliases;
             this.outcomes = outcomes;
         }
     }

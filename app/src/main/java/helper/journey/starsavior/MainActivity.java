@@ -237,14 +237,14 @@ public final class MainActivity extends Activity {
         TextView privacyTitle = Ui.text(this, "화면 내용은 기기 안에서만 처리", 16, Ui.GREEN);
         privacyTitle.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         privacy.addView(privacyTitle, marginParams(-1, -2, 0, 0, 0, 7));
-        TextView privacyBody = body("캡처 이미지와 인식한 글자는 저장하거나 전송하지 않습니다. 광고·자체 추적 서버는 없습니다. DB 업데이트 시 원자료에 접속하며, ML Kit SDK는 호환성 정보와 성능 지표를 위해 Google과 통신할 수 있습니다.");
+        TextView privacyBody = body("캡처 이미지와 인식한 글자는 저장하거나 전송하지 않습니다. 광고·자체 추적 서버는 없습니다. DB 업데이트 시 데이터 배포 서버에 접속하며, ML Kit SDK는 호환성 정보와 성능 지표를 위해 Google과 통신할 수 있습니다.");
         privacy.addView(privacyBody);
         root.addView(privacy, marginParams(-1, -2, 0, 0, 0, 14));
 
-        TextView source = Ui.text(this, "원자료: 스타 세이비어 DB  ↗", 14, Ui.BLUE);
+        TextView source = Ui.text(this, "선택지 DB 원본  ↗", 14, Ui.BLUE);
         source.setPadding(Ui.dp(this, 4), Ui.dp(this, 8), Ui.dp(this, 4), Ui.dp(this, 8));
         source.setOnClickListener(v -> startActivity(new Intent(Intent.ACTION_VIEW,
-                Uri.parse("https://star-savior-arcana-db.pages.dev/journey"))));
+                Uri.parse(JourneyDatabaseUpdater.DATABASE_URL))));
         root.addView(source);
 
         TextView openSource = Ui.text(this, "오픈소스·개인정보 안내  ↗", 14, Ui.BLUE);
@@ -253,7 +253,7 @@ public final class MainActivity extends Activity {
                 Uri.parse(getString(R.string.source_code_url)))));
         root.addView(openSource);
 
-        TextView disclaimer = Ui.text(this, "비공식 팬 도우미이며 STUDIOBSIDE 및 원자료 사이트와 제휴·보증 관계가 없습니다.", 12, Color.rgb(125, 121, 151));
+        TextView disclaimer = Ui.text(this, "비공식 팬 도우미이며 STUDIOBSIDE와 제휴·보증 관계가 없습니다.", 12, Color.rgb(125, 121, 151));
         disclaimer.setLineSpacing(0, 1.15f);
         root.addView(disclaimer, marginParams(-1, -2, 4, 4, 4, 0));
         return scroll;
@@ -476,7 +476,7 @@ public final class MainActivity extends Activity {
     private String friendlyUpdateError(Exception error) {
         String detail = error.getMessage();
         if (detail == null || detail.trim().isEmpty()) detail = error.getClass().getSimpleName();
-        return "새 데이터는 적용하지 않았으며 현재 DB는 그대로입니다. 인터넷 연결과 원자료 사이트 상태를 확인한 뒤 다시 시도해 주세요.\n\n" + detail;
+        return "새 데이터는 적용하지 않았으며 현재 DB는 그대로입니다. 인터넷 연결과 DB 배포 서버 상태를 확인한 뒤 다시 시도해 주세요.\n\n" + detail;
     }
 
     private void refreshStatus() {
