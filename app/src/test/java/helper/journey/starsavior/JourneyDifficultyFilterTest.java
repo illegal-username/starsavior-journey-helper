@@ -3,6 +3,7 @@ package helper.journey.starsavior;
 import org.junit.Test;
 
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertSame;
@@ -54,5 +55,33 @@ public class JourneyDifficultyFilterTest {
 
         assertEquals(2, choice.outcomesForDifficulty("").size());
         assertTrue(choice.outcomesForDifficulty(null).containsAll(List.of(easy, hard)));
+    }
+
+    @Test
+    public void recognizedArcanaKeepsOnlyItsOutcomesAcrossAnyNumberOfSources() {
+        JourneyModels.Outcome shared = new JourneyModels.Outcome(
+                "공유", "", "", "힘 +5", "", List.of("7000001", "7000002", "7000003"));
+        JourneyModels.Outcome fourth = new JourneyModels.Outcome(
+                "네 번째", "", "", "힘 +9", "", List.of("7000004"));
+        JourneyModels.Choice choice = new JourneyModels.Choice(
+                "계속한다", List.of(shared, fourth));
+
+        List<JourneyModels.Outcome> visible = choice.outcomesFor("", Set.of("7000003"));
+
+        assertEquals(1, visible.size());
+        assertSame(shared, visible.get(0));
+    }
+
+    @Test
+    public void missingOrUnmatchedImageEvidenceKeepsChoiceGroupingFallback() {
+        JourneyModels.Outcome first = new JourneyModels.Outcome(
+                "첫 번째", "", "", "힘 +5", "", List.of("7000001"));
+        JourneyModels.Outcome second = new JourneyModels.Outcome(
+                "두 번째", "", "", "힘 +9", "", List.of("7000002"));
+        JourneyModels.Choice choice = new JourneyModels.Choice(
+                "계속한다", List.of(first, second));
+
+        assertEquals(2, choice.outcomesFor("", Set.of()).size());
+        assertEquals(2, choice.outcomesFor("", Set.of("unknown-thumbnail")).size());
     }
 }

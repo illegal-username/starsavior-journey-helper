@@ -9,7 +9,6 @@ import org.json.JSONObject;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -17,26 +16,33 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public final class JourneyRepository {
     private static final String ASSET_NAME = "journey_choices.json";
     private static final String EXAMPLE_ASSET_NAME = "journey_choices.example.json";
     private static final String EXAMPLE_SOURCE = "public-example";
-    private static final String UPDATED_NAME = "journey_choices_updated.json";
-    private static final String PREVIOUS_NAME = "journey_choices_previous.json";
-    private static final String TEMP_NAME = "journey_choices_update.tmp";
     private static final Object FILE_LOCK = new Object();
 
     private JourneyRepository() {}
 
     public static JourneyModels.Data load(Context context) throws IOException, JSONException {
         synchronized (FILE_LOCK) {
-            JourneyModels.Data updated = tryLoadFile(new File(context.getFilesDir(), UPDATED_NAME));
+            if (BuildConfig.BUNDLED_TEST_DATABASE) {
+                JourneyModels.Data bundledTest = tryLoadAsset(context, ASSET_NAME);
+                if (bundledTest != null) return bundledTest;
+                throw new IOException("테스트 APK의 내장 선택지 DB를 읽지 못했습니다.");
+            }
+
+            JourneyModels.Data updated = tryLoadFile(
+                    JourneyDatabaseFileStore.updated(context.getFilesDir()));
             if (updated != null) return updated;
 
-            JourneyModels.Data previous = tryLoadFile(new File(context.getFilesDir(), PREVIOUS_NAME));
+            JourneyModels.Data previous = tryLoadFile(
+                    JourneyDatabaseFileStore.previous(context.getFilesDir()));
             if (previous != null) return previous;
 
             JourneyModels.Data bundled = tryLoadAsset(context, ASSET_NAME);
@@ -57,41 +63,22 @@ public final class JourneyRepository {
         validate(parsed);
 
         synchronized (FILE_LOCK) {
-            File directory = context.getFilesDir();
-            File current = new File(directory, UPDATED_NAME);
-            File previous = new File(directory, PREVIOUS_NAME);
-            File temporary = new File(directory, TEMP_NAME);
-            byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
-
-            try (FileOutputStream output = new FileOutputStream(temporary, false)) {
-                output.write(bytes);
-                output.flush();
-                output.getFD().sync();
-            }
-
-            if (previous.exists() && !previous.delete()) {
-                throw new IOException("이전 DB 백업을 정리하지 못했습니다.");
-            }
-            if (current.exists() && !current.renameTo(previous)) {
-                throw new IOException("현재 DB를 백업하지 못했습니다.");
-            }
-            if (!temporary.renameTo(current)) {
-                if (previous.exists()) previous.renameTo(current);
-                throw new IOException("새 DB를 적용하지 못했습니다.");
-            }
+            JourneyDatabaseFileStore.install(context.getFilesDir(), json);
         }
         return parsed;
     }
 
     public static boolean hasDownloadedDatabase(Context context) {
         synchronized (FILE_LOCK) {
-            return new File(context.getFilesDir(), UPDATED_NAME).isFile();
+            return JourneyDatabaseFileStore.updated(context.getFilesDir()).isFile();
         }
     }
 
     static JourneyModels.Data parse(String json) throws JSONException {
         byte[] content = json.getBytes(StandardCharsets.UTF_8);
         JSONObject root = new JSONObject(json);
+        Map<String, JourneyModels.ArcanaImageFeature> arcanaImageFeatures =
+                parseArcanaImageFeatures(root.optJSONObject("arcanaImageFeatures"));
         JSONArray records = root.getJSONArray("records");
         List<JourneyModels.Event> events = new ArrayList<>(records.length());
 
@@ -114,12 +101,28 @@ public final class JourneyRepository {
 
                 for (int outcomeIndex = 0; outcomeIndex < outcomesJson.length(); outcomeIndex++) {
                     JSONObject outcomeJson = outcomesJson.getJSONObject(outcomeIndex);
+                    JSONArray arcanaIdsJson = outcomeJson.optJSONArray("arcanaIds");
+                    List<String> arcanaIds = new ArrayList<>();
+                    Set<String> seenArcanaIds = new HashSet<>();
+                    if (arcanaIdsJson != null) {
+                        for (int arcanaIndex = 0; arcanaIndex < arcanaIdsJson.length(); arcanaIndex++) {
+                            String arcanaId = arcanaIdsJson.getString(arcanaIndex).trim();
+                            if (arcanaId.isEmpty()) {
+                                throw new JSONException("아르카나 출처 ID가 비어 있습니다.");
+                            }
+                            if (!seenArcanaIds.add(arcanaId)) {
+                                throw new JSONException("아르카나 출처 ID가 중복되었습니다.");
+                            }
+                            arcanaIds.add(arcanaId);
+                        }
+                    }
                     outcomes.add(new JourneyModels.Outcome(
                             outcomeJson.optString("label"),
                             outcomeJson.optString("difficulty"),
                             outcomeJson.optString("condition"),
                             outcomeJson.optString("success"),
-                            outcomeJson.optString("failure")
+                            outcomeJson.optString("failure"),
+                            arcanaIds
                     ));
                 }
 
@@ -130,7 +133,8 @@ public final class JourneyRepository {
             events.add(new JourneyModels.Event(
                     eventJson.getString("event"),
                     eventJson.optString("context"),
-                    choices
+                    choices,
+                    optionalBoolean(eventJson, "sameProgress")
             ));
         }
 
@@ -143,8 +147,35 @@ public final class JourneyRepository {
                 root.optInt("choiceCount", countChoices(events)),
                 sha256(content),
                 content.length,
-                events
+                events,
+                arcanaImageFeatures
         );
+    }
+
+    private static Map<String, JourneyModels.ArcanaImageFeature> parseArcanaImageFeatures(
+            JSONObject featureRoot) throws JSONException {
+        if (featureRoot == null) return Map.of();
+        if (featureRoot.optInt("schema", -1) != 1
+                || !"hsv-h12-s4".equals(featureRoot.optString("kind"))) {
+            throw new JSONException("Unsupported Arcana image feature format.");
+        }
+        JSONArray items = featureRoot.getJSONArray("items");
+        Map<String, JourneyModels.ArcanaImageFeature> result = new LinkedHashMap<>();
+        for (int itemIndex = 0; itemIndex < items.length(); itemIndex++) {
+            JSONObject item = items.getJSONObject(itemIndex);
+            String arcanaId = item.getString("arcanaId").trim();
+            JSONArray values = item.getJSONArray("histogram");
+            if (arcanaId.isEmpty() || result.containsKey(arcanaId)
+                    || values.length() != JourneyModels.ArcanaImageFeature.HISTOGRAM_SIZE) {
+                throw new JSONException("Invalid Arcana image feature item.");
+            }
+            int[] histogram = new int[values.length()];
+            for (int valueIndex = 0; valueIndex < values.length(); valueIndex++) {
+                histogram[valueIndex] = values.getInt(valueIndex);
+            }
+            result.put(arcanaId, new JourneyModels.ArcanaImageFeature(arcanaId, histogram));
+        }
+        return result;
     }
 
     static String sha256(byte[] content) {
@@ -165,10 +196,15 @@ public final class JourneyRepository {
 
         int actualChoices = 0;
         Set<String> signatures = new HashSet<>();
+        Set<String> ambiguousArcanaIds = new HashSet<>();
         for (JourneyModels.Event event : data.events) {
             if (event.name.trim().isEmpty()) throw new JSONException("이벤트 이름이 비어 있습니다.");
             if (event.choices.size() < 2) throw new JSONException("선택지가 두 개보다 적은 이벤트가 있습니다.");
-            StringBuilder signature = new StringBuilder(JourneyMatcher.normalize(event.name));
+            StringBuilder signature = new StringBuilder(event.sameProgress
+                    ? "same-progress|"
+                    : "choice-results|");
+            signature.append(JourneyMatcher.normalize(event.name));
+            Set<String> eventArcanaIds = new HashSet<>();
             for (JourneyModels.Choice choice : event.choices) {
                 String normalized = JourneyMatcher.normalize(choice.text);
                 if (normalized.isEmpty()) throw new JSONException("선택지 문구가 비어 있습니다.");
@@ -182,19 +218,74 @@ public final class JourneyRepository {
                         throw new JSONException("선택지 별칭이 중복되었습니다.");
                     }
                 }
+                for (JourneyModels.Outcome outcome : choice.outcomes) {
+                    Set<String> arcanaIds = new HashSet<>();
+                    eventArcanaIds.addAll(outcome.arcanaIds);
+                    for (String arcanaId : outcome.arcanaIds) {
+                        if (arcanaId.trim().isEmpty()) {
+                            throw new JSONException("아르카나 출처 ID가 비어 있습니다.");
+                        }
+                        if (!arcanaIds.add(arcanaId)) {
+                            throw new JSONException("아르카나 출처 ID가 중복되었습니다.");
+                        }
+                    }
+                }
                 signature.append('|');
                 signature.append(normalized);
                 actualChoices++;
             }
+            boolean distinguishableArcanaSources = false;
+            for (JourneyModels.Choice choice : event.choices) {
+                for (JourneyModels.Outcome outcome : choice.outcomes) {
+                    if (!outcome.arcanaIds.isEmpty()
+                            && !new HashSet<>(outcome.arcanaIds).equals(eventArcanaIds)) {
+                        distinguishableArcanaSources = true;
+                    }
+                }
+            }
+            if (eventArcanaIds.size() > 1 && distinguishableArcanaSources) {
+                ambiguousArcanaIds.addAll(eventArcanaIds);
+            }
             if (!signatures.add(signature.toString())) throw new JSONException("중복 이벤트·선택지 그룹이 있습니다.");
         }
         if (data.choiceCount != actualChoices) throw new JSONException("선택지 개수가 일치하지 않습니다.");
+        for (Map.Entry<String, JourneyModels.ArcanaImageFeature> entry
+                : data.arcanaImageFeatures.entrySet()) {
+            JourneyModels.ArcanaImageFeature feature = entry.getValue();
+            if (!entry.getKey().equals(feature.arcanaId)
+                    || feature.histogram.length != JourneyModels.ArcanaImageFeature.HISTOGRAM_SIZE) {
+                throw new JSONException("Invalid Arcana image feature item.");
+            }
+            long histogramTotal = 0;
+            for (int value : feature.histogram) {
+                if (value < 0 || value > 65535) {
+                    throw new JSONException("Arcana image feature value is out of range.");
+                }
+                histogramTotal += value;
+            }
+            if (histogramTotal <= 0) {
+                throw new JSONException("Arcana image feature histogram is empty.");
+            }
+        }
+        if (!data.arcanaImageFeatures.isEmpty()
+                && !data.arcanaImageFeatures.keySet().equals(ambiguousArcanaIds)) {
+            throw new JSONException("Arcana image features do not match ambiguous source IDs.");
+        }
     }
 
     private static int countChoices(List<JourneyModels.Event> events) {
         int result = 0;
         for (JourneyModels.Event event : events) result += event.choices.size();
         return result;
+    }
+
+    private static boolean optionalBoolean(JSONObject value, String name) throws JSONException {
+        if (!value.has(name) || value.isNull(name)) return false;
+        Object raw = value.get(name);
+        if (!(raw instanceof Boolean)) {
+            throw new JSONException(name + " 값은 boolean이어야 합니다.");
+        }
+        return (Boolean) raw;
     }
 
     private static JourneyModels.Data tryLoadFile(File file) {

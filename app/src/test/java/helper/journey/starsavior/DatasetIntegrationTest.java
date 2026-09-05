@@ -18,8 +18,13 @@ public class DatasetIntegrationTest {
         JourneyRepository.validate(data);
 
         assertEquals("public-example", data.source);
-        assertEquals(2, data.recordCount);
-        assertEquals(4, data.choiceCount);
+        assertEquals(3, data.recordCount);
+        assertEquals(6, data.choiceCount);
+        JourneyModels.Event sameProgress = data.events.stream()
+                .filter(event -> event.name.equals("공개 예제 - 동일 진행"))
+                .findFirst()
+                .orElseThrow();
+        assertTrue(sameProgress.sameProgress);
     }
 
     @Test
@@ -37,6 +42,13 @@ public class DatasetIntegrationTest {
         assertEquals("공개 예제 - 아침", match.event.name);
         assertEquals(1, match.event.choices.get(0).outcomes.size());
         assertEquals("예제 효과 A", match.event.choices.get(0).outcomes.get(0).success);
+    }
+
+    @Test
+    public void sameProgressCopyMatchesTheApprovedMessage() {
+        assertEquals("선택에 따른 차이 없음", OverlayResultView.sameProgressTitle());
+        assertEquals("어느 쪽을 골라도 동일하게 진행됩니다.",
+                OverlayResultView.sameProgressMessage());
     }
 
     private static Path exampleAsset() {

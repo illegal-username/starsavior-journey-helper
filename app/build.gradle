@@ -1,3 +1,5 @@
+import groovy.json.JsonSlurper
+
 plugins {
     id 'com.android.application'
 }
@@ -14,6 +16,10 @@ def releaseKeyAlias = signingProperties.getProperty('keyAlias') ?: System.getenv
 def releaseKeyPassword = signingProperties.getProperty('keyPassword') ?: System.getenv('STAR_JOURNEY_KEY_PASSWORD')
 def hasReleaseSigning = [releaseStoreFile, releaseStorePassword, releaseKeyAlias, releaseKeyPassword]
         .every { it != null && !it.trim().isEmpty() }
+def bundledTestDatabase = providers.gradleProperty('bundledTestDatabase')
+def bundledTestVersionCode = providers.gradleProperty('bundledTestVersionCode')
+def bundledTestVersionName = providers.gradleProperty('bundledTestVersionName')
+def bundledTestAssetsDirectory = layout.buildDirectory.dir('generated/bundledTestAssets')
 
 android {
     namespace 'helper.journey.starsavior'
@@ -38,8 +44,9 @@ android {
         applicationId 'helper.journey.starsavior'
         minSdk 26
         targetSdk 35
-        versionCode 42
-        versionName '2.1.9'
+        versionCode 46
+        versionName '2.1.10'
+        buildConfigField 'boolean', 'BUNDLED_TEST_DATABASE', 'false'
 
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
     }
@@ -49,6 +56,18 @@ android {
             if (hasReleaseSigning) signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        internal {
+            initWith release
+            matchingFallbacks = ['release']
+            versionNameSuffix '-db-test'
+            buildConfigField 'boolean', 'BUNDLED_TEST_DATABASE', 'true'
+        }
+    }
+
+    sourceSets {
+        internal {
+            assets.srcDir(bundledTestAssetsDirectory)
         }
     }
 
@@ -60,6 +79,19 @@ android {
     packaging {
         resources {
             excludes += ['/META-INF/{AL2.0,LGPL2.1}']
+        }
+    }
+}
+
+android.applicationVariants.configureEach { variant ->
+    if (variant.buildType.name == 'internal') {
+        variant.outputs.configureEach { output ->
+            if (bundledTestVersionCode.isPresent()) {
+                output.versionCodeOverride = bundledTestVersionCode.get().toInteger()
+            }
+            if (bundledTestVersionName.isPresent()) {
+                output.versionNameOverride = bundledTestVersionName.get()
+            }
         }
     }
 }
@@ -86,8 +118,94 @@ def validateReleaseSigning = tasks.register('validateReleaseSigning') {
     }
 }
 
+def validateReleaseDatabaseBoundary = tasks.register('validateReleaseDatabaseBoundary') {
+    group = 'verification'
+    description = 'Fails if a real journey database could enter the production release source sets.'
+    doLast {
+        List<File> forbidden = [
+                file('src/main/assets/journey_choices.json'),
+                file('src/release/assets/journey_choices.json')
+        ]
+        List<File> present = forbidden.findAll { it.isFile() }
+        if (!present.isEmpty()) {
+            throw new GradleException(
+                    'Production release must not bundle journey_choices.json: '
+                            + present.collect { it.path }.join(', '))
+        }
+    }
+}
+
+def validateBundledTestBuild = tasks.register('validateBundledTestBuild') {
+    group = 'verification'
+    description = 'Checks the external DB and installable version used by an internal test APK.'
+    dependsOn(validateReleaseSigning)
+    doLast {
+        if (!bundledTestDatabase.isPresent()) {
+            throw new GradleException('Supply -PbundledTestDatabase=<external journey_choices.json>.')
+        }
+        File database = file(bundledTestDatabase.get()).canonicalFile
+        if (!database.isFile()) {
+            throw new GradleException("Bundled test database does not exist: ${database}")
+        }
+        if (database.toPath().startsWith(rootDir.canonicalFile.toPath())) {
+            throw new GradleException('Bundled test database must remain outside the public source repository.')
+        }
+        if (!bundledTestVersionCode.isPresent()) {
+            throw new GradleException('Supply -PbundledTestVersionCode=<installable versionCode>.')
+        }
+        int testVersionCode
+        try {
+            testVersionCode = bundledTestVersionCode.get().toInteger()
+        } catch (NumberFormatException error) {
+            throw new GradleException('bundledTestVersionCode must be an integer.', error)
+        }
+        if (testVersionCode <= android.defaultConfig.versionCode) {
+            throw new GradleException(
+                    "bundledTestVersionCode must exceed production versionCode ${android.defaultConfig.versionCode}.")
+        }
+    }
+}
+
+def prepareBundledTestDatabase = tasks.register('prepareBundledTestDatabase') {
+    group = 'build setup'
+    description = 'Validates and stages an external journey DB only in the generated internal assets directory.'
+    dependsOn(validateBundledTestBuild)
+    inputs.property('databasePath', bundledTestDatabase.orElse(''))
+    if (bundledTestDatabase.isPresent()) inputs.file(file(bundledTestDatabase.get()))
+    outputs.file(bundledTestAssetsDirectory.map { it.file('journey_choices.json') })
+    doLast {
+        File source = file(bundledTestDatabase.get()).canonicalFile
+        Object parsed
+        try {
+            parsed = new JsonSlurper().parse(source, 'UTF-8')
+        } catch (Exception error) {
+            throw new GradleException('Bundled test database is not valid UTF-8 JSON.', error)
+        }
+        if (!(parsed instanceof Map)
+                || parsed.schema != 4
+                || !(parsed.records instanceof List)
+                || parsed.records.isEmpty()) {
+            throw new GradleException('Bundled test database must be a non-empty schema 4 compact DB.')
+        }
+        File destinationDirectory = bundledTestAssetsDirectory.get().asFile
+        copy {
+            from source
+            into destinationDirectory
+            rename { 'journey_choices.json' }
+        }
+    }
+}
+
 tasks.configureEach { task ->
     if (task.name in ['assembleRelease', 'packageRelease', 'bundleRelease', 'signReleaseBundle']) {
-        task.dependsOn(validateReleaseSigning)
+        task.dependsOn(validateReleaseSigning, validateReleaseDatabaseBoundary)
+    }
+    if (task.name.contains('Internal')
+            && !task.name.startsWith('clean')
+            && !task.name.startsWith('uninstall')) {
+        task.dependsOn(prepareBundledTestDatabase)
+    }
+    if (task.name in ['assembleInternal', 'packageInternal', 'bundleInternal']) {
+        task.dependsOn(validateBundledTestBuild)
     }
 }

@@ -213,8 +213,14 @@ public final class MainActivity extends Activity {
         startButton.setOnClickListener(v -> startFlow());
         root.addView(startButton, marginParams(-1, Ui.dp(this, 56), 0, 0, 0, 10));
 
-        updateButton = Ui.button(this, "DB 업데이트", false);
-        updateButton.setOnClickListener(v -> updateDatabase());
+        updateButton = Ui.button(this,
+                BuildConfig.BUNDLED_TEST_DATABASE ? "테스트 DB 내장됨" : "DB 업데이트", false);
+        if (BuildConfig.BUNDLED_TEST_DATABASE) {
+            updateButton.setEnabled(false);
+            updateButton.setAlpha(0.65f);
+        } else {
+            updateButton.setOnClickListener(v -> updateDatabase());
+        }
         root.addView(updateButton, marginParams(-1, Ui.dp(this, 52), 0, 0, 0, 10));
 
         stopButton = Ui.button(this, "오버레이 종료", false);
@@ -407,6 +413,7 @@ public final class MainActivity extends Activity {
     }
 
     private void checkDatabaseUpdateOnLaunch() {
+        if (BuildConfig.BUNDLED_TEST_DATABASE) return;
         loader.execute(() -> {
             try {
                 JourneyDatabaseUpdater.CheckResult result =
@@ -447,7 +454,9 @@ public final class MainActivity extends Activity {
             return;
         }
         String date = formatDatabaseDate(data.generatedAt);
-        String kind = JourneyRepository.hasDownloadedDatabase(this) ? "업데이트 DB" : "내장 DB";
+        String kind = BuildConfig.BUNDLED_TEST_DATABASE
+                ? "테스트 내장 DB"
+                : JourneyRepository.hasDownloadedDatabase(this) ? "업데이트 DB" : "내장 DB";
         String summary = String.format(Locale.KOREA, "%s · 선택지 %,d개 · %s 기준", kind, data.choiceCount, date);
         setStatus(dataState, summary, true);
     }
@@ -464,6 +473,10 @@ public final class MainActivity extends Activity {
     }
 
     private void updateDatabase() {
+        if (BuildConfig.BUNDLED_TEST_DATABASE) {
+            Toast.makeText(this, "테스트 APK는 내장 DB를 사용합니다.", Toast.LENGTH_SHORT).show();
+            return;
+        }
         if (JourneyDatabaseUpdater.isUpdating()) {
             Toast.makeText(this, "이미 DB를 업데이트하고 있습니다.", Toast.LENGTH_SHORT).show();
             return;
@@ -629,7 +642,10 @@ public final class MainActivity extends Activity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == REQUEST_CAPTURE) {
-            if (resultCode != RESULT_OK || data == null) {
+            ScreenCapturePermissionDecision.Action decision =
+                    ScreenCapturePermissionDecision.fromResult(
+                            resultCode == RESULT_OK, data != null);
+            if (decision != ScreenCapturePermissionDecision.Action.START_CAPTURE_SERVICE) {
                 Toast.makeText(this, "화면 공유를 허용해야 선택지를 읽을 수 있습니다.", Toast.LENGTH_LONG).show();
                 return;
             }

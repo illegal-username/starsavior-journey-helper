@@ -16,7 +16,7 @@ TEXT_SUFFIXES = {
     ".gradle", ".java", ".json", ".kt", ".kts", ".md", ".mjs", ".properties",
     ".py", ".txt", ".toml", ".xml", ".yaml", ".yml",
 }
-PRODUCTION_DB = Path("app/src/main/assets/journey_choices.json")
+PRIVATE_DATABASE_NAME = "journey_choices.json"
 LEGACY_APP_ID = ".".join(("dev", "starjourney", "overlay"))
 LEGACY_KEY_NAME = "star-journey" + "-dev"
 PRIVATE_WORKSPACE_MARKER = "starsavior-journey-helper" + "-private"
@@ -82,8 +82,11 @@ def main() -> int:
             continue
         relative = path.relative_to(ROOT)
 
-        if relative == PRODUCTION_DB:
-            failures.append(f"production database is present: {relative}")
+        if (path.name == PRIVATE_DATABASE_NAME
+                and len(relative.parts) >= 4
+                and relative.parts[:2] == ("app", "src")
+                and "assets" in relative.parts):
+            failures.append(f"production database is present in an Android source set: {relative}")
         if path.name == "keystore.properties":
             failures.append(f"local signing properties are present: {relative}")
         if path.suffix.lower() in PRIVATE_KEY_SUFFIXES:

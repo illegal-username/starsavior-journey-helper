@@ -2,7 +2,7 @@
 
 ## Star Savior journey data
 
-실제 여정 데이터는 공개 소스 저장소에 포함되지 않습니다. 운영 APK 또는 사용자가 실행한 DB 업데이트에는 프로젝트 운영자가 별도로 생성·배포하는 다음 데이터가 사용될 수 있습니다.
+실제 여정 데이터는 공개 소스 저장소와 공개 APK에 포함되지 않습니다. 사용자가 실행한 DB 업데이트에는 프로젝트 운영자가 별도로 생성·배포하는 다음 데이터가 사용될 수 있습니다.
 
 https://starsavior-journey-data.pages.dev/journey_choices.json
 https://starsavior-journey-data.pages.dev/journey_choices.meta.json

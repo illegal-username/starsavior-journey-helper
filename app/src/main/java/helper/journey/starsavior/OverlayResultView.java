@@ -16,9 +16,12 @@ import android.widget.TextView;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 final class OverlayResultView {
     private static final String INFO_MESSAGE_TAG = "journey_overlay_info_message";
+    private static final String SAME_PROGRESS_TITLE = "선택에 따른 차이 없음";
+    private static final String SAME_PROGRESS_MESSAGE = "어느 쪽을 골라도 동일하게 진행됩니다.";
 
     private OverlayResultView() {}
 
@@ -28,19 +31,39 @@ final class OverlayResultView {
 
     static View match(Context context, JourneyModels.Match match, String difficulty,
                       StaminaGaugeDetector.Result stamina, Runnable closeAction) {
+        return match(context, match, difficulty, stamina, Set.of(), closeAction);
+    }
+
+    static View match(Context context, JourneyModels.Match match, String difficulty,
+                      StaminaGaugeDetector.Result stamina, Set<String> recognizedArcanaIds,
+                      Runnable closeAction) {
         LinearLayout panel = panel(context);
         addHeader(context, panel, match.event.name, closeAction);
 
         addJourneyStatus(context, panel, stamina);
+
+        ArcanaRecognitionStatus arcanaStatus = ArcanaRecognitionStatus.from(
+                match.event, difficulty, recognizedArcanaIds);
+        boolean showArcanaStatus = !match.event.sameProgress && arcanaStatus.applicable;
 
         String detail = match.eventNameUsed
                 ? String.format(Locale.KOREA, "이벤트 %.0f%% · 선택지 %.0f%%",
                         match.eventConfidence * 100, match.choiceConfidence * 100)
                 : String.format(Locale.KOREA, "선택지 %.0f%% · 이벤트명 미확인",
                         match.choiceConfidence * 100);
-        if (!match.event.context.isEmpty()) detail += " · " + match.event.context;
+        if (!match.event.sameProgress && !showArcanaStatus && !match.event.context.isEmpty()) {
+            detail += " · " + match.event.context;
+        }
         TextView subtitle = Ui.text(context, detail, 12, Ui.MUTED);
-        panel.addView(subtitle, margins(context, -1, -2, 0, 2, 0, 10));
+        panel.addView(subtitle, margins(
+                context, -1, -2, 0, 2, 0, showArcanaStatus ? 6 : 10));
+
+        if (match.event.sameProgress) {
+            addSameProgressNotice(context, panel);
+            return wrap(context, panel);
+        }
+
+        if (showArcanaStatus) addArcanaStatus(context, panel, arcanaStatus);
 
         MaxHeightScrollView scroll = new MaxHeightScrollView(context, maxScrollHeight(context));
         scroll.setFillViewport(false);
@@ -51,13 +74,15 @@ final class OverlayResultView {
 
         for (int index = 0; index < match.event.choices.size(); index++) {
             JourneyModels.Choice choice = match.event.choices.get(index);
-            List<JourneyModels.Outcome> visibleOutcomes = choice.outcomesForDifficulty(difficulty);
+            List<JourneyModels.Outcome> visibleOutcomes = choice.outcomesFor(
+                    difficulty, recognizedArcanaIds);
             LinearLayout choiceCard = new LinearLayout(context);
             choiceCard.setOrientation(LinearLayout.VERTICAL);
             choiceCard.setPadding(Ui.dp(context, 13), Ui.dp(context, 11), Ui.dp(context, 13), Ui.dp(context, 11));
             choiceCard.setBackground(Ui.rounded(context, Ui.CARD_ALT, 14));
 
-            TextView choiceTitle = Ui.text(context, (index + 1) + ". " + choice.text, 14, Ui.TEXT);
+            String displayedText = JourneyMatcher.displayChoiceText(choice, match.recognizedLines);
+            TextView choiceTitle = Ui.text(context, (index + 1) + ". " + displayedText, 14, Ui.TEXT);
             choiceTitle.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
             choiceTitle.setLineSpacing(0, 1.08f);
             choiceCard.addView(choiceTitle, new LinearLayout.LayoutParams(-1, -2));
@@ -251,6 +276,48 @@ final class OverlayResultView {
         status.setBackground(Ui.roundedStroke(context, Color.argb(42, 86, 219, 171), 10,
                 Color.argb(105, 86, 219, 171), 1));
         panel.addView(status, margins(context, -1, -2, 0, 3, 0, 9));
+    }
+
+    static String sameProgressTitle() {
+        return SAME_PROGRESS_TITLE;
+    }
+
+    static String sameProgressMessage() {
+        return SAME_PROGRESS_MESSAGE;
+    }
+
+    private static void addArcanaStatus(
+            Context context, LinearLayout panel, ArcanaRecognitionStatus arcanaStatus) {
+        int color = arcanaStatus.recognized ? Ui.GREEN : Ui.ORANGE;
+        TextView status = Ui.text(context, arcanaStatus.message(), 12, color);
+        status.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        status.setLineSpacing(0, 1.15f);
+        status.setPadding(Ui.dp(context, 10), Ui.dp(context, 7), Ui.dp(context, 10), Ui.dp(context, 7));
+        status.setBackground(Ui.roundedStroke(
+                context,
+                Color.argb(35, Color.red(color), Color.green(color), Color.blue(color)),
+                9,
+                Color.argb(90, Color.red(color), Color.green(color), Color.blue(color)),
+                1));
+        panel.addView(status, margins(context, -1, -2, 0, 0, 0, 10));
+    }
+
+    private static void addSameProgressNotice(Context context, LinearLayout panel) {
+        LinearLayout notice = new LinearLayout(context);
+        notice.setOrientation(LinearLayout.VERTICAL);
+        notice.setPadding(Ui.dp(context, 13), Ui.dp(context, 11), Ui.dp(context, 13), Ui.dp(context, 11));
+        notice.setBackground(Ui.roundedStroke(
+                context, Color.argb(42, 86, 219, 171), 12,
+                Color.argb(105, 86, 219, 171), 1));
+
+        TextView title = Ui.text(context, SAME_PROGRESS_TITLE, 14, Ui.GREEN);
+        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        notice.addView(title, new LinearLayout.LayoutParams(-1, -2));
+
+        TextView message = Ui.text(context, SAME_PROGRESS_MESSAGE, 12, Ui.TEXT);
+        message.setLineSpacing(0, 1.15f);
+        notice.addView(message, margins(context, -1, -2, 0, 6, 0, 0));
+        panel.addView(notice, margins(context, -1, -2, 0, 0, 0, 0));
     }
 
     private static LinearLayout.LayoutParams margins(Context context, int width, int height,

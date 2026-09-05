@@ -41,10 +41,10 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public final class OverlayCaptureService extends Service {
     public static final String ACTION_START = BuildConfig.APPLICATION_ID + ".START";
@@ -62,10 +62,10 @@ public final class OverlayCaptureService extends Service {
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
-    private final AtomicBoolean capturing = new AtomicBoolean(false);
     private final AtomicBoolean databaseUpdating = new AtomicBoolean(false);
-    private final AtomicInteger projectionGeneration = new AtomicInteger();
+    private final CaptureSessionStateMachine captureSession = new CaptureSessionStateMachine();
     private final Object pipelineLock = new Object();
+    private final JourneyMatcherStore matcherStore = new JourneyMatcherStore();
 
     private HandlerThread captureThread;
     private Handler captureHandler;
@@ -77,7 +77,6 @@ public final class OverlayCaptureService extends Service {
     private VirtualDisplay virtualDisplay;
     private ImageReader imageReader;
     private TextRecognizer recognizer;
-    private volatile JourneyMatcher matcher;
     private int captureWidth;
     private int captureHeight;
     private int densityDpi;
@@ -106,8 +105,7 @@ public final class OverlayCaptureService extends Service {
         captureHandler = new Handler(captureThread.getLooper());
         worker.execute(() -> {
             try {
-                JourneyModels.Data data = JourneyRepository.load(this);
-                matcher = new JourneyMatcher(data.events);
+                matcherStore.reload(() -> JourneyRepository.load(this));
             } catch (Exception error) {
                 mainHandler.post(() -> showError("데이터 준비 실패", "앱의 선택지 데이터를 읽지 못했습니다.", List.of()));
             }
@@ -219,8 +217,7 @@ public final class OverlayCaptureService extends Service {
         MediaProjection projection = mediaProjection;
         mediaProjection = null;
         captureActive = false;
-        projectionGeneration.incrementAndGet();
-        capturing.set(false);
+        captureSession.waitForPermission();
         releaseCapturePipeline();
         if (stopProjection && projection != null) {
             try {
@@ -334,7 +331,7 @@ public final class OverlayCaptureService extends Service {
         densityDpi = getResources().getDisplayMetrics().densityDpi;
         createPipeline(bounds.width(), bounds.height());
         captureActive = true;
-        projectionGeneration.incrementAndGet();
+        captureSession.activate();
         startAsForeground(true);
         showBubble();
         updateBubbleState();
@@ -369,7 +366,7 @@ public final class OverlayCaptureService extends Service {
             boolean interrupted;
             synchronized (pipelineLock) {
                 if (virtualDisplay == null || (width == captureWidth && height == captureHeight)) return;
-                interrupted = capturing.getAndSet(false);
+                interrupted = captureSession.interruptForResize();
                 if (captureTimeout != null) captureHandler.removeCallbacks(captureTimeout);
                 virtualDisplay.setSurface(null);
                 if (imageReader != null) {
@@ -425,11 +422,11 @@ public final class OverlayCaptureService extends Service {
             showInfo("DB 업데이트 중", "업데이트가 끝난 뒤 선택지를 다시 읽어 주세요.");
             return;
         }
-        if (matcher == null) {
+        if (matcherStore.current() == null) {
             showError("잠시만 기다려 주세요", "선택지 데이터를 준비하고 있습니다.", List.of());
             return;
         }
-        if (!capturing.compareAndSet(false, true)) return;
+        if (!captureSession.beginCapture()) return;
         if (bubbleView != null) bubbleView.setVisibility(View.INVISIBLE);
         if (Build.VERSION.SDK_INT >= 34) {
             // Android 14+ reports the exact shared-content size through
@@ -487,15 +484,17 @@ public final class OverlayCaptureService extends Service {
 
     private void attachCaptureSurface() {
         synchronized (pipelineLock) {
-            if (!capturing.get() || virtualDisplay == null || imageReader == null) {
+            if (!captureSession.isCapturing() || virtualDisplay == null || imageReader == null) {
+                captureSession.finishCapture();
                 captureFailed("화면 공유가 종료되었습니다.", List.of());
                 return;
             }
             drainImagesLocked();
             imageReader.setOnImageAvailableListener(this::onImageAvailable, captureHandler);
             virtualDisplay.setSurface(imageReader.getSurface());
+            int captureGeneration = captureSession.generation();
             captureTimeout = () -> {
-                if (!capturing.compareAndSet(true, false)) return;
+                if (!captureSession.finishCapture(captureGeneration)) return;
                 synchronized (pipelineLock) {
                     if (virtualDisplay != null) virtualDisplay.setSurface(null);
                     if (imageReader != null) imageReader.setOnImageAvailableListener(null, null);
@@ -507,12 +506,13 @@ public final class OverlayCaptureService extends Service {
     }
 
     private void onImageAvailable(ImageReader reader) {
-        if (!capturing.get()) return;
-        final int generation = projectionGeneration.get();
+        if (!captureSession.isCapturing()) return;
+        final int generation = captureSession.generation();
         final Image image;
         try {
             image = reader.acquireLatestImage();
         } catch (IllegalStateException closedReader) {
+            captureSession.finishCapture(generation);
             captureFailed("화면 크기가 바뀌었습니다. 다시 눌러 주세요.", List.of());
             return;
         }
@@ -537,7 +537,7 @@ public final class OverlayCaptureService extends Service {
                 image.close();
                 if (!isProjectionSessionActive(generation)) {
                     full.recycle();
-                    capturing.set(false);
+                    captureSession.finishCapture(generation);
                     return;
                 }
                 StaminaGaugeDetector.Result stamina = detectStamina(full);
@@ -549,6 +549,7 @@ public final class OverlayCaptureService extends Service {
                     image.close();
                 } catch (RuntimeException ignored) {}
                 recycleBitmaps(eventCrop, choiceCrop, full);
+                captureSession.finishCapture(generation);
                 captureFailed("화면 처리 중 오류가 발생했습니다: " + error.getMessage(), List.of());
             }
         });
@@ -605,24 +606,24 @@ public final class OverlayCaptureService extends Service {
         TextRecognizer currentRecognizer = recognizer;
         if (!isProjectionSessionActive(generation) || currentRecognizer == null) {
             recycleBitmaps(eventBitmap, choiceBitmap, fullBitmap);
-            capturing.set(false);
+            captureSession.finishCapture(generation);
             return;
         }
         Task<Text> choiceTask = currentRecognizer.process(InputImage.fromBitmap(choiceBitmap, 0));
         choiceTask.addOnSuccessListener(worker, choiceText -> {
             if (!isProjectionSessionActive(generation)) {
                 recycleBitmaps(eventBitmap, choiceBitmap, fullBitmap);
-                capturing.set(false);
+                captureSession.finishCapture(generation);
                 return;
             }
             List<String> choiceLines = extractLines(choiceText);
             if (!choiceBitmap.isRecycled()) choiceBitmap.recycle();
 
-            JourneyMatcher currentMatcher = matcher;
+            JourneyMatcher currentMatcher = matcherStore.current();
             if (stamina != null && currentMatcher != null
                     && !currentMatcher.hasPlausibleChoiceSignal(choiceLines)) {
                 recycleBitmaps(eventBitmap, fullBitmap);
-                capturing.set(false);
+                captureSession.finishCapture(generation);
                 mainHandler.post(() -> showStamina(stamina));
                 return;
             }
@@ -630,103 +631,118 @@ public final class OverlayCaptureService extends Service {
             TextRecognizer eventRecognizer = recognizer;
             if (eventRecognizer == null) {
                 recycleBitmaps(eventBitmap, fullBitmap);
-                capturing.set(false);
+                captureSession.finishCapture(generation);
                 return;
             }
             Task<Text> eventTask = eventRecognizer.process(InputImage.fromBitmap(eventBitmap, 0));
             eventTask.addOnSuccessListener(worker, eventText -> {
                 if (!isProjectionSessionActive(generation)) {
                     recycleBitmaps(eventBitmap, fullBitmap);
-                    capturing.set(false);
+                    captureSession.finishCapture(generation);
                     return;
                 }
                 List<String> eventLines = extractLines(eventText);
+                ArcanaImageRecognizer.Anchor arcanaAnchor = regionalArcanaAnchor(
+                        eventText, fullBitmap.getWidth(), fullBitmap.getHeight(),
+                        eventBitmap.getWidth(), eventBitmap.getHeight());
                 if (!eventBitmap.isRecycled()) eventBitmap.recycle();
-                matchOrFallback(eventLines, choiceLines, fullBitmap, generation, stamina);
+                matchOrFallback(
+                        eventLines, choiceLines, fullBitmap, generation, stamina, arcanaAnchor);
             }).addOnFailureListener(worker, ignored -> {
                 if (!eventBitmap.isRecycled()) eventBitmap.recycle();
                 if (!isProjectionSessionActive(generation)) {
                     recycleBitmaps(fullBitmap);
-                    capturing.set(false);
+                    captureSession.finishCapture(generation);
                     return;
                 }
-                matchOrFallback(List.of(), choiceLines, fullBitmap, generation, stamina);
+                matchOrFallback(List.of(), choiceLines, fullBitmap, generation, stamina, null);
             });
         }).addOnFailureListener(worker, error -> {
             recycleBitmaps(eventBitmap, choiceBitmap);
             if (!isProjectionSessionActive(generation)) {
                 recycleBitmaps(fullBitmap);
-                capturing.set(false);
+                captureSession.finishCapture(generation);
                 return;
             }
             if (stamina != null) {
                 recycleBitmaps(fullBitmap);
-                capturing.set(false);
+                captureSession.finishCapture(generation);
                 mainHandler.post(() -> showStamina(stamina));
             } else {
-                recognizeFull(fullBitmap, generation, List.of(), null);
+                recognizeFull(fullBitmap, generation, List.of(), null, null);
             }
         });
     }
 
     private void matchOrFallback(List<String> eventLines, List<String> choiceLines,
                                  Bitmap fullBitmap, int generation,
-                                 StaminaGaugeDetector.Result stamina) {
-        JourneyMatcher currentMatcher = matcher;
-        if (currentMatcher == null) {
+                                 StaminaGaugeDetector.Result stamina,
+                                 ArcanaImageRecognizer.Anchor arcanaAnchor) {
+        JourneyMatcher currentMatcher = matcherStore.current();
+        JourneyRecognitionCoordinator.Decision decision =
+                JourneyRecognitionCoordinator.evaluateRegional(
+                        currentMatcher, eventLines, choiceLines);
+        if (decision.action == JourneyRecognitionCoordinator.Action.DATA_UNAVAILABLE) {
             recycleBitmaps(fullBitmap);
-            capturing.set(false);
+            captureSession.finishCapture(generation);
             captureFailed("선택지 데이터를 아직 준비하고 있습니다. 잠시 후 다시 눌러 주세요.", List.of());
             return;
         }
-        JourneyModels.Match match = currentMatcher.match(eventLines, choiceLines);
-        if (match.isConfident()) {
-            String difficulty = DifficultyResolver.fromRecognizedLines(match.event, choiceLines);
+        if (decision.action == JourneyRecognitionCoordinator.Action.SHOW_MATCH) {
+            Set<String> recognizedArcanaIds = recognizeArcana(
+                    fullBitmap, decision.match.event, decision.difficulty, arcanaAnchor);
             recycleBitmaps(fullBitmap);
-            capturing.set(false);
-            mainHandler.post(() -> showMatch(match, difficulty, stamina));
+            captureSession.finishCapture(generation);
+            mainHandler.post(() -> showMatch(
+                    decision.match, decision.difficulty, stamina, recognizedArcanaIds));
         } else {
-            recognizeFull(fullBitmap, generation, choiceLines, stamina);
+            recognizeFull(fullBitmap, generation, choiceLines, stamina, arcanaAnchor);
         }
     }
 
     private void recognizeFull(Bitmap fullBitmap, int generation, List<String> regionalChoiceLines,
-                               StaminaGaugeDetector.Result stamina) {
+                               StaminaGaugeDetector.Result stamina,
+                               ArcanaImageRecognizer.Anchor regionalArcanaAnchor) {
         TextRecognizer currentRecognizer = recognizer;
         if (!isProjectionSessionActive(generation) || currentRecognizer == null) {
             recycleBitmaps(fullBitmap);
-            capturing.set(false);
+            captureSession.finishCapture(generation);
             return;
         }
         Task<Text> task = currentRecognizer.process(InputImage.fromBitmap(fullBitmap, 0));
         task.addOnSuccessListener(worker, text -> {
             if (!isProjectionSessionActive(generation)) {
                 recycleBitmaps(fullBitmap);
-                capturing.set(false);
+                captureSession.finishCapture(generation);
                 return;
             }
             List<String> lines = extractLines(text);
-            JourneyMatcher currentMatcher = matcher;
-            if (currentMatcher == null) {
+            ArcanaImageRecognizer.Anchor detectedArcanaAnchor = fullArcanaAnchor(text);
+            ArcanaImageRecognizer.Anchor arcanaAnchor = detectedArcanaAnchor == null
+                    ? regionalArcanaAnchor : detectedArcanaAnchor;
+            JourneyRecognitionCoordinator.Decision decision =
+                    JourneyRecognitionCoordinator.evaluateFull(
+                            matcherStore.current(), lines, regionalChoiceLines);
+            if (decision.action == JourneyRecognitionCoordinator.Action.DATA_UNAVAILABLE) {
                 recycleBitmaps(fullBitmap);
-                capturing.set(false);
+                captureSession.finishCapture(generation);
                 captureFailed("선택지 데이터를 아직 준비하고 있습니다. 잠시 후 다시 눌러 주세요.", List.of());
                 return;
             }
-            JourneyModels.Match match = currentMatcher.match(lines, lines);
+            if (decision.action == JourneyRecognitionCoordinator.Action.SHOW_MATCH) {
+                Set<String> recognizedArcanaIds = recognizeArcana(
+                        fullBitmap, decision.match.event, decision.difficulty, arcanaAnchor);
+                recycleBitmaps(fullBitmap);
+                captureSession.finishCapture(generation);
+                mainHandler.post(() -> showMatch(
+                        decision.match, decision.difficulty, stamina, recognizedArcanaIds));
+                return;
+            }
             recycleBitmaps(fullBitmap);
-            capturing.set(false);
-            if (match.isConfident()) {
-                String difficulty = DifficultyResolver.fromRecognizedLines(
-                        match.event, regionalChoiceLines);
-                if (difficulty.isEmpty()) {
-                    difficulty = DifficultyResolver.fromRecognizedLines(match.event, lines);
-                }
-                String resolvedDifficulty = difficulty;
-                mainHandler.post(() -> showMatch(match, resolvedDifficulty, stamina));
-            } else if (stamina != null) {
+            captureSession.finishCapture(generation);
+            if (stamina != null) {
                 mainHandler.post(() -> showStamina(stamina));
-            } else if (match.ambiguous) {
+            } else if (decision.action == JourneyRecognitionCoordinator.Action.AMBIGUOUS) {
                 captureFailed("같은 선택지를 사용하는 이벤트가 있습니다. 왼쪽 이벤트명이 모두 보이도록 한 뒤 다시 눌러 주세요.", lines);
             } else {
                 captureFailed("선택지를 충분히 읽지 못했습니다. 선택지가 모두 보이는 화면에서 다시 눌러 주세요.", lines);
@@ -734,19 +750,76 @@ public final class OverlayCaptureService extends Service {
         }).addOnFailureListener(worker, error -> {
             recycleBitmaps(fullBitmap);
             if (isProjectionSessionActive(generation)) {
-                capturing.set(false);
+                captureSession.finishCapture(generation);
                 if (stamina != null) mainHandler.post(() -> showStamina(stamina));
                 else captureFailed("한국어 글자 인식에 실패했습니다: " + error.getMessage(), List.of());
             } else {
-                capturing.set(false);
+                captureSession.finishCapture(generation);
             }
         });
+    }
+
+    private ArcanaImageRecognizer.Anchor regionalArcanaAnchor(
+            Text text, int fullWidth, int fullHeight, int eventBitmapWidth,
+            int eventBitmapHeight) {
+        CaptureRegionPlanner.Region region = CaptureRegionPlanner.event(fullWidth, fullHeight);
+        double scaleX = eventBitmapWidth / (double) region.width();
+        double scaleY = eventBitmapHeight / (double) region.height();
+        return findArcanaAnchor(text, region.left, region.top, scaleX, scaleY);
+    }
+
+    private ArcanaImageRecognizer.Anchor fullArcanaAnchor(Text text) {
+        return findArcanaAnchor(text, 0, 0, 1.0, 1.0);
+    }
+
+    private ArcanaImageRecognizer.Anchor findArcanaAnchor(
+            Text text, int offsetX, int offsetY, double scaleX, double scaleY) {
+        if (text == null || scaleX <= 0.0 || scaleY <= 0.0) return null;
+        for (Text.TextBlock block : text.getTextBlocks()) {
+            for (Text.Line line : block.getLines()) {
+                String normalized = JourneyMatcher.normalize(line.getText());
+                if (!normalized.contains("\uc544\ub974\uce74\ub098")
+                        || !normalized.contains("\uc774\ubca4\ud2b8")) {
+                    continue;
+                }
+                Rect box = line.getBoundingBox();
+                if (box == null || box.height() <= 0) continue;
+                return new ArcanaImageRecognizer.Anchor(
+                        offsetX + (int) Math.round(box.left / scaleX),
+                        offsetY + (int) Math.round(box.top / scaleY),
+                        Math.max(1, (int) Math.round(box.height() / scaleY)));
+            }
+        }
+        return null;
+    }
+
+    private Set<String> recognizeArcana(
+            Bitmap fullBitmap, JourneyModels.Event event, String difficulty,
+            ArcanaImageRecognizer.Anchor anchor) {
+        Set<String> candidates = ArcanaImageRecognizer.candidateIds(event, difficulty);
+        if (anchor == null || candidates.size() < 2) return Set.of();
+        JourneyModels.Data data = matcherStore.currentData();
+        if (data == null || data.arcanaImageFeatures.isEmpty()) return Set.of();
+        ArcanaImageRecognizer.Region region = ArcanaImageRecognizer.scanRegion(
+                fullBitmap.getWidth(), fullBitmap.getHeight(), anchor);
+        if (region.width <= 0 || region.height <= 0) return Set.of();
+        try {
+            int[] pixels = new int[region.width * region.height];
+            fullBitmap.getPixels(
+                    pixels, 0, region.width, region.left, region.top,
+                    region.width, region.height);
+            return ArcanaImageRecognizer.recognize(
+                    region, pixels, anchor, data.arcanaImageFeatures,
+                    candidates).recognizedArcanaIds;
+        } catch (RuntimeException ignored) {
+            return Set.of();
+        }
     }
 
     private boolean isProjectionSessionActive(int generation) {
         return captureActive
                 && mediaProjection != null
-                && projectionGeneration.get() == generation;
+                && captureSession.isActive(generation);
     }
 
     private void recycleBitmaps(Bitmap... bitmaps) {
@@ -782,12 +855,14 @@ public final class OverlayCaptureService extends Service {
     }
 
     private void showMatch(JourneyModels.Match match, String difficulty,
-                           StaminaGaugeDetector.Result stamina) {
+                           StaminaGaugeDetector.Result stamina,
+                           Set<String> recognizedArcanaIds) {
         if (!captureActive || destroying) return;
         setBubbleGlyph("✓");
         mainHandler.postDelayed(() -> setBubbleGlyph("✦"), 900);
         dismissResult();
-        resultView = OverlayResultView.match(this, match, difficulty, stamina, this::dismissResult);
+        resultView = OverlayResultView.match(
+                this, match, difficulty, stamina, recognizedArcanaIds, this::dismissResult);
         addResultView(resultView);
     }
 
@@ -802,7 +877,6 @@ public final class OverlayCaptureService extends Service {
 
     private void captureFailed(String message, List<String> lines) {
         mainHandler.post(() -> {
-            capturing.set(false);
             if (bubbleView != null) bubbleView.setVisibility(View.VISIBLE);
             if (!captureActive || destroying) return;
             setBubbleGlyph("!");
@@ -864,7 +938,7 @@ public final class OverlayCaptureService extends Service {
             try {
                 JourneyDatabaseUpdater.UpdateResult result = JourneyDatabaseUpdater.update(
                         this, this::updateInfoMessage);
-                if (result.data != null) matcher = new JourneyMatcher(result.data.events);
+                if (result.data != null) matcherStore.reload(() -> result.data);
                 databaseUpdating.set(false);
                 mainHandler.post(() -> {
                     if (destroying) return;
@@ -887,8 +961,7 @@ public final class OverlayCaptureService extends Service {
     private void reloadMatcher() {
         worker.execute(() -> {
             try {
-                JourneyModels.Data data = JourneyRepository.load(this);
-                matcher = new JourneyMatcher(data.events);
+                matcherStore.reload(() -> JourneyRepository.load(this));
                 mainHandler.post(() -> {
                     if (destroying) return;
                     setBubbleGlyph("✓");
@@ -971,8 +1044,7 @@ public final class OverlayCaptureService extends Service {
         destroying = true;
         running = false;
         captureActive = false;
-        projectionGeneration.incrementAndGet();
-        capturing.set(false);
+        captureSession.destroy();
         databaseUpdating.set(false);
         dismissResult();
         if (bubbleView != null) {

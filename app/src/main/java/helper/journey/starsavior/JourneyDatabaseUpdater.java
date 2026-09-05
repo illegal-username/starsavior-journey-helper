@@ -126,7 +126,7 @@ final class JourneyDatabaseUpdater {
         }
     }
 
-    private static final class HttpResponse {
+    static final class HttpResponse {
         final int status;
         final String body;
         final String etag;
@@ -147,6 +147,7 @@ final class JourneyDatabaseUpdater {
     static CheckResult checkForUpdate(Context context, boolean force) throws Exception {
         Context application = context.getApplicationContext();
         JourneyModels.Data current = JourneyRepository.load(application);
+        if (BuildConfig.BUNDLED_TEST_DATABASE) return CheckResult.current(current, false);
         if (!UPDATING.compareAndSet(false, true)) return CheckResult.busy(current);
         try {
             return checkLocked(application, current, force);
@@ -160,6 +161,9 @@ final class JourneyDatabaseUpdater {
         Context application = context.getApplicationContext();
         try {
             JourneyModels.Data current = JourneyRepository.load(application);
+            if (BuildConfig.BUNDLED_TEST_DATABASE) {
+                return new UpdateResult(false, false, false, current, "테스트 APK는 내장 DB를 사용합니다.");
+            }
             progress(listener, "최신 버전을 확인하고 있습니다…");
             CheckResult check = checkLocked(application, current, true);
             if (check.incompatible && check.manifest != null) {
@@ -289,7 +293,7 @@ final class JourneyDatabaseUpdater {
         }
     }
 
-    private static HttpResponse request(
+    static HttpResponse request(
             String url, int maximumBytes, String etag, String purpose) throws IOException {
         HttpURLConnection connection = open(url, etag, purpose);
         try {

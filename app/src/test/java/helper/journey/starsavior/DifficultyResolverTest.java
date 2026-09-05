@@ -57,6 +57,21 @@ public class DifficultyResolverTest {
     }
 
     @Test
+    public void resolvesDifficultyFromShortenedChoiceAlias() {
+        JourneyModels.Choice choice = new JourneyModels.Choice(
+                "고작 천둥번개를 겁낼 수는 없지!",
+                List.of("훈련을 이어나간다."),
+                List.of(
+                        outcome("이지", "집중 73 필요"),
+                        outcome("노말", "집중 147 필요"),
+                        outcome("하드", "집중 911 필요")));
+        JourneyModels.Event event = event("오늘의 날씨 - 낙뢰", choice);
+
+        assertEquals("노말", DifficultyResolver.fromRecognizedLines(
+                event, List.of("훈련을 이어나간다.", "147")));
+    }
+
+    @Test
     public void sharedCostsAndUnrelatedScreenNumbersDoNotChooseDifficulty() {
         JourneyModels.Event event = beachQualifier();
 
