@@ -3,8 +3,16 @@ package helper.journey.starsavior;
 import org.json.JSONException;
 import org.junit.Test;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -65,6 +73,65 @@ public class JourneyDatabaseUpdaterTest {
         assertThrows(JSONException.class, () ->
                 JourneyDatabaseUpdater.validateManifestAgainstCurrent(
                         data(80, JourneyDatabaseUpdater.DATABASE_URL, "old"), manifest));
+    }
+
+    @Test
+    public void performsRealHttpGetAndHandlesConditional304() throws Exception {
+        byte[] body = "{\"status\":\"ok\"}".getBytes(StandardCharsets.UTF_8);
+        ServerSocket server = new ServerSocket(0);
+        AtomicReference<Throwable> serverFailure = new AtomicReference<>();
+        Thread serverThread = new Thread(() -> {
+            try {
+                for (int request = 0; request < 2; request++) {
+                    try (Socket socket = server.accept()) {
+                        BufferedReader input = new BufferedReader(new InputStreamReader(
+                                socket.getInputStream(), StandardCharsets.US_ASCII));
+                        boolean conditional = false;
+                        String line;
+                        while ((line = input.readLine()) != null && !line.isEmpty()) {
+                            if (line.equalsIgnoreCase("If-None-Match: \"v1\"")) conditional = true;
+                        }
+                        OutputStream output = socket.getOutputStream();
+                        if (conditional) {
+                            output.write(("HTTP/1.1 304 Not Modified\r\n"
+                                    + "ETag: \"v1\"\r\n"
+                                    + "Connection: close\r\n\r\n")
+                                    .getBytes(StandardCharsets.US_ASCII));
+                        } else {
+                            output.write(("HTTP/1.1 200 OK\r\n"
+                                    + "Content-Type: application/json; charset=utf-8\r\n"
+                                    + "Content-Length: " + body.length + "\r\n"
+                                    + "ETag: \"v1\"\r\n"
+                                    + "Connection: close\r\n\r\n")
+                                    .getBytes(StandardCharsets.US_ASCII));
+                            output.write(body);
+                        }
+                        output.flush();
+                    }
+                }
+            } catch (Throwable error) {
+                serverFailure.set(error);
+            }
+        });
+        serverThread.start();
+        try {
+            String url = "http://127.0.0.1:" + server.getLocalPort() + "/manifest";
+            JourneyDatabaseUpdater.HttpResponse fresh =
+                    JourneyDatabaseUpdater.request(url, 1024, "", "integration test");
+            assertEquals(HttpURLConnection.HTTP_OK, fresh.status);
+            assertEquals("{\"status\":\"ok\"}", fresh.body);
+            assertEquals("\"v1\"", fresh.etag);
+
+            JourneyDatabaseUpdater.HttpResponse cached =
+                    JourneyDatabaseUpdater.request(url, 1024, fresh.etag, "integration test");
+            assertEquals(HttpURLConnection.HTTP_NOT_MODIFIED, cached.status);
+            assertEquals("", cached.body);
+            assertEquals("\"v1\"", cached.etag);
+        } finally {
+            server.close();
+            serverThread.join(5_000);
+        }
+        if (serverFailure.get() != null) throw new AssertionError(serverFailure.get());
     }
 
     private static JourneyModels.Data data(int recordCount, String source, String revision) {

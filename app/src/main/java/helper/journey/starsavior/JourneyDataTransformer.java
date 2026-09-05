@@ -22,6 +22,7 @@ import java.util.regex.Pattern;
 /** Converts the public Star Savior DB documents into the compact matcher database. */
 final class JourneyDataTransformer {
     static final String SOURCE = JourneyDatabaseUpdater.DATABASE_URL;
+    private static final String SAME_PROGRESS_MESSAGE = "어느 쪽을 골라도 동일하게 진행됩니다.";
     static final List<String> FILES = List.of(
             "journeys.json",
             "journey_items.json",
@@ -98,9 +99,13 @@ final class JourneyDataTransformer {
                         ? difficulty
                         : variants.length() > 1 ? "경우 " + (variantIndex + 1) : "";
                 String label = hint.isEmpty() ? event : event + " · " + hint;
+                boolean sameProgress = variant.optBoolean("same_progress", false);
                 addRecord(grouped, new RecordSource(
-                        event, "", choiceTexts, choiceAliases(rawChoices),
-                        formatter.outcomes(rawChoices, label, difficulty)));
+                        event, "", "", choiceTexts, choiceAliases(rawChoices),
+                        sameProgress
+                                ? sameProgressOutcomes(rawChoices)
+                                : formatter.outcomes(rawChoices, label, difficulty),
+                        sameProgress));
             }
         }
 
@@ -109,6 +114,7 @@ final class JourneyDataTransformer {
             if (arcana == null) continue;
             JSONArray events = arcana.optJSONArray("events");
             if (events == null) continue;
+            String arcanaId = clean(arcana.opt("id"));
             for (int eventIndex = 0; eventIndex < events.length(); eventIndex++) {
                 JSONObject eventData = events.optJSONObject(eventIndex);
                 if (eventData == null) continue;
@@ -117,9 +123,13 @@ final class JourneyDataTransformer {
                 String event = local(eventData.opt("name"));
                 String context = local(arcana.opt("char_name")) + " · " + local(arcana.opt("name"));
                 String label = event + " · " + context;
+                boolean sameProgress = eventData.optBoolean("same_progress", false);
                 addRecord(grouped, new RecordSource(
-                        event, context, choiceTexts, choiceAliases(rawChoices),
-                        formatter.outcomes(rawChoices, label, "")));
+                        event, context, arcanaId, choiceTexts, choiceAliases(rawChoices),
+                        sameProgress
+                                ? sameProgressOutcomes(rawChoices)
+                                : formatter.outcomes(rawChoices, label, ""),
+                        sameProgress));
             }
         }
 
@@ -136,14 +146,24 @@ final class JourneyDataTransformer {
             RecordSource first = sources.get(0);
             for (int choiceIndex = 0; choiceIndex < first.choiceTexts.size(); choiceIndex++) {
                 Map<String, OutcomeData> unique = new LinkedHashMap<>();
+                Map<String, Set<String>> arcanaIdsByOutcome = new LinkedHashMap<>();
                 for (RecordSource source : sources) {
                     if (choiceIndex >= source.outcomes.size()) continue;
                     OutcomeData outcome = source.outcomes.get(choiceIndex);
                     unique.putIfAbsent(outcome.signature(), outcome);
+                    if (!source.arcanaId.isEmpty()) {
+                        arcanaIdsByOutcome.computeIfAbsent(
+                                outcome.signature(), ignored -> new LinkedHashSet<>())
+                                .add(source.arcanaId);
+                    }
                 }
                 JSONArray outcomes = new JSONArray();
                 boolean single = unique.size() == 1;
-                for (OutcomeData outcome : unique.values()) outcomes.put(outcome.toJson(single ? "" : outcome.label));
+                for (OutcomeData outcome : unique.values()) {
+                    Set<String> arcanaIds = arcanaIdsByOutcome.getOrDefault(
+                            outcome.signature(), Collections.emptySet());
+                    outcomes.put(outcome.toJson(single ? "" : outcome.label, arcanaIds));
+                }
                 JSONObject choice = new JSONObject()
                         .put("text", first.choiceTexts.get(choiceIndex))
                         .put("outcomes", outcomes);
@@ -162,10 +182,12 @@ final class JourneyDataTransformer {
                 choiceCount++;
             }
 
-            records.add(new JSONObject()
+            JSONObject record = new JSONObject()
                     .put("event", first.event)
                     .put("context", summarized(contexts, 2, ""))
-                    .put("choices", choices));
+                    .put("choices", choices);
+            if (first.sameProgress) record.put("sameProgress", true);
+            records.add(record);
         }
 
         Collator korean = Collator.getInstance(Locale.KOREAN);
@@ -194,8 +216,18 @@ final class JourneyDataTransformer {
             if (value.isEmpty()) return;
             normalized.add(value);
         }
-        String signature = normalize(source.event) + "|" + String.join("|", normalized);
+        String recordType = source.sameProgress ? "same-progress" : "choice-results";
+        String signature = recordType + "|" + normalize(source.event) + "|" + String.join("|", normalized);
         grouped.computeIfAbsent(signature, ignored -> new ArrayList<>()).add(source);
+    }
+
+    private static List<OutcomeData> sameProgressOutcomes(JSONArray choices) {
+        if (choices == null) return Collections.emptyList();
+        List<OutcomeData> result = new ArrayList<>(choices.length());
+        for (int index = 0; index < choices.length(); index++) {
+            result.add(new OutcomeData("", "", "", SAME_PROGRESS_MESSAGE, ""));
+        }
+        return result;
     }
 
     private static List<String> choiceTexts(JSONArray choices) {
@@ -478,17 +510,22 @@ final class JourneyDataTransformer {
     private static final class RecordSource {
         final String event;
         final String context;
+        final String arcanaId;
         final List<String> choiceTexts;
         final List<List<String>> choiceAliases;
         final List<OutcomeData> outcomes;
+        final boolean sameProgress;
 
-        RecordSource(String event, String context, List<String> choiceTexts,
-                     List<List<String>> choiceAliases, List<OutcomeData> outcomes) {
+        RecordSource(String event, String context, String arcanaId, List<String> choiceTexts,
+                     List<List<String>> choiceAliases, List<OutcomeData> outcomes,
+                     boolean sameProgress) {
             this.event = event;
             this.context = context;
+            this.arcanaId = arcanaId;
             this.choiceTexts = choiceTexts;
             this.choiceAliases = choiceAliases;
             this.outcomes = outcomes;
+            this.sameProgress = sameProgress;
         }
     }
 
@@ -511,13 +548,15 @@ final class JourneyDataTransformer {
             return difficulty + "|" + condition + "|" + success + "|" + failure;
         }
 
-        JSONObject toJson(String outputLabel) throws JSONException {
-            return new JSONObject()
+        JSONObject toJson(String outputLabel, Set<String> arcanaIds) throws JSONException {
+            JSONObject result = new JSONObject()
                     .put("label", outputLabel)
                     .put("difficulty", difficulty)
                     .put("condition", condition)
                     .put("success", success)
                     .put("failure", failure);
+            if (!arcanaIds.isEmpty()) result.put("arcanaIds", new JSONArray(arcanaIds));
+            return result;
         }
     }
 }

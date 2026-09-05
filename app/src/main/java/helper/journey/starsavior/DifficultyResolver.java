@@ -117,21 +117,28 @@ final class DifficultyResolver {
             JourneyModels.Event event, List<String> lines) {
         List<ChoiceAnchor> result = new ArrayList<>(event.choices.size());
         for (JourneyModels.Choice choice : event.choices) {
-            String expected = JourneyMatcher.normalize(choice.text);
             ChoiceAnchor best = ChoiceAnchor.NONE;
-            for (int lineIndex = 0; lineIndex < lines.size(); lineIndex++) {
-                String one = choiceText(lines.get(lineIndex));
-                double oneScore = JourneyMatcher.similarity(expected, one);
-                if (oneScore > best.score) best = new ChoiceAnchor(lineIndex, lineIndex, oneScore);
+            List<String> expectedTexts = new ArrayList<>();
+            expectedTexts.add(JourneyMatcher.normalize(choice.text));
+            for (String alias : choice.aliases) {
+                String normalized = JourneyMatcher.normalize(alias);
+                if (!normalized.isEmpty()) expectedTexts.add(normalized);
+            }
+            for (String expected : expectedTexts) {
+                for (int lineIndex = 0; lineIndex < lines.size(); lineIndex++) {
+                    String one = choiceText(lines.get(lineIndex));
+                    double oneScore = JourneyMatcher.similarity(expected, one);
+                    if (oneScore > best.score) best = new ChoiceAnchor(lineIndex, lineIndex, oneScore);
 
-                if (lineIndex + 1 < lines.size()) {
-                    String next = choiceText(lines.get(lineIndex + 1));
-                    // Never make a two-line choice anchor through a number-only cost line.
-                    // Otherwise that number can be attached to both adjacent choices.
-                    if (!one.isEmpty() && !next.isEmpty()) {
-                        double pairScore = JourneyMatcher.similarity(expected, one + next);
-                        if (pairScore > best.score) {
-                            best = new ChoiceAnchor(lineIndex, lineIndex + 1, pairScore);
+                    if (lineIndex + 1 < lines.size()) {
+                        String next = choiceText(lines.get(lineIndex + 1));
+                        // Never make a two-line choice anchor through a number-only cost line.
+                        // Otherwise that number can be attached to both adjacent choices.
+                        if (!one.isEmpty() && !next.isEmpty()) {
+                            double pairScore = JourneyMatcher.similarity(expected, one + next);
+                            if (pairScore > best.score) {
+                                best = new ChoiceAnchor(lineIndex, lineIndex + 1, pairScore);
+                            }
                         }
                     }
                 }

@@ -170,4 +170,71 @@ public class JourneyDataTransformerTest {
         assertTrue(data.events.stream().anyMatch(event -> event.name.equals("공개 예제 - 아침")));
         assertTrue(data.events.stream().anyMatch(event -> event.name.equals("공개 예제 - 저녁")));
     }
+
+    @Test
+    public void preservesEveryArcanaMembershipWhenIdenticalOutcomesAreMerged() throws Exception {
+        Map<String, String> documents = new LinkedHashMap<>();
+        documents.put("journeys.json", "{}");
+        documents.put("journey_items.json", "[]");
+        documents.put("potentials.json", "[]");
+        documents.put("stat_potentials.json", "[]");
+        documents.put("journey_buffs.json", "[]");
+        documents.put("arcanas.json", """
+                [
+                  {"id":7000001,"char_name":{"ko-KR":"캐릭터"},"name":{"ko-KR":"첫째"},"events":[{
+                    "name":{"ko-KR":"공유 이벤트"},"choices":[
+                      {"name":{"ko-KR":"계속한다"},"success_rewards":[[{"type":"RT_STAT","reward_stat":"JST_POWER","min":5,"max":5}]]},
+                      {"name":{"ko-KR":"돌아간다"},"success_rewards":[[{"type":"RT_STAMINA","min":3,"max":3}]]}
+                    ]}]},
+                  {"id":7000002,"char_name":{"ko-KR":"캐릭터"},"name":{"ko-KR":"둘째"},"events":[{
+                    "name":{"ko-KR":"공유 이벤트"},"choices":[
+                      {"name":{"ko-KR":"계속한다"},"success_rewards":[[{"type":"RT_STAT","reward_stat":"JST_POWER","min":5,"max":5}]]},
+                      {"name":{"ko-KR":"돌아간다"},"success_rewards":[[{"type":"RT_STAMINA","min":3,"max":3}]]}
+                    ]}]},
+                  {"id":7000003,"char_name":{"ko-KR":"캐릭터"},"name":{"ko-KR":"셋째"},"events":[{
+                    "name":{"ko-KR":"공유 이벤트"},"choices":[
+                      {"name":{"ko-KR":"계속한다"},"success_rewards":[[{"type":"RT_STAT","reward_stat":"JST_POWER","min":5,"max":5}]]},
+                      {"name":{"ko-KR":"돌아간다"},"success_rewards":[[{"type":"RT_STAMINA","min":3,"max":3}]]}
+                    ]}]}
+                ]
+                """);
+
+        JourneyModels.Data data = JourneyRepository.parse(JourneyDataTransformer.transform(
+                documents, "test", "2026-09-04T00:00:00Z"));
+        JourneyRepository.validate(data);
+
+        assertEquals(1, data.recordCount);
+        assertEquals(1, data.events.get(0).choices.get(0).outcomes.size());
+        assertEquals(List.of("7000001", "7000002", "7000003"),
+                data.events.get(0).choices.get(0).outcomes.get(0).arcanaIds);
+    }
+
+    @Test
+    public void convertsSameProgressDialogueWithoutInventingChoiceRewards() throws Exception {
+        Map<String, String> documents = new LinkedHashMap<>();
+        documents.put("journeys.json", """
+                {
+                  "dialogue":[{"name":{"ko-KR":"대화 이벤트"},"same_progress":true,"choices":[
+                    {"name":{"ko-KR":"첫 번째 응답"}},
+                    {"name":{"ko-KR":"두 번째 응답"}}
+                  ]}]
+                }
+                """);
+        documents.put("journey_items.json", "[]");
+        documents.put("potentials.json", "[]");
+        documents.put("stat_potentials.json", "[]");
+        documents.put("journey_buffs.json", "[]");
+        documents.put("arcanas.json", "[]");
+
+        JourneyModels.Data data = JourneyRepository.parse(JourneyDataTransformer.transform(
+                documents, "test", "2026-09-05T00:00:00Z"));
+        JourneyRepository.validate(data);
+
+        JourneyModels.Event event = data.events.get(0);
+        assertTrue(event.sameProgress);
+        assertEquals("어느 쪽을 골라도 동일하게 진행됩니다.",
+                event.choices.get(0).outcomes.get(0).success);
+        assertEquals(event.choices.get(0).outcomes.get(0).success,
+                event.choices.get(1).outcomes.get(0).success);
+    }
 }

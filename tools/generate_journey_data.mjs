@@ -224,14 +224,32 @@ function outcomeFromChoice(choice, label, difficulty = "") {
 
 const grouped = new Map();
 
-function addRecord({ event, context = "", choiceTexts, outcomes }) {
+function choiceAliases(choices) {
+    return (choices ?? []).map((choice) =>
+        Array.isArray(choice.aliases) ? choice.aliases.map(local).filter(Boolean) : []);
+}
+
+const SAME_PROGRESS_MESSAGE = "어느 쪽을 골라도 동일하게 진행됩니다.";
+
+function sameProgressOutcomes(choices) {
+    return (choices ?? []).map(() => ({
+        label: "",
+        difficulty: "",
+        condition: "",
+        success: SAME_PROGRESS_MESSAGE,
+        failure: "",
+    }));
+}
+
+function addRecord({ event, context = "", arcanaId = "", choiceTexts, aliases, outcomes, sameProgress = false }) {
     if (choiceTexts.length < 2 || choiceTexts.some((text) => !normalize(text))) return;
     // The event title is part of the lookup key. Different events can reuse the
     // exact same choices while granting different rewards (for example fog and
     // lightning weather events), so grouping by choices alone loses information.
-    const signature = `${normalize(event)}|${choiceTexts.map(normalize).join("|")}`;
+    const recordType = sameProgress ? "same-progress" : "choice-results";
+    const signature = `${recordType}|${normalize(event)}|${choiceTexts.map(normalize).join("|")}`;
     if (!grouped.has(signature)) grouped.set(signature, []);
-    grouped.get(signature).push({ event, context, choiceTexts, outcomes });
+    grouped.get(signature).push({ event, context, arcanaId, choiceTexts, aliases, outcomes, sameProgress });
 }
 
 for (const [eventKey, variants] of Object.entries(journeys)) {
@@ -243,10 +261,15 @@ for (const [eventKey, variants] of Object.entries(journeys)) {
         const variantHint = difficulty || (variants.length > 1 ? `경우 ${variantIndex + 1}` : "");
         const event = local(variant.name) || eventKey;
         const label = variantHint ? `${event} · ${variantHint}` : event;
+        const sameProgress = variant.same_progress === true;
         addRecord({
             event,
             choiceTexts,
-            outcomes: (variant.choices ?? []).map((choice) => outcomeFromChoice(choice, label, difficulty)),
+            aliases: choiceAliases(variant.choices),
+            outcomes: sameProgress
+                ? sameProgressOutcomes(variant.choices)
+                : (variant.choices ?? []).map((choice) => outcomeFromChoice(choice, label, difficulty)),
+            sameProgress,
         });
     });
 }
@@ -257,11 +280,17 @@ for (const arcana of arcanas) {
         const event = local(eventData.name);
         const context = `${local(arcana.char_name)} · ${local(arcana.name)}`;
         const label = `${event} · ${context}`;
+        const sameProgress = eventData.same_progress === true;
         addRecord({
             event,
             context,
+            arcanaId: String(arcana.id ?? ""),
             choiceTexts,
-            outcomes: (eventData.choices ?? []).map((choice) => outcomeFromChoice(choice, label)),
+            aliases: choiceAliases(eventData.choices),
+            outcomes: sameProgress
+                ? sameProgressOutcomes(eventData.choices)
+                : (eventData.choices ?? []).map((choice) => outcomeFromChoice(choice, label)),
+            sameProgress,
         });
     }
 }
@@ -274,16 +303,32 @@ for (const sources of grouped.values()) {
         for (const source of sources) {
             const outcome = source.outcomes[choiceIndex];
             const key = `${outcome.difficulty}|${outcome.condition}|${outcome.success}|${outcome.failure}`;
-            if (!unique.has(key)) unique.set(key, outcome);
+            if (!unique.has(key)) unique.set(key, { outcome: { ...outcome }, arcanaIds: new Set() });
+            if (source.arcanaId) unique.get(key).arcanaIds.add(source.arcanaId);
         }
-        const outcomes = [...unique.values()];
+        const outcomes = [...unique.values()].map(({ outcome, arcanaIds }) => ({
+            ...outcome,
+            ...(arcanaIds.size > 0 ? { arcanaIds: [...arcanaIds] } : {}),
+        }));
         if (outcomes.length === 1) outcomes[0].label = "";
-        return { text, outcomes };
+        const aliases = [];
+        const seenAliases = new Set([normalize(text)]);
+        for (const source of sources) {
+            for (const alias of source.aliases?.[choiceIndex] ?? []) {
+                const normalized = normalize(alias);
+                if (normalized && !seenAliases.has(normalized)) {
+                    seenAliases.add(normalized);
+                    aliases.push(alias);
+                }
+            }
+        }
+        return { text, ...(aliases.length > 0 ? { aliases } : {}), outcomes };
     });
 
     records.push({
         event: sources[0].event,
         context: contexts.length <= 2 ? contexts.join(" / ") : `${contexts[0]} 외 ${contexts.length - 1}개`,
+        ...(sources[0].sameProgress ? { sameProgress: true } : {}),
         choices,
     });
 }

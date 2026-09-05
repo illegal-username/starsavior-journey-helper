@@ -121,6 +121,29 @@ public final class JourneyMatcher {
             return new ChoiceEvaluation(score, scores);
     }
 
+    /** Select a registered wording using the same OCR candidates as event matching. */
+    static String displayChoiceText(JourneyModels.Choice choice, List<String> recognizedLines) {
+        List<Candidate> candidates = makeCandidates(recognizedLines);
+        String selected = choice.text;
+        double best = scoreEventName(choice.text, candidates);
+        double second = 0.0;
+        Set<String> seen = new HashSet<>();
+        seen.add(normalize(choice.text));
+        for (String alias : choice.aliases) {
+            if (!seen.add(normalize(alias))) continue;
+            double score = scoreEventName(alias, candidates);
+            if (score > best) {
+                second = best;
+                best = score;
+                selected = alias;
+            } else {
+                second = Math.max(second, score);
+            }
+        }
+        return best >= MIN_CHOICE_CONFIDENCE && best - second >= 0.02
+                ? selected : choice.text;
+    }
+
     private static double scoreEventName(String eventName, List<Candidate> candidates) {
         String expected = normalize(eventName);
         double best = 0.0;
