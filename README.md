@@ -56,9 +56,10 @@
 - Android SDK 35
 
 ```bash
-./gradlew testDebugUnitTest lintRelease assembleDebug
-python3 tools/check_public_source.py
+python3 tools/verify.py --scope android
 ```
+
+문서·도구만 수정했을 때의 빠른 검증과 선택적 회귀 검증은 [기여 안내](CONTRIBUTING.md#검사)를 참고하세요.
 
 Debug APK는 Android의 표준 debug 키로 서명됩니다. 공개 배포용으로 사용하지 마세요.
 

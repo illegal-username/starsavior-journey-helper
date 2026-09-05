@@ -13,12 +13,26 @@
 
 ## 검사
 
-```bash
-python3 tools/check_public_source.py
-./gradlew testDebugUnitTest lintRelease assembleDebug
-```
+변경 범위에 맞는 검증을 선택합니다. `python3` 대신 Windows에서는 `python`을 사용할 수 있습니다.
 
-실제 게임 데이터 대신 `journey_choices.example.json`과 합성 테스트 데이터를 사용해 주세요. 화면 처리나 네트워크 동작을 변경했다면 `PRIVACY.md`와 앱 내 안내도 함께 갱신해야 합니다.
+| 변경 범위 | 최종 검증 |
+| --- | --- |
+| 문서·검증 도구 | `python3 tools/verify.py` |
+| 앱 코드·리소스·DB 파서·Gradle·CI | `python3 tools/verify.py --scope android` |
+| 스태미나 판독·경계·안정화 | Windows에서 `python tools/verify.py --scope stamina --corpus-root <외부-코퍼스-경로>` |
+| 후보 DB를 담은 기기 시험 | 아래 internal 빌드 명령; 별도 debug APK는 필요할 때만 생성 |
+
+모든 범위는 공개 소스 검사, Python 도구 테스트, staged/unstaged 공백 검사를 수행합니다. Android 범위는 `testDebugUnitTest lintRelease assembleDebug`를 한 번 실행합니다. Windows에서는 설치된 프로젝트 Gradle 래퍼를 우선 사용합니다. CI도 같은 Android 명령을 사용하며 서명 키·실제 DB는 필요하지 않습니다.
+
+수정 중에는 `./gradlew testDebugUnitTest --tests 'helper.journey.starsavior.변경대상Test'`처럼 관련 테스트부터 실행하세요. 최종 변경 묶음이 통과하면 새 변경·실패·미해결 의문이 없는 한 같은 검사를 반복하지 않습니다. `clean`, `--rerun-tasks`, 모든 variant의 `test lint`는 기본 절차가 아닙니다. internal variant는 별도 입력과 서명 구성이 필요합니다.
+
+`--plan`은 실행 예정 명령만 표시합니다. 실행 결과는 Git 제외 경로 `.gradle/verification/latest.json`에 범위, HEAD, 추적/새 소스 내용 지문, 명령, 종료 코드, 시간으로 남습니다. 이는 검증 근거이며 자동 생략 캐시는 아닙니다. 소스나 데이터가 바뀌었다면 과거 성공을 재사용하지 않습니다. 스태미나 보고서는 지정한 외부 코퍼스의 `reports/`에 생성됩니다.
+
+스태미나 합격 기준은 사용자가 직접 주석한 `annotated/**/annotations.tsv` 전체이며 값·변화량·쌍 비교 허용오차는 1입니다. `expectations.tsv`는 추정값 진단용입니다. 다른 HUD 크기·화면비·위치의 합성 사례도 검증하고, 실제 게임 화면은 공개 저장소에 넣지 않습니다.
+
+실제 게임 데이터 대신 `journey_choices.example.json`과 합성 데이터를 사용해 주세요. 화면/네트워크의 개인정보 처리 방식이 바뀌면 `PRIVACY.md`와 앱 내 안내도 함께 갱신합니다.
+
+DB·메타 생성은 별도 데이터 생성 프로젝트에서 수행하고 Android는 완성된 compact JSON만 소비합니다. 사용하지 않는 앱 내 6문서 변환기와 소스 assets에 실제 DB를 쓰던 개발 스크립트는 제거했습니다. 후보 DB는 아래 internal 빌드에 외부 파일로 전달하세요.
 
 ## 내장 DB 테스트 APK
 

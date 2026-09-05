@@ -10,9 +10,12 @@ local.properties
 *.keystore
 *.p12
 
-# The real journey database is generated or copied locally before a private release build.
-/app/src/main/assets/journey_choices.json
+# Real databases are external inputs; internal builds stage them only under build/.
+/app/src/*/assets/journey_choices.json
 
 # Distributable binaries are published separately from the source repository.
 *.apk
 *.aab
+
+# Local Python tool bytecode.
+__pycache__/
