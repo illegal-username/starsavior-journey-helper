@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
@@ -10,11 +11,11 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SKIP_DIRECTORIES = {".git", ".gradle", ".idea", "build"}
+SKIP_DIRECTORIES = {".git", ".gradle", ".idea", "build", "__pycache__"}
 PRIVATE_KEY_SUFFIXES = {".jks", ".keystore", ".p12"}
 TEXT_SUFFIXES = {
     ".gradle", ".java", ".json", ".kt", ".kts", ".md", ".mjs", ".properties",
-    ".py", ".txt", ".toml", ".xml", ".yaml", ".yml",
+    ".py", ".ps1", ".cmd", ".bat", ".txt", ".toml", ".xml", ".yaml", ".yml",
 }
 PRIVATE_DATABASE_NAME = "journey_choices.json"
 LEGACY_APP_ID = ".".join(("dev", "starjourney", "overlay"))
@@ -28,25 +29,28 @@ LITERAL_SECRET_PATTERNS = (
 )
 TRACKED_MARKDOWN_PRIVATE_PATTERNS = (
     ("local drive path", re.compile(r"(?<![A-Za-z0-9])[A-Za-z]:[\\\\/]")),
-    ("local home path", re.compile(r"(?i)(?<![A-Za-z0-9])/(?:Users|home)/[^/\\s`\"')]+/")),
-    ("local file URI", re.compile(r"(?i)\\bfile://")),
+    ("local home path", re.compile(r"(?i)(?<![A-Za-z0-9])/(?:Users|home)/[^/\s`\"')]+/")),
+    ("local file URI", re.compile(r"(?i)\bfile://")),
     ("private workspace reference", re.compile(
         rf"(?i){re.escape(PRIVATE_WORKSPACE_MARKER)}|{PRIVATE_FILENAME_MARKER}"
     )),
-    ("private share link", re.compile(r"(?i)quickshare\\.samsungcloud\\.com")),
+    ("private share link", re.compile(r"(?i)quickshare\.samsungcloud\.com")),
 )
 
 
-def skipped(path: Path) -> bool:
-    relative = path.relative_to(ROOT)
-    return any(part in SKIP_DIRECTORIES for part in relative.parts)
+def source_files():
+    """Prune SDK/build trees before walking them, while checking untracked source."""
+    for directory, children, filenames in os.walk(ROOT):
+        children[:] = [name for name in children if name not in SKIP_DIRECTORIES]
+        for name in filenames:
+            yield Path(directory) / name
 
 
-def tracked_markdown_files() -> list[Path]:
-    """Return only Markdown files that can be published from this checkout."""
+def published_markdown_files() -> list[Path]:
+    """Include tracked and new publishable Markdown, excluding ignored local notes."""
     command = [
         "git", "-c", f"safe.directory={ROOT.as_posix()}",
-        "ls-files", "-z", "--", "*.md",
+        "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "*.md",
     ]
     try:
         completed = subprocess.run(
@@ -57,7 +61,7 @@ def tracked_markdown_files() -> list[Path]:
             text=False,
         )
     except (OSError, subprocess.CalledProcessError):
-        return [path for path in ROOT.rglob("*.md") if not skipped(path)]
+        return [path for path in source_files() if path.suffix.lower() == ".md"]
     return [ROOT / Path(raw.decode("utf-8"))
             for raw in completed.stdout.split(b"\0") if raw]
 
@@ -65,7 +69,7 @@ def tracked_markdown_files() -> list[Path]:
 def main() -> int:
     failures: list[str] = []
 
-    for path in tracked_markdown_files():
+    for path in published_markdown_files():
         relative = path.relative_to(ROOT)
         try:
             content = path.read_text(encoding="utf-8")
@@ -77,9 +81,7 @@ def main() -> int:
                     f"{description} is present in published Markdown: {relative}"
                 )
 
-    for path in ROOT.rglob("*"):
-        if not path.is_file() or skipped(path):
-            continue
+    for path in source_files():
         relative = path.relative_to(ROOT)
 
         if (path.name == PRIVATE_DATABASE_NAME
