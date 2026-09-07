@@ -118,6 +118,11 @@ public final class JourneyMatcher {
             double coverage = covered / (double) event.choices.size();
             double orderBonus = isMostlyInOrder(bestIndices) ? 0.025 : 0.0;
             double score = Math.min(1.0, average * 0.78 + coverage * 0.22 + orderBonus);
+            // One shared action must not identify an otherwise unrelated screen.
+            // A title bonus cannot replace evidence for the other choices.
+            if (covered < Math.min(2, event.choices.size())) {
+                score = Math.min(score, MIN_CHOICE_CONFIDENCE - 0.01);
+            }
             return new ChoiceEvaluation(score, scores);
     }
 
