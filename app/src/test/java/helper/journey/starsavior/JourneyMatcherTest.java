@@ -9,6 +9,29 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class JourneyMatcherTest {
+    @Test
+    public void oneSharedActionDoesNotIdentifyAnUnregisteredChoiceScreen() {
+        JourneyModels.Event wrong = new JourneyModels.Event("탐사 중단", "", List.of(
+                new JourneyModels.Choice("집으로 돌아가자", List.of()),
+                new JourneyModels.Choice("회복 물약을 전달한다", List.of())));
+        JourneyModels.Event correct = new JourneyModels.Event("연습 중단", "", List.of(
+                new JourneyModels.Choice("오늘은 그만하자", List.of()),
+                new JourneyModels.Choice("차근차근 연습하자", List.of()),
+                new JourneyModels.Choice("회복 물약을 전달한다", List.of())));
+        List<String> lines = List.of("이제 잠깐 휴식이 필요해", "다시 한번 도전해보자", "회복 물약을 전달한다");
+        assertFalse(new JourneyMatcher(List.of(wrong, correct))
+                .match(List.of("연습 중단"), lines).isConfident());
+        JourneyModels.Event withAliases = new JourneyModels.Event("연습 중단", "", List.of(
+                new JourneyModels.Choice("오늘은 그만하자", List.of(lines.get(0)), List.of()),
+                new JourneyModels.Choice("차근차근 연습하자", List.of(lines.get(1)), List.of()),
+                correct.choices.get(2)));
+        JourneyModels.Match match = new JourneyMatcher(List.of(wrong, withAliases))
+                .match(List.of("연습 중단"), lines);
+        assertTrue(match.isConfident());
+        assertEquals("연습 중단", match.event.name);
+        assertEquals(lines.get(0), JourneyMatcher.displayChoiceText(withAliases.choices.get(0), lines));
+    }
+
     private JourneyModels.Event sampleEvent() {
         return new JourneyModels.Event("공개 예제 이벤트", "", List.of(
                 new JourneyModels.Choice("반짝이는 첫 번째 선택", List.of()),
