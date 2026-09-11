@@ -1,6 +1,6 @@
 {
   "schema": 5,
-  "language": "ko-KR",
+  "language": "vi-VN",
   "source": "public-example",
   "generatedAt": "",
   "upstreamRevision": "example-v5",
@@ -8,29 +8,29 @@
   "choiceCount": 6,
   "records": [
     {
-      "event": "공개 예제 - 아침",
+      "event": "Chợ buổi sáng (ví dụ)",
       "context": "",
       "choices": [
         {
-          "text": "첫 번째 예제 선택",
+          "text": "Lựa chọn mẫu thứ nhất",
           "outcomes": [
             {
               "label": "",
               "difficulty": "",
               "condition": "",
-              "success": "예제 효과 A",
+              "success": "Hiệu ứng mẫu 1",
               "failure": ""
             }
           ]
         },
         {
-          "text": "두 번째 예제 선택",
+          "text": "Lựa chọn mẫu thứ hai",
           "outcomes": [
             {
               "label": "",
               "difficulty": "",
               "condition": "",
-              "success": "예제 효과 B",
+              "success": "Hiệu ứng mẫu 2",
               "failure": ""
             }
           ]
@@ -38,29 +38,29 @@
       ]
     },
     {
-      "event": "공개 예제 - 저녁",
+      "event": "Đài quan sát ban đêm (ví dụ)",
       "context": "",
       "choices": [
         {
-          "text": "첫 번째 예제 선택",
+          "text": "Lựa chọn mẫu thứ nhất",
           "outcomes": [
             {
               "label": "",
               "difficulty": "",
               "condition": "",
-              "success": "예제 효과 A",
+              "success": "Hiệu ứng mẫu 1",
               "failure": ""
             }
           ]
         },
         {
-          "text": "두 번째 예제 선택",
+          "text": "Lựa chọn mẫu thứ hai",
           "outcomes": [
             {
               "label": "",
               "difficulty": "",
               "condition": "",
-              "success": "예제 효과 B",
+              "success": "Hiệu ứng mẫu 2",
               "failure": ""
             }
           ]
@@ -68,29 +68,29 @@
       ]
     },
     {
-      "event": "공개 예제 - 동일 진행",
+      "event": "Ví dụ công khai — tiến triển giống nhau",
       "context": "",
       "choices": [
         {
-          "text": "계속 이동한다",
+          "text": "Tiếp tục theo đường",
           "outcomes": [
             {
               "label": "",
               "difficulty": "",
               "condition": "",
-              "success": "예제 효과 A",
+              "success": "Hiệu ứng mẫu 1",
               "failure": ""
             }
           ]
         },
         {
-          "text": "여기서 기다린다",
+          "text": "Chờ ở đây",
           "outcomes": [
             {
               "label": "",
               "difficulty": "",
               "condition": "",
-              "success": "예제 효과 B",
+              "success": "Hiệu ứng mẫu 2",
               "failure": ""
             }
           ]

@@ -1,6 +1,6 @@
 {
   "schema": 5,
-  "language": "ko-KR",
+  "language": "en-US",
   "source": "public-example",
   "generatedAt": "",
   "upstreamRevision": "example-v5",
@@ -8,29 +8,29 @@
   "choiceCount": 6,
   "records": [
     {
-      "event": "공개 예제 - 아침",
+      "event": "Morning market (example)",
       "context": "",
       "choices": [
         {
-          "text": "첫 번째 예제 선택",
+          "text": "First example choice",
           "outcomes": [
             {
               "label": "",
               "difficulty": "",
               "condition": "",
-              "success": "예제 효과 A",
+              "success": "Example effect A",
               "failure": ""
             }
           ]
         },
         {
-          "text": "두 번째 예제 선택",
+          "text": "Second example choice",
           "outcomes": [
             {
               "label": "",
               "difficulty": "",
               "condition": "",
-              "success": "예제 효과 B",
+              "success": "Example effect B",
               "failure": ""
             }
           ]
@@ -38,29 +38,29 @@
       ]
     },
     {
-      "event": "공개 예제 - 저녁",
+      "event": "Night observatory (example)",
       "context": "",
       "choices": [
         {
-          "text": "첫 번째 예제 선택",
+          "text": "First example choice",
           "outcomes": [
             {
               "label": "",
               "difficulty": "",
               "condition": "",
-              "success": "예제 효과 A",
+              "success": "Example effect A",
               "failure": ""
             }
           ]
         },
         {
-          "text": "두 번째 예제 선택",
+          "text": "Second example choice",
           "outcomes": [
             {
               "label": "",
               "difficulty": "",
               "condition": "",
-              "success": "예제 효과 B",
+              "success": "Example effect B",
               "failure": ""
             }
           ]
@@ -68,29 +68,29 @@
       ]
     },
     {
-      "event": "공개 예제 - 동일 진행",
+      "event": "Public example - Same progress",
       "context": "",
       "choices": [
         {
-          "text": "계속 이동한다",
+          "text": "Continue along the path",
           "outcomes": [
             {
               "label": "",
               "difficulty": "",
               "condition": "",
-              "success": "예제 효과 A",
+              "success": "Example effect A",
               "failure": ""
             }
           ]
         },
         {
-          "text": "여기서 기다린다",
+          "text": "Wait here",
           "outcomes": [
             {
               "label": "",
               "difficulty": "",
               "condition": "",
-              "success": "예제 효과 B",
+              "success": "Example effect B",
               "failure": ""
             }
           ]

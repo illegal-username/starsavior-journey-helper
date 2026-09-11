@@ -7,6 +7,7 @@ import android.content.ActivityNotFoundException;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Intent;
+import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -61,6 +62,11 @@ public final class MainActivity extends Activity {
     private volatile boolean destroyed;
     private final Runnable appearanceUpdate = this::notifyBubbleAppearanceChanged;
     private final Runnable captureRequest = this::consumeCaptureRequest;
+
+    @Override
+    protected void attachBaseContext(Context context) {
+        super.attachBaseContext(AppLanguage.wrap(context));
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -129,15 +135,15 @@ public final class MainActivity extends Activity {
             root.setBackgroundColor(Color.rgb(14, 13, 24));
 
             TextView title = new TextView(this);
-            title.setText("앱 화면을 준비하지 못했습니다");
+            title.setText(getString(R.string.startup_failed));
             title.setTextSize(23);
             title.setTextColor(Color.WHITE);
             title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
             root.addView(title, new LinearLayout.LayoutParams(-1, -2));
 
             TextView message = new TextView(this);
-            message.setText(String.format(Locale.KOREA,
-                    "앱이 종료되지 않도록 복구 화면을 열었습니다. 아래 버튼으로 오류 정보를 복사해 전달해 주세요.\n\n%s: %s",
+            message.setText(String.format(AppLanguage.of(this).locale(),
+                    getString(R.string.startup_recovery),
                     error.getClass().getSimpleName(), String.valueOf(error.getMessage())));
             message.setTextSize(15);
             message.setTextColor(Color.rgb(205, 200, 226));
@@ -147,7 +153,7 @@ public final class MainActivity extends Activity {
             root.addView(message, messageParams);
 
             TextView copy = new TextView(this);
-            copy.setText("오류 정보 복사");
+            copy.setText(getString(R.string.copy_error));
             copy.setTextSize(16);
             copy.setTextColor(Color.WHITE);
             copy.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
@@ -157,14 +163,14 @@ public final class MainActivity extends Activity {
             copy.setClickable(true);
             copy.setOnClickListener(view -> {
                 ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
-                clipboard.setPrimaryClip(ClipData.newPlainText("스세 여정 도우미 오류", details));
-                Toast.makeText(this, "오류 정보를 복사했습니다.", Toast.LENGTH_SHORT).show();
+                clipboard.setPrimaryClip(ClipData.newPlainText(getString(R.string.error_clipboard), details));
+                Toast.makeText(this, getString(R.string.error_copied), Toast.LENGTH_SHORT).show();
             });
             root.addView(copy, new LinearLayout.LayoutParams(-1, -2));
             setContentView(root);
         } catch (Throwable ignored) {
             TextView fallback = new TextView(this);
-            fallback.setText(String.format(Locale.KOREA, "스세 여정 도우미를 시작하지 못했습니다.\n%s",
+            fallback.setText(String.format(AppLanguage.of(this).locale(), getString(R.string.startup_fallback),
                     error.getClass().getSimpleName()));
             fallback.setTextColor(Color.WHITE);
             fallback.setTextSize(18);
@@ -185,87 +191,128 @@ public final class MainActivity extends Activity {
         root.setPadding(side, Ui.dp(this, 28), side, Ui.dp(this, 36));
         scroll.addView(root, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        TextView eyebrow = Ui.text(this, "STAR SAVIOR · JOURNEY", 12, Ui.PRIMARY);
+        TextView eyebrow = Ui.text(this, getString(R.string.app_eyebrow), 12, Ui.PRIMARY);
         eyebrow.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         eyebrow.setLetterSpacing(0.14f);
         root.addView(eyebrow);
 
-        TextView title = Ui.text(this, "스세 여정 도우미", 32, Ui.TEXT);
+        TextView title = Ui.text(this, getString(R.string.app_name), 32, Ui.TEXT);
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         root.addView(title, marginParams(-1, -2, 0, 7, 0, 0));
 
-        TextView subtitle = Ui.text(this, "게임 화면의 선택지를 읽고, 보상과 실패 효과만 빠르게 보여줍니다.", 15, Ui.MUTED);
+        TextView subtitle = Ui.text(this, getString(R.string.app_subtitle), 15, Ui.MUTED);
         subtitle.setLineSpacing(0, 1.18f);
         root.addView(subtitle, marginParams(-1, -2, 0, 0, 0, 24));
 
+        root.addView(buildLanguageCard(), marginParams(-1, -2, 0, 0, 0, 18));
+
         LinearLayout statusCard = card();
-        TextView statusTitle = Ui.text(this, "준비 상태", 17, Ui.TEXT);
+        TextView statusTitle = Ui.text(this, getString(R.string.ready_status), 17, Ui.TEXT);
         statusTitle.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         statusCard.addView(statusTitle, marginParams(-1, -2, 0, 0, 0, 12));
-        overlayState = statusRow(statusCard, "다른 앱 위에 표시", false);
-        captureState = statusRow(statusCard, "화면 읽기 서비스", false);
-        dataState = statusRow(statusCard, "선택지 데이터 확인 중", false);
+        overlayState = statusRow(statusCard, getString(R.string.overlay_permission), false);
+        captureState = statusRow(statusCard, getString(R.string.capture_service), false);
+        dataState = statusRow(statusCard, getString(R.string.checking_data), false);
         root.addView(statusCard, marginParams(-1, -2, 0, 0, 0, 18));
 
         root.addView(buildAppearanceCard(), marginParams(-1, -2, 0, 0, 0, 18));
 
-        startButton = Ui.button(this, "권한 설정하고 시작", true);
+        startButton = Ui.button(this, getString(R.string.start_helper), true);
         startButton.setOnClickListener(v -> startFlow());
-        root.addView(startButton, marginParams(-1, Ui.dp(this, 56), 0, 0, 0, 10));
+        root.addView(startButton, marginParams(-1, -2, 0, 0, 0, 10));
 
         updateButton = Ui.button(this,
-                BuildConfig.BUNDLED_TEST_DATABASE ? "테스트 DB 내장됨" : "DB 업데이트", false);
+                BuildConfig.BUNDLED_TEST_DATABASE ? getString(R.string.test_bundled) : getString(R.string.update_database), false);
         if (BuildConfig.BUNDLED_TEST_DATABASE) {
             updateButton.setEnabled(false);
             updateButton.setAlpha(0.65f);
         } else {
             updateButton.setOnClickListener(v -> updateDatabase());
         }
-        root.addView(updateButton, marginParams(-1, Ui.dp(this, 52), 0, 0, 0, 10));
+        root.addView(updateButton, marginParams(-1, -2, 0, 0, 0, 10));
 
-        stopButton = Ui.button(this, "오버레이 종료", false);
+        stopButton = Ui.button(this, getString(R.string.stop_overlay), false);
         stopButton.setOnClickListener(v -> {
             Intent stop = new Intent(this, OverlayCaptureService.class).setAction(OverlayCaptureService.ACTION_STOP);
             startService(stop);
             mainHandler.postDelayed(this::refreshStatus, 250);
         });
-        root.addView(stopButton, marginParams(-1, Ui.dp(this, 52), 0, 0, 0, 22));
+        root.addView(stopButton, marginParams(-1, -2, 0, 0, 0, 22));
 
         LinearLayout howTo = card();
-        TextView howTitle = Ui.text(this, "사용법", 17, Ui.TEXT);
+        TextView howTitle = Ui.text(this, getString(R.string.how_to), 17, Ui.TEXT);
         howTitle.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         howTo.addView(howTitle, marginParams(-1, -2, 0, 0, 0, 10));
-        howTo.addView(body("1. 시작을 누르고 Android의 화면 공유 창에서 스타 세이비어를 선택합니다."));
-        howTo.addView(body("2. 여정 선택지가 나타나면 화면 가장자리의 ✦ 아이콘을 한 번 누릅니다."));
-        howTo.addView(body("3. 결과 카드는 선택지를 가리지 않도록 왼쪽에 표시됩니다. 아이콘은 드래그해 옮길 수 있습니다."));
-        howTo.addView(body("4. ✦ 아이콘을 길게 누르면 DB 업데이트와 도우미 종료 메뉴가 열립니다."));
+        howTo.addView(body(getString(R.string.how_step_1)));
+        howTo.addView(body(getString(R.string.how_step_2)));
+        howTo.addView(body(getString(R.string.how_step_3)));
+        howTo.addView(body(getString(R.string.how_step_4)));
         root.addView(howTo, marginParams(-1, -2, 0, 0, 0, 14));
 
         LinearLayout privacy = card();
         privacy.setBackground(Ui.roundedStroke(this, Color.rgb(24, 41, 45), 20, Color.rgb(48, 94, 91), 1));
-        TextView privacyTitle = Ui.text(this, "화면 내용은 기기 안에서만 처리", 16, Ui.GREEN);
+        TextView privacyTitle = Ui.text(this, getString(R.string.privacy_title), 16, Ui.GREEN);
         privacyTitle.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         privacy.addView(privacyTitle, marginParams(-1, -2, 0, 0, 0, 7));
-        TextView privacyBody = body("캡처 이미지와 인식한 글자는 저장하거나 전송하지 않습니다. 광고·자체 추적 서버는 없습니다. 앱을 열면 최신 DB 여부를 확인하고, 사용자가 DB 업데이트를 누르면 데이터를 받기 위해 배포 서버에 접속합니다. ML Kit SDK는 호환성 정보와 성능 지표를 위해 Google과 통신할 수 있습니다.");
+        TextView privacyBody = body(getString(R.string.privacy_body));
         privacy.addView(privacyBody);
         root.addView(privacy, marginParams(-1, -2, 0, 0, 0, 14));
 
-        TextView source = Ui.text(this, "선택지 DB 원본  ↗", 14, Ui.BLUE);
+        TextView source = Ui.text(this, getString(R.string.database_source), 14, Ui.BLUE);
         source.setPadding(Ui.dp(this, 4), Ui.dp(this, 8), Ui.dp(this, 4), Ui.dp(this, 8));
         source.setOnClickListener(v -> startActivity(new Intent(Intent.ACTION_VIEW,
-                Uri.parse(JourneyDatabaseUpdater.DATABASE_URL))));
+                Uri.parse(AppLanguage.of(this).databaseUrl()))));
         root.addView(source);
 
-        TextView openSource = Ui.text(this, "오픈소스·개인정보 안내  ↗", 14, Ui.BLUE);
+        TextView openSource = Ui.text(this, getString(R.string.source_privacy), 14, Ui.BLUE);
         openSource.setPadding(Ui.dp(this, 4), Ui.dp(this, 8), Ui.dp(this, 4), Ui.dp(this, 8));
         openSource.setOnClickListener(v -> startActivity(new Intent(Intent.ACTION_VIEW,
                 Uri.parse(getString(R.string.source_code_url)))));
         root.addView(openSource);
 
-        TextView disclaimer = Ui.text(this, "비공식 팬 도우미이며 STUDIOBSIDE와 제휴·보증 관계가 없습니다.", 12, Color.rgb(125, 121, 151));
+        TextView disclaimer = Ui.text(this, getString(R.string.disclaimer), 12, Color.rgb(125, 121, 151));
         disclaimer.setLineSpacing(0, 1.15f);
         root.addView(disclaimer, marginParams(-1, -2, 4, 4, 4, 0));
         return scroll;
+    }
+
+    private View buildLanguageCard() {
+        LinearLayout languageCard = card();
+        TextView select = Ui.button(this, getString(R.string.language_title) + ": " + (AppLanguage.preference(this).isEmpty()
+                ? getString(R.string.system_language) + " · " : "") + AppLanguage.of(this).nativeName(), false);
+        select.setOnClickListener(view -> {
+            GameLanguage[] languages = GameLanguage.values();
+            String[] labels = new String[languages.length + 1];
+            labels[0] = getString(R.string.system_language);
+            String saved = AppLanguage.preference(this);
+            int checked = 0;
+            for (int index = 0; index < languages.length; index++) {
+                labels[index + 1] = languages[index].nativeName();
+                if (languages[index].tag.equals(saved)) checked = index + 1;
+            }
+            new AlertDialog.Builder(this)
+                    .setTitle(getString(R.string.language_title))
+                    .setSingleChoiceItems(labels, checked, (dialog, which) -> {
+                        String next = which == 0 ? "" : languages[which - 1].tag;
+                        dialog.dismiss();
+                        if (next.equals(saved)) return;
+                        AppLanguage.setLanguage(this, next);
+                        requestCaptureOnResume = false;
+                        continueAfterOverlaySettings = false;
+                        mainHandler.removeCallbacks(captureRequest);
+                        if (OverlayCaptureService.isRunning()) {
+                            startService(new Intent(this, OverlayCaptureService.class)
+                                    .setAction(OverlayCaptureService.ACTION_CHANGE_LANGUAGE));
+                        }
+                        recreate();
+                    })
+                    .setNegativeButton(getString(R.string.close), null)
+                    .show();
+        });
+        languageCard.addView(select, new LinearLayout.LayoutParams(-1, -2));
+        languageCard.addView(body(getString(R.string.language_help)),
+                marginParams(-1, -2, 0, 8, 0, 0));
+        return languageCard;
     }
 
     private View buildAppearanceCard() {
@@ -277,10 +324,10 @@ public final class MainActivity extends Activity {
 
         LinearLayout copy = new LinearLayout(this);
         copy.setOrientation(LinearLayout.VERTICAL);
-        TextView title = Ui.text(this, "플로팅 아이콘", 17, Ui.TEXT);
+        TextView title = Ui.text(this, getString(R.string.floating_icon), 17, Ui.TEXT);
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         copy.addView(title, new LinearLayout.LayoutParams(-1, -2));
-        TextView description = body("흰색 ✦와 터치 영역은 그대로 두고 보라색 원만 조절합니다.");
+        TextView description = body(getString(R.string.icon_description));
         copy.addView(description, marginParams(-1, -2, 0, 4, 12, 0));
         heading.addView(copy, new LinearLayout.LayoutParams(0, -2, 1f));
 
@@ -299,7 +346,7 @@ public final class MainActivity extends Activity {
         SeekBar slider = new SeekBar(this);
         slider.setMax(BubbleAppearance.MAX_PROGRESS);
         slider.setProgress(savedProgress);
-        slider.setContentDescription("플로팅 아이콘 보라색 원 크기");
+        slider.setContentDescription(getString(R.string.icon_size_accessibility));
         slider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
@@ -324,8 +371,8 @@ public final class MainActivity extends Activity {
 
         LinearLayout endpoints = new LinearLayout(this);
         endpoints.setOrientation(LinearLayout.HORIZONTAL);
-        TextView minimum = Ui.text(this, "✦에 닿는 최소", 12, Color.rgb(134, 129, 160));
-        TextView maximum = Ui.text(this, "기존 최대", 12, Color.rgb(134, 129, 160));
+        TextView minimum = Ui.text(this, getString(R.string.icon_minimum), 12, Color.rgb(134, 129, 160));
+        TextView maximum = Ui.text(this, getString(R.string.icon_maximum), 12, Color.rgb(134, 129, 160));
         maximum.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
         endpoints.addView(minimum, new LinearLayout.LayoutParams(0, -2, 1f));
         endpoints.addView(maximum, new LinearLayout.LayoutParams(0, -2, 1f));
@@ -334,9 +381,9 @@ public final class MainActivity extends Activity {
     }
 
     private String circleSizeLabel(int progress) {
-        if (progress <= BubbleAppearance.MIN_PROGRESS) return "보라색 원 크기 · 최소";
-        if (progress >= BubbleAppearance.MAX_PROGRESS) return "보라색 원 크기 · 최대";
-        return String.format(Locale.KOREA, "보라색 원 크기 · %d%%", progress);
+        if (progress <= BubbleAppearance.MIN_PROGRESS) return getString(R.string.circle_minimum);
+        if (progress >= BubbleAppearance.MAX_PROGRESS) return getString(R.string.circle_maximum);
+        return String.format(AppLanguage.of(this).locale(), getString(R.string.circle_size), progress);
     }
 
     private void notifyBubbleAppearanceChanged() {
@@ -382,7 +429,7 @@ public final class MainActivity extends Activity {
     }
 
     private void setStatus(TextView view, String label, boolean ok) {
-        view.setText(String.format(Locale.KOREA, "%s  %s", ok ? "●" : "○", label));
+        view.setText(String.format(AppLanguage.of(this).locale(), "%s  %s", ok ? "●" : "○", label));
         view.setTextColor(ok ? Ui.GREEN : Ui.MUTED);
     }
 
@@ -406,7 +453,7 @@ public final class MainActivity extends Activity {
                 mainHandler.post(() -> showDataSummary(data));
             } catch (Exception error) {
                 mainHandler.post(() -> {
-                    if (!destroyed) setStatus(dataState, "선택지 데이터 오류", false);
+                    if (!destroyed) setStatus(dataState, getString(R.string.data_error), false);
                 });
             }
         });
@@ -430,12 +477,12 @@ public final class MainActivity extends Activity {
         databaseUpdateAvailable = result.available;
         databaseAppUpdateRequired = result.incompatible;
         if (result.incompatible) {
-            setStatus(dataState, "새 DB는 앱 업데이트 필요", false);
+            setStatus(dataState, getString(R.string.new_db_requires_app), false);
             dataState.setTextColor(Ui.ORANGE);
         } else if (result.available && result.manifest != null) {
             String summary = String.format(
-                    Locale.KOREA,
-                    "새 DB 있음 · 선택지 %,d개 · %s 기준",
+                    AppLanguage.of(this).locale(),
+                    getString(R.string.new_db_summary),
                     result.manifest.choiceCount,
                     formatDatabaseDate(result.manifest.generatedAt));
             setStatus(dataState, summary, false);
@@ -449,24 +496,25 @@ public final class MainActivity extends Activity {
     private void showDataSummary(JourneyModels.Data data) {
         if (destroyed || dataState == null) return;
         if (JourneyRepository.isExampleDatabase(data)) {
-            setStatus(dataState, "공개 예제 DB · 실제 사용 전 DB 업데이트 필요", false);
+            setStatus(dataState, getString(R.string.example_warning), false);
             dataState.setTextColor(Ui.ORANGE);
             return;
         }
         String date = formatDatabaseDate(data.generatedAt);
         String kind = BuildConfig.BUNDLED_TEST_DATABASE
-                ? "테스트 내장 DB"
-                : JourneyRepository.hasDownloadedDatabase(this) ? "업데이트 DB" : "내장 DB";
-        String summary = String.format(Locale.KOREA, "%s · 선택지 %,d개 · %s 기준", kind, data.choiceCount, date);
+                ? getString(R.string.db_test_kind)
+                : JourneyRepository.hasDownloadedDatabase(this) ? getString(R.string.db_updated_kind) : getString(R.string.db_bundled_kind);
+        String summary = String.format(AppLanguage.of(this).locale(), getString(R.string.db_summary), kind, data.choiceCount, date);
         setStatus(dataState, summary, true);
     }
 
     private String formatDatabaseDate(String generatedAt) {
-        String date = generatedAt == null || generatedAt.isEmpty() ? "날짜 미상" : generatedAt;
+        String date = generatedAt == null || generatedAt.isEmpty() ? getString(R.string.date_unknown) : generatedAt;
         try {
             Instant instant = Instant.parse(generatedAt);
-            date = DateTimeFormatter.ofPattern("yyyy.MM.dd")
-                    .withZone(ZoneId.of("Asia/Seoul"))
+            date = DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM)
+                    .withLocale(AppLanguage.of(this).locale())
+                    .withZone(ZoneId.systemDefault())
                     .format(instant);
         } catch (Exception ignored) {}
         return date;
@@ -474,11 +522,11 @@ public final class MainActivity extends Activity {
 
     private void updateDatabase() {
         if (BuildConfig.BUNDLED_TEST_DATABASE) {
-            Toast.makeText(this, "테스트 APK는 내장 DB를 사용합니다.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.test_uses_bundled), Toast.LENGTH_SHORT).show();
             return;
         }
         if (JourneyDatabaseUpdater.isUpdating()) {
-            Toast.makeText(this, "이미 DB를 업데이트하고 있습니다.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.update_already_busy), Toast.LENGTH_SHORT).show();
             return;
         }
         setUpdateBusy(true);
@@ -506,15 +554,15 @@ public final class MainActivity extends Activity {
                     }
                     setUpdateBusy(false);
                     if (result.incompatible) {
-                        setStatus(dataState, "새 DB는 앱 업데이트 필요", false);
+                        setStatus(dataState, getString(R.string.new_db_requires_app), false);
                         dataState.setTextColor(Ui.ORANGE);
                     } else if (result.data != null) {
                         showDataSummary(result.data);
                     }
                     new AlertDialog.Builder(this)
-                            .setTitle(result.changed ? "DB 업데이트 완료" : "DB 업데이트")
-                            .setMessage(result.message)
-                            .setPositiveButton("확인", null)
+                            .setTitle(result.changed ? getString(R.string.update_complete) : getString(R.string.update_database))
+                            .setMessage(result.message(this))
+                            .setPositiveButton(getString(R.string.confirm), null)
                             .show();
                 });
             } catch (Exception error) {
@@ -523,9 +571,9 @@ public final class MainActivity extends Activity {
                     setUpdateBusy(false);
                     loadDataSummary();
                     new AlertDialog.Builder(this)
-                            .setTitle("DB 업데이트 실패")
+                            .setTitle(getString(R.string.update_failed))
                             .setMessage(friendlyUpdateError(error))
-                            .setPositiveButton("확인", null)
+                            .setPositiveButton(getString(R.string.confirm), null)
                             .show();
                 });
             }
@@ -542,38 +590,39 @@ public final class MainActivity extends Activity {
             Ui.styleSecondaryButton(this, updateButton);
         }
         if (busy) {
-            updateButton.setText("DB 업데이트 중…");
+            updateButton.setText(getString(R.string.update_busy_ellipsis));
         } else if (databaseAppUpdateRequired) {
-            updateButton.setText("앱 업데이트 필요");
+            updateButton.setText(getString(R.string.app_update_required));
         } else if (databaseUpdateAvailable) {
-            updateButton.setText("새 DB 받기");
+            updateButton.setText(getString(R.string.get_new_db));
         } else {
-            updateButton.setText("DB 업데이트");
+            updateButton.setText(getString(R.string.update_database));
         }
     }
 
     private String friendlyUpdateError(Exception error) {
         String detail = error.getMessage();
         if (detail == null || detail.trim().isEmpty()) detail = error.getClass().getSimpleName();
-        return "새 데이터는 적용하지 않았으며 현재 DB는 그대로입니다. 인터넷 연결과 DB 배포 서버 상태를 확인한 뒤 다시 시도해 주세요.\n\n" + detail;
+        return getString(R.string.update_error_detail) + detail;
     }
 
     private void refreshStatus() {
         boolean overlay = Settings.canDrawOverlays(this);
         boolean running = OverlayCaptureService.isRunning();
         boolean captureActive = OverlayCaptureService.isCaptureActive();
-        setStatus(overlayState, overlay ? "다른 앱 위에 표시 허용됨" : "다른 앱 위에 표시 권한 필요", overlay);
+        setStatus(overlayState, overlay ? getString(R.string.overlay_allowed) : getString(R.string.overlay_required), overlay);
         if (running && captureActive) {
-            setStatus(captureState, "화면 읽기 실행 중", true);
+            setStatus(captureState, getString(R.string.capture_running), true);
         } else if (running) {
-            setStatus(captureState, "플로팅 아이콘 유지 중 · 화면 공유 다시 필요", false);
+            setStatus(captureState, getString(R.string.capture_waiting), false);
             captureState.setTextColor(Ui.ORANGE);
         } else {
-            setStatus(captureState, "화면 읽기 서비스 꺼짐", false);
+            setStatus(captureState, getString(R.string.capture_stopped), false);
         }
         startButton.setText(running
-                ? (captureActive ? "스타 세이비어 열기" : "화면 공유 다시 연결")
-                : "권한 설정하고 시작");
+                ? (captureActive ? getString(BuildConfig.BUNDLED_TEST_DATABASE
+                        ? R.string.test_return_to_image : R.string.open_game) : getString(R.string.reconnect_capture))
+                : getString(R.string.start_helper));
         Ui.setVisible(stopButton, running);
     }
 
@@ -597,14 +646,14 @@ public final class MainActivity extends Activity {
 
         continueAfterOverlaySettings = false;
         new AlertDialog.Builder(this)
-                .setTitle("오버레이 설정을 열 수 없습니다")
-                        .setMessage("휴대전화 설정에서 ‘특별한 접근’ → ‘다른 앱 위에 표시’ → ‘스세 여정 도우미’를 허용해 주세요.")
-                .setNegativeButton("닫기", null)
-                .setPositiveButton("설정 열기", (dialog, which) -> {
+                .setTitle(getString(R.string.overlay_settings_failed))
+                        .setMessage(getString(R.string.overlay_settings_help))
+                .setNegativeButton(getString(R.string.close), null)
+                .setPositiveButton(getString(R.string.open_settings), (dialog, which) -> {
                     try {
                         startActivity(new Intent(Settings.ACTION_SETTINGS));
                     } catch (ActivityNotFoundException | SecurityException ignored) {
-                        Toast.makeText(this, "설정 앱을 직접 열어 주세요.", Toast.LENGTH_LONG).show();
+                        Toast.makeText(this, getString(R.string.open_settings_manually), Toast.LENGTH_LONG).show();
                     }
                 })
                 .show();
@@ -646,7 +695,7 @@ public final class MainActivity extends Activity {
                     ScreenCapturePermissionDecision.fromResult(
                             resultCode == RESULT_OK, data != null);
             if (decision != ScreenCapturePermissionDecision.Action.START_CAPTURE_SERVICE) {
-                Toast.makeText(this, "화면 공유를 허용해야 선택지를 읽을 수 있습니다.", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, getString(R.string.capture_permission_help), Toast.LENGTH_LONG).show();
                 return;
             }
             Intent service = new Intent(this, OverlayCaptureService.class)
@@ -662,12 +711,17 @@ public final class MainActivity extends Activity {
     }
 
     private void launchGame() {
+        if (BuildConfig.BUNDLED_TEST_DATABASE) {
+            Toast.makeText(this, getString(R.string.test_open_gallery), Toast.LENGTH_LONG).show();
+            moveTaskToBack(true);
+            return;
+        }
         Intent launch = getPackageManager().getLaunchIntentForPackage(GAME_PACKAGE);
         if (launch == null) {
             new AlertDialog.Builder(this)
-                    .setTitle("게임을 찾지 못했습니다")
-                    .setMessage("스타 세이비어를 직접 실행해 주세요. 오버레이는 계속 켜져 있습니다.")
-                    .setPositiveButton("확인", null)
+                    .setTitle(getString(R.string.game_not_found))
+                    .setMessage(getString(R.string.launch_game_manually))
+                    .setPositiveButton(getString(R.string.confirm), null)
                     .show();
             return;
         }

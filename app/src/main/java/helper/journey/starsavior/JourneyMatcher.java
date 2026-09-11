@@ -12,8 +12,8 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 public final class JourneyMatcher {
-    private static final Pattern NOISE = Pattern.compile("[^가-힣A-Za-z0-9]");
-    private static final String EVENT_HEADER = normalize("여정 이벤트");
+    private static final Pattern NOISE = Pattern.compile("[^\\p{L}\\p{M}\\p{Nd}]");
+    private final String eventHeader;
     private static final double MIN_CHOICE_CONFIDENCE = 0.58;
     private static final double MIN_EVENT_SIGNAL = 0.50;
     private static final double STRONG_EVENT_SIGNAL = 0.58;
@@ -23,7 +23,12 @@ public final class JourneyMatcher {
     private final List<JourneyModels.Event> events;
 
     public JourneyMatcher(List<JourneyModels.Event> events) {
+        this(events, GameLanguage.KOREAN);
+    }
+
+    public JourneyMatcher(List<JourneyModels.Event> events, GameLanguage language) {
         this.events = events;
+        this.eventHeader = normalize(language.eventHeader);
     }
 
     public JourneyModels.Match match(List<String> recognizedLines) {
@@ -184,20 +189,22 @@ public final class JourneyMatcher {
             String one = normalize(lines.get(i));
             if (one.length() >= 2) result.add(new Candidate(one, i));
 
-            if (i + 1 < lines.size()) {
-                String pair = normalize(lines.get(i) + lines.get(i + 1));
-                if (pair.length() >= 3) result.add(new Candidate(pair, i));
+            StringBuilder joined = new StringBuilder(lines.get(i));
+            for (int j = i + 1; j < Math.min(lines.size(), i + 4); j++) {
+                joined.append(lines.get(j));
+                String candidate = normalize(joined.toString());
+                if (candidate.length() >= 3) result.add(new Candidate(candidate, i));
             }
         }
         return result;
     }
 
-    private static List<Candidate> makeEventCandidates(List<String> lines) {
+    private List<Candidate> makeEventCandidates(List<String> lines) {
         List<String> cleaned = new ArrayList<>(lines.size());
         for (String line : lines) {
             String normalized = normalize(line);
-            if (normalized.equals(EVENT_HEADER)) continue;
-            if (normalized.startsWith(EVENT_HEADER)) normalized = normalized.substring(EVENT_HEADER.length());
+            if (normalized.equals(eventHeader)) continue;
+            if (normalized.startsWith(eventHeader)) normalized = normalized.substring(eventHeader.length());
             if (!normalized.isEmpty()) cleaned.add(normalized);
         }
         return makeCandidates(cleaned);

@@ -20,8 +20,6 @@ import java.util.Set;
 
 final class OverlayResultView {
     private static final String INFO_MESSAGE_TAG = "journey_overlay_info_message";
-    private static final String SAME_PROGRESS_TITLE = "선택에 따른 차이 없음";
-    private static final String SAME_PROGRESS_MESSAGE = "어느 쪽을 골라도 동일하게 진행됩니다.";
 
     private OverlayResultView() {}
 
@@ -47,9 +45,9 @@ final class OverlayResultView {
         boolean showArcanaStatus = !match.event.sameProgress && arcanaStatus.applicable;
 
         String detail = match.eventNameUsed
-                ? String.format(Locale.KOREA, "이벤트 %.0f%% · 선택지 %.0f%%",
+                ? String.format(AppLanguage.of(context).locale(), context.getString(R.string.match_confidence),
                         match.eventConfidence * 100, match.choiceConfidence * 100)
-                : String.format(Locale.KOREA, "선택지 %.0f%% · 이벤트명 미확인",
+                : String.format(AppLanguage.of(context).locale(), context.getString(R.string.match_no_title),
                         match.choiceConfidence * 100);
         if (!match.event.sameProgress && !showArcanaStatus && !match.event.context.isEmpty()) {
             detail += " · " + match.event.context;
@@ -88,7 +86,7 @@ final class OverlayResultView {
             choiceCard.addView(choiceTitle, new LinearLayout.LayoutParams(-1, -2));
 
             if (visibleOutcomes.isEmpty()) {
-                TextView unavailable = Ui.text(context, "감지한 난이도의 결과 정보가 없습니다.", 12, Ui.MUTED);
+                TextView unavailable = Ui.text(context, context.getString(R.string.no_difficulty_result), 12, Ui.MUTED);
                 choiceCard.addView(unavailable, margins(context, -1, -2, 0, 7, 0, 0));
             }
 
@@ -96,17 +94,17 @@ final class OverlayResultView {
                 JourneyModels.Outcome outcome = visibleOutcomes.get(outcomeIndex);
                 if (visibleOutcomes.size() > 1) {
                     String variantText = difficulty == null || difficulty.isEmpty()
-                            ? outcome.label.isEmpty() ? "가능 결과 " + (outcomeIndex + 1) : outcome.label
-                            : "가능 결과 " + (outcomeIndex + 1);
+                            ? outcome.label.isEmpty() ? context.getString(R.string.possible_result, outcomeIndex + 1) : outcome.label
+                            : context.getString(R.string.possible_result, outcomeIndex + 1);
                     TextView variant = Ui.text(context,
                             variantText,
                             11, Ui.ORANGE);
                     variant.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
                     choiceCard.addView(variant, margins(context, -1, -2, 0, 8, 0, 2));
                 }
-                if (!outcome.condition.isEmpty()) addEffect(context, choiceCard, "조건", outcome.condition, Ui.ORANGE);
-                addEffect(context, choiceCard, outcome.failure.isEmpty() ? "효과" : "성공", outcome.success, Ui.GREEN);
-                if (!outcome.failure.isEmpty()) addEffect(context, choiceCard, "실패", outcome.failure, Ui.RED);
+                if (!outcome.condition.isEmpty()) addEffect(context, choiceCard, context.getString(R.string.condition_label), outcome.condition, Ui.ORANGE);
+                addEffect(context, choiceCard, outcome.failure.isEmpty() ? context.getString(R.string.effect_label) : context.getString(R.string.success_label), outcome.success, Ui.GREEN);
+                if (!outcome.failure.isEmpty()) addEffect(context, choiceCard, context.getString(R.string.failure_label), outcome.failure, Ui.RED);
             }
 
             list.addView(choiceCard, margins(context, -1, -2, 0, 0, 0, index == match.event.choices.size() - 1 ? 0 : 8));
@@ -118,10 +116,10 @@ final class OverlayResultView {
 
     static View stamina(Context context, StaminaGaugeDetector.Result stamina, Runnable closeAction) {
         LinearLayout panel = panel(context);
-        addHeader(context, panel, "스태미나", closeAction);
+        addHeader(context, panel, context.getString(R.string.stamina_label), closeAction);
         addJourneyStatus(context, panel, stamina);
         TextView hint = Ui.text(context,
-                "상단 게이지의 색 구간을 기준으로 계산한 추정값입니다.", 11, Ui.MUTED);
+                context.getString(R.string.stamina_hint), 11, Ui.MUTED);
         panel.addView(hint, margins(context, -1, -2, 0, 3, 0, 0));
         return wrap(context, panel);
     }
@@ -134,7 +132,7 @@ final class OverlayResultView {
         panel.addView(body, margins(context, -1, -2, 0, 4, 0, 10));
 
         if (recognizedLines != null && !recognizedLines.isEmpty()) {
-            TextView rawTitle = Ui.text(context, "읽힌 글자", 11, Ui.ORANGE);
+            TextView rawTitle = Ui.text(context, context.getString(R.string.recognized_text), 11, Ui.ORANGE);
             rawTitle.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
             panel.addView(rawTitle, margins(context, -1, -2, 0, 0, 0, 3));
             String raw = String.join("  /  ", recognizedLines);
@@ -148,28 +146,28 @@ final class OverlayResultView {
 
     static View controls(Context context, Runnable updateAction, Runnable stopAction, Runnable closeAction) {
         LinearLayout panel = panel(context);
-        addHeader(context, panel, "도우미 메뉴", closeAction);
+        addHeader(context, panel, context.getString(R.string.helper_menu), closeAction);
 
         TextView description = Ui.text(context,
-                "DB를 최신화하거나 화면 공유와 플로팅 아이콘을 함께 종료할 수 있습니다.", 13, Ui.MUTED);
+                context.getString(R.string.menu_help), 13, Ui.MUTED);
         description.setLineSpacing(0, 1.2f);
         panel.addView(description, margins(context, -1, -2, 0, 5, 0, 13));
 
-        TextView update = Ui.button(context, "DB 업데이트", true);
-        update.setContentDescription("선택지 DB 업데이트");
+        TextView update = Ui.button(context, context.getString(R.string.update_database), true);
+        update.setContentDescription(context.getString(R.string.update_accessibility));
         update.setOnClickListener(view -> updateAction.run());
-        panel.addView(update, margins(context, -1, Ui.dp(context, 48), 0, 0, 0, 8));
+        panel.addView(update, margins(context, -1, -2, 0, 0, 0, 8));
 
-        TextView stop = Ui.button(context, "도우미 종료", false);
+        TextView stop = Ui.button(context, context.getString(R.string.stop_helper), false);
         stop.setTextColor(Ui.RED);
         stop.setBackground(Ui.roundedStroke(context, Color.argb(35, 255, 129, 145), 16, Ui.RED, 1));
-        stop.setContentDescription("도우미 완전히 종료");
+        stop.setContentDescription(context.getString(R.string.stop_accessibility));
         stop.setOnClickListener(view -> stopAction.run());
-        panel.addView(stop, margins(context, -1, Ui.dp(context, 48), 0, 0, 0, 8));
+        panel.addView(stop, margins(context, -1, -2, 0, 0, 0, 8));
 
-        TextView cancel = Ui.button(context, "취소", false);
+        TextView cancel = Ui.button(context, context.getString(R.string.cancel), false);
         cancel.setOnClickListener(view -> closeAction.run());
-        panel.addView(cancel, margins(context, -1, Ui.dp(context, 46), 0, 0, 0, 0));
+        panel.addView(cancel, margins(context, -1, -2, 0, 0, 0, 0));
         return wrap(context, panel);
     }
 
@@ -232,7 +230,7 @@ final class OverlayResultView {
 
         TextView close = Ui.text(context, "×", 26, Ui.MUTED);
         close.setGravity(Gravity.CENTER);
-        close.setContentDescription("결과 닫기");
+        close.setContentDescription(context.getString(R.string.close_result));
         close.setBackground(Ui.rounded(context, Color.rgb(50, 47, 75), 12));
         close.setOnClickListener(v -> closeAction.run());
         header.addView(close, new LinearLayout.LayoutParams(Ui.dp(context, 38), Ui.dp(context, 38)));
@@ -248,7 +246,11 @@ final class OverlayResultView {
         labelView.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         labelView.setGravity(Gravity.CENTER);
         labelView.setBackground(Ui.rounded(context, Color.argb(45, Color.red(color), Color.green(color), Color.blue(color)), 7));
-        row.addView(labelView, new LinearLayout.LayoutParams(Ui.dp(context, 42), Ui.dp(context, 24)));
+        labelView.setMinWidth(Ui.dp(context, 42));
+        labelView.setMinHeight(Ui.dp(context, 24));
+        labelView.setMaxWidth(Ui.dp(context, 95));
+        labelView.setPadding(Ui.dp(context, 5), Ui.dp(context, 3), Ui.dp(context, 5), Ui.dp(context, 3));
+        row.addView(labelView, new LinearLayout.LayoutParams(-2, -2));
 
         TextView valueView = Ui.text(context, value, 12, Ui.TEXT);
         valueView.setLineSpacing(0, 1.13f);
@@ -261,10 +263,9 @@ final class OverlayResultView {
         StringBuilder text = new StringBuilder();
         if (stamina != null) {
             if (stamina.hasPreview()) {
-                text.append("행동 후 스태미나 : ")
-                        .append(stamina.current).append(" → ").append(stamina.after);
+                text.append(context.getString(R.string.stamina_after, stamina.current, stamina.after));
             } else {
-                text.append("현재 스태미나 : ").append(stamina.current);
+                text.append(context.getString(R.string.stamina_current, stamina.current));
             }
         }
         if (text.length() == 0) return;
@@ -278,18 +279,12 @@ final class OverlayResultView {
         panel.addView(status, margins(context, -1, -2, 0, 3, 0, 9));
     }
 
-    static String sameProgressTitle() {
-        return SAME_PROGRESS_TITLE;
-    }
-
-    static String sameProgressMessage() {
-        return SAME_PROGRESS_MESSAGE;
-    }
-
     private static void addArcanaStatus(
             Context context, LinearLayout panel, ArcanaRecognitionStatus arcanaStatus) {
         int color = arcanaStatus.recognized ? Ui.GREEN : Ui.ORANGE;
-        TextView status = Ui.text(context, arcanaStatus.message(), 12, color);
+        TextView status = Ui.text(context, arcanaStatus.recognized
+                ? context.getString(R.string.arcana_detected, arcanaStatus.detectedSource)
+                : context.getString(R.string.arcana_unknown), 12, color);
         status.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         status.setLineSpacing(0, 1.15f);
         status.setPadding(Ui.dp(context, 10), Ui.dp(context, 7), Ui.dp(context, 10), Ui.dp(context, 7));
@@ -310,11 +305,11 @@ final class OverlayResultView {
                 context, Color.argb(42, 86, 219, 171), 12,
                 Color.argb(105, 86, 219, 171), 1));
 
-        TextView title = Ui.text(context, SAME_PROGRESS_TITLE, 14, Ui.GREEN);
+        TextView title = Ui.text(context, context.getString(R.string.same_progress_title), 14, Ui.GREEN);
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         notice.addView(title, new LinearLayout.LayoutParams(-1, -2));
 
-        TextView message = Ui.text(context, SAME_PROGRESS_MESSAGE, 12, Ui.TEXT);
+        TextView message = Ui.text(context, context.getString(R.string.same_progress_message), 12, Ui.TEXT);
         message.setLineSpacing(0, 1.15f);
         notice.addView(message, margins(context, -1, -2, 0, 6, 0, 0));
         panel.addView(notice, margins(context, -1, -2, 0, 0, 0, 0));

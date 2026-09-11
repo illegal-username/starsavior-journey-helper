@@ -8,11 +8,12 @@ import java.util.Locale;
 import java.util.regex.Pattern;
 
 final class JourneyDatabaseManifest {
-    static final int MANIFEST_SCHEMA = 1;
-    private static final int DATABASE_SCHEMA = 4;
+    static final int MANIFEST_SCHEMA = 2;
+    private static final int DATABASE_SCHEMA = 5;
     private static final int MAX_DATABASE_BYTES = 8 * 1024 * 1024;
     private static final Pattern SHA256 = Pattern.compile("[0-9a-f]{64}");
 
+    final String language;
     final int manifestSchema;
     final int databaseSchema;
     final String contentSha256;
@@ -33,6 +34,14 @@ final class JourneyDatabaseManifest {
             int recordCount,
             int choiceCount,
             int minimumAppVersionCode) {
+        this(manifestSchema, databaseSchema, contentSha256, contentLength, upstreamRevision,
+                generatedAt, recordCount, choiceCount, minimumAppVersionCode, "ko-KR");
+    }
+
+    JourneyDatabaseManifest(int manifestSchema, int databaseSchema, String contentSha256,
+            int contentLength, String upstreamRevision, String generatedAt, int recordCount,
+            int choiceCount, int minimumAppVersionCode, String language) {
+        this.language = language;
         this.manifestSchema = manifestSchema;
         this.databaseSchema = databaseSchema;
         this.contentSha256 = value(contentSha256).toLowerCase(Locale.ROOT);
@@ -46,6 +55,10 @@ final class JourneyDatabaseManifest {
 
     static JourneyDatabaseManifest parse(String json) throws JSONException {
         JSONObject root = new JSONObject(json);
+        if (root.optInt("manifestSchema") == 1 && root.has("language")
+                && !"ko-KR".equals(root.optString("language"))) {
+            throw new JSONException("Legacy manifest cannot declare another language.");
+        }
         JourneyDatabaseManifest manifest = new JourneyDatabaseManifest(
                 checkedInt(root, "manifestSchema"),
                 checkedInt(root, "databaseSchema"),
@@ -55,60 +68,66 @@ final class JourneyDatabaseManifest {
                 root.getString("generatedAt"),
                 checkedInt(root, "recordCount"),
                 checkedInt(root, "choiceCount"),
-                checkedInt(root, "minimumAppVersionCode"));
+                checkedInt(root, "minimumAppVersionCode"),
+                root.optInt("manifestSchema") == 1 ? "ko-KR" : root.getString("language"));
         manifest.validate();
         return manifest;
     }
 
     void validate() throws JSONException {
-        if (manifestSchema != MANIFEST_SCHEMA) {
-            throw new JSONException("지원하지 않는 DB 릴리스 정보 형식입니다.");
+        if (manifestSchema != MANIFEST_SCHEMA && manifestSchema != 1) {
+            throw new JSONException("Unsupported database manifest schema.");
         }
-        if (databaseSchema < 1) throw new JSONException("DB 형식 번호가 올바르지 않습니다.");
+        try { GameLanguage.require(language); }
+        catch (IllegalArgumentException error) { throw new JSONException(error.getMessage()); }
+        if (manifestSchema == 1 && !"ko-KR".equals(language)) throw new JSONException("Legacy manifest must be Korean.");
+        if (databaseSchema < 1) throw new JSONException("Invalid database schema number.");
         if (!SHA256.matcher(contentSha256).matches()) {
-            throw new JSONException("DB 릴리스 해시가 올바르지 않습니다.");
+            throw new JSONException("Invalid database release hash.");
         }
         if (contentLength < 1 || contentLength > MAX_DATABASE_BYTES) {
-            throw new JSONException("DB 릴리스 크기가 안전 범위를 벗어났습니다.");
+            throw new JSONException("Database size exceeds the permitted range.");
         }
-        if (upstreamRevision.isEmpty()) throw new JSONException("DB 원본 버전이 비어 있습니다.");
-        if (generatedAt.isEmpty()) throw new JSONException("DB 생성 시각이 비어 있습니다.");
+        if (upstreamRevision.isEmpty()) throw new JSONException("Empty database source revision.");
+        if (generatedAt.isEmpty()) throw new JSONException("Empty database generation time.");
         try {
             Instant.parse(generatedAt);
         } catch (RuntimeException error) {
-            throw new JSONException("DB 생성 시각이 올바르지 않습니다.");
+            throw new JSONException("Invalid database generation time.");
         }
         if (recordCount < 1 || choiceCount < 2) {
-            throw new JSONException("DB 릴리스 개수가 올바르지 않습니다.");
+            throw new JSONException("Invalid database release counts.");
         }
         if (minimumAppVersionCode < 1) {
-            throw new JSONException("최소 앱 버전이 올바르지 않습니다.");
+            throw new JSONException("Invalid minimum app version.");
         }
     }
 
     boolean isCompatible(int appVersionCode) {
-        return databaseSchema == DATABASE_SCHEMA && minimumAppVersionCode <= appVersionCode;
+        return ((manifestSchema == MANIFEST_SCHEMA && databaseSchema == DATABASE_SCHEMA)
+                || (manifestSchema == 1 && databaseSchema == 4))
+                && minimumAppVersionCode <= appVersionCode;
     }
 
     boolean matches(JourneyModels.Data data) {
-        if (data == null) return false;
+        if (data == null || !language.equals(data.language)) return false;
         if (!data.contentSha256.isEmpty()) return contentSha256.equals(data.contentSha256);
         return upstreamRevision.equals(data.upstreamRevision);
     }
 
     void verifyCandidate(JourneyModels.Data data) throws JSONException {
         if (!contentSha256.equals(data.contentSha256)) {
-            throw new JSONException("다운로드한 DB의 SHA-256이 릴리스 정보와 일치하지 않습니다.");
+            throw new JSONException("Downloaded database SHA-256 differs from the manifest.");
         }
         if (contentLength != data.contentLength) {
-            throw new JSONException("다운로드한 DB의 크기가 릴리스 정보와 일치하지 않습니다.");
+            throw new JSONException("Downloaded database size differs from the manifest.");
         }
-        if (databaseSchema != data.schema
+        if (!language.equals(data.language) || databaseSchema != data.schema
                 || !upstreamRevision.equals(data.upstreamRevision)
                 || !generatedAt.equals(data.generatedAt)
                 || recordCount != data.recordCount
                 || choiceCount != data.choiceCount) {
-            throw new JSONException("다운로드한 DB의 메타데이터가 릴리스 정보와 일치하지 않습니다.");
+            throw new JSONException("Downloaded database metadata differs from the manifest.");
         }
     }
 
@@ -116,6 +135,7 @@ final class JourneyDatabaseManifest {
         JSONObject root = new JSONObject();
         root.put("manifestSchema", manifestSchema);
         root.put("databaseSchema", databaseSchema);
+        if (manifestSchema >= 2) root.put("language", language);
         root.put("contentSha256", contentSha256);
         root.put("contentLength", contentLength);
         root.put("upstreamRevision", upstreamRevision);
@@ -129,7 +149,7 @@ final class JourneyDatabaseManifest {
     private static int checkedInt(JSONObject root, String name) throws JSONException {
         long value = root.getLong(name);
         if (value < Integer.MIN_VALUE || value > Integer.MAX_VALUE) {
-            throw new JSONException(name + " 값이 너무 큽니다.");
+            throw new JSONException(name + " is out of range.");
         }
         return (int) value;
     }

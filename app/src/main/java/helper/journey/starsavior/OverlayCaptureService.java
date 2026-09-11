@@ -7,6 +7,9 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
+import android.content.Context;
+import android.content.res.Configuration;
+import android.content.res.Resources;
 import android.content.pm.ServiceInfo;
 import android.graphics.Bitmap;
 import android.graphics.PixelFormat;
@@ -34,8 +37,6 @@ import com.google.android.gms.tasks.Task;
 import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.text.Text;
 import com.google.mlkit.vision.text.TextRecognizer;
-import com.google.mlkit.vision.text.TextRecognition;
-import com.google.mlkit.vision.text.korean.KoreanTextRecognizerOptions;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -49,6 +50,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public final class OverlayCaptureService extends Service {
     public static final String ACTION_START = BuildConfig.APPLICATION_ID + ".START";
     public static final String ACTION_STOP = BuildConfig.APPLICATION_ID + ".STOP";
+    public static final String ACTION_CHANGE_LANGUAGE = BuildConfig.APPLICATION_ID + ".CHANGE_LANGUAGE";
     public static final String ACTION_RELOAD_DATA = BuildConfig.APPLICATION_ID + ".RELOAD_DATA";
     public static final String ACTION_UPDATE_APPEARANCE = BuildConfig.APPLICATION_ID + ".UPDATE_APPEARANCE";
     public static final String EXTRA_RESULT_CODE = "result_code";
@@ -76,7 +78,9 @@ public final class OverlayCaptureService extends Service {
     private MediaProjection mediaProjection;
     private VirtualDisplay virtualDisplay;
     private ImageReader imageReader;
-    private TextRecognizer recognizer;
+    private volatile TextRecognizer recognizer;
+    private volatile Context languageContext;
+    private volatile GameLanguage language;
     private int captureWidth;
     private int captureHeight;
     private int densityDpi;
@@ -95,19 +99,56 @@ public final class OverlayCaptureService extends Service {
     }
 
     @Override
+    protected void attachBaseContext(Context base) {
+        languageContext = AppLanguage.wrap(base);
+        language = AppLanguage.of(languageContext);
+        super.attachBaseContext(languageContext);
+    }
+
+    @Override
+    public Resources getResources() {
+        Context current = languageContext;
+        return current == null ? super.getResources() : current.getResources();
+    }
+
+    @Override
+    public void onConfigurationChanged(Configuration configuration) {
+        super.onConfigurationChanged(configuration);
+        refreshLanguage();
+    }
+
+    private void refreshLanguage() {
+        GameLanguage selected = AppLanguage.selected(getApplicationContext());
+        languageContext = AppLanguage.wrap(getApplicationContext());
+        if (selected == language) return;
+        language = selected;
+        // End the old capture generation before loading a different language.
+        moveToProjectionWaitingState(true);
+        matcherStore.selectLanguage(language);
+        reloadMatcher();
+    }
+
+    @Override
     public void onCreate() {
         super.onCreate();
+        matcherStore.selectLanguage(language);
         running = true;
         captureActive = false;
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
         captureThread = new HandlerThread("journey-screen-capture");
         captureThread.start();
         captureHandler = new Handler(captureThread.getLooper());
+        Context selectedContext = languageContext;
         worker.execute(() -> {
             try {
-                matcherStore.reload(() -> JourneyRepository.load(this));
+                JourneyModels.Data loaded = JourneyRepository.load(selectedContext);
+                if (loaded.language.equals(language.tag)) matcherStore.reload(() -> loaded);
             } catch (Exception error) {
-                mainHandler.post(() -> showError("데이터 준비 실패", "앱의 선택지 데이터를 읽지 못했습니다.", List.of()));
+                mainHandler.post(() -> {
+                    if (!destroying && AppLanguage.of(selectedContext) == language) {
+                        showError(getString(R.string.data_load_failed), getString(R.string.data_load_help), List.of());
+                    }
+                });
             }
         });
     }
@@ -128,6 +169,10 @@ public final class OverlayCaptureService extends Service {
             stopSelf();
             return START_NOT_STICKY;
         }
+        if (ACTION_CHANGE_LANGUAGE.equals(intent.getAction())) {
+            refreshLanguage();
+            return START_STICKY;
+        }
         if (ACTION_RELOAD_DATA.equals(intent.getAction())) {
             reloadMatcher();
             return START_STICKY;
@@ -137,6 +182,7 @@ public final class OverlayCaptureService extends Service {
             return START_STICKY;
         }
         if (!ACTION_START.equals(intent.getAction())) return START_STICKY;
+        refreshLanguage();
         if (mediaProjection != null) return START_STICKY;
 
         int resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, Activity.RESULT_CANCELED);
@@ -151,7 +197,7 @@ public final class OverlayCaptureService extends Service {
             startProjection(resultCode, resultData);
         } catch (Exception error) {
             moveToProjectionWaitingState(true);
-            showError("화면 읽기 시작 실패", error.getClass().getSimpleName() + ": " + error.getMessage(), List.of());
+            showError(getString(R.string.capture_start_failed), error.getClass().getSimpleName() + ": " + error.getMessage(), List.of());
         }
         return START_STICKY;
     }
@@ -172,14 +218,14 @@ public final class OverlayCaptureService extends Service {
 
         Notification notification = new Notification.Builder(this, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notification)
-                .setContentTitle(projectionReady ? "스세 여정 도우미 실행 중" : "스세 여정 도우미 대기 중")
+                .setContentTitle(projectionReady ? getString(R.string.notification_running) : getString(R.string.notification_waiting))
                 .setContentText(projectionReady
-                        ? "✦: 선택지 읽기 · 길게 누르기: 메뉴"
-                        : "화면 공유가 풀렸습니다 · ✦를 눌러 다시 연결")
+                        ? getString(R.string.notification_controls)
+                        : getString(R.string.notification_reconnect))
                 .setContentIntent(open)
                 .setOngoing(true)
                 .setCategory(Notification.CATEGORY_SERVICE)
-                .addAction(new Notification.Action.Builder(R.drawable.ic_notification, "종료", stop).build())
+                .addAction(new Notification.Action.Builder(R.drawable.ic_notification, getString(R.string.stop), stop).build())
                 .build();
 
         if (Build.VERSION.SDK_INT >= 34) {
@@ -198,14 +244,14 @@ public final class OverlayCaptureService extends Service {
         NotificationManager manager = getSystemService(NotificationManager.class);
         NotificationChannel channel = new NotificationChannel(
                 CHANNEL_ID, getString(R.string.notification_channel), NotificationManager.IMPORTANCE_LOW);
-        channel.setDescription("플로팅 아이콘과 화면 읽기 상태를 유지하는 서비스 알림입니다.");
+        channel.setDescription(getString(R.string.notification_description));
         channel.setShowBadge(false);
         manager.createNotificationChannel(channel);
     }
 
     private void ensureRecognizer() {
         if (recognizer == null) {
-            recognizer = TextRecognition.getClient(new KoreanTextRecognizerOptions.Builder().build());
+            recognizer = AppLanguage.recognizer(language);
         }
     }
 
@@ -281,7 +327,7 @@ public final class OverlayCaptureService extends Service {
         try {
             startActivity(request);
         } catch (RuntimeException error) {
-            showInfo("화면 공유 다시 연결", "도우미 앱을 열어 ‘화면 공유 다시 연결’을 눌러 주세요.");
+            showInfo(getString(R.string.reconnect_capture), getString(R.string.reconnect_help));
         }
     }
 
@@ -289,7 +335,7 @@ public final class OverlayCaptureService extends Service {
         mainHandler.post(() -> {
             if (bubbleView == null) return;
             bubbleView.setCaptureActive(captureActive);
-            bubbleView.setContentDescription(captureActive ? "여정 선택지 읽기" : "화면 공유 다시 연결");
+            bubbleView.setContentDescription(captureActive ? getString(R.string.read_choices) : getString(R.string.reconnect_capture));
         });
     }
 
@@ -378,7 +424,7 @@ public final class OverlayCaptureService extends Service {
                 imageReader = ImageReader.newInstance(captureWidth, captureHeight, PixelFormat.RGBA_8888, 3);
                 virtualDisplay.resize(captureWidth, captureHeight, densityDpi);
             }
-            if (interrupted) captureFailed("화면 방향이 바뀌었습니다. 선택지가 멈춘 뒤 다시 눌러 주세요.", List.of());
+            if (interrupted) captureFailed(getString(R.string.orientation_changed), List.of());
         });
     }
 
@@ -388,7 +434,7 @@ public final class OverlayCaptureService extends Service {
             BubbleIconView bubble = new BubbleIconView(this);
             bubble.setCircleProgress(BubbleAppearance.loadCircleProgress(this));
             bubble.setCaptureActive(captureActive);
-            bubble.setContentDescription(captureActive ? "여정 선택지 읽기" : "화면 공유 다시 연결");
+            bubble.setContentDescription(captureActive ? getString(R.string.read_choices) : getString(R.string.reconnect_capture));
             bubble.setClickable(true);
             bubble.setOnClickListener(view -> beginCapture());
 
@@ -419,11 +465,11 @@ public final class OverlayCaptureService extends Service {
             return;
         }
         if (databaseUpdating.get() || JourneyDatabaseUpdater.isUpdating()) {
-            showInfo("DB 업데이트 중", "업데이트가 끝난 뒤 선택지를 다시 읽어 주세요.");
+            showInfo(getString(R.string.update_busy), getString(R.string.wait_for_update));
             return;
         }
         if (matcherStore.current() == null) {
-            showError("잠시만 기다려 주세요", "선택지 데이터를 준비하고 있습니다.", List.of());
+            showError(getString(R.string.please_wait), getString(R.string.preparing_data), List.of());
             return;
         }
         if (!captureSession.beginCapture()) return;
@@ -486,7 +532,7 @@ public final class OverlayCaptureService extends Service {
         synchronized (pipelineLock) {
             if (!captureSession.isCapturing() || virtualDisplay == null || imageReader == null) {
                 captureSession.finishCapture();
-                captureFailed("화면 공유가 종료되었습니다.", List.of());
+                captureFailed(getString(R.string.capture_ended), List.of());
                 return;
             }
             drainImagesLocked();
@@ -499,7 +545,7 @@ public final class OverlayCaptureService extends Service {
                     if (virtualDisplay != null) virtualDisplay.setSurface(null);
                     if (imageReader != null) imageReader.setOnImageAvailableListener(null, null);
                 }
-                captureFailed("화면을 가져오지 못했습니다. 화면 공유를 다시 시작해 주세요.", List.of());
+                captureFailed(getString(R.string.capture_frame_failed), List.of());
             };
             captureHandler.postDelayed(captureTimeout, 3000);
         }
@@ -513,7 +559,7 @@ public final class OverlayCaptureService extends Service {
             image = reader.acquireLatestImage();
         } catch (IllegalStateException closedReader) {
             captureSession.finishCapture(generation);
-            captureFailed("화면 크기가 바뀌었습니다. 다시 눌러 주세요.", List.of());
+            captureFailed(generation, getString(R.string.screen_resized), List.of());
             return;
         }
         if (image == null) return;
@@ -550,7 +596,7 @@ public final class OverlayCaptureService extends Service {
                 } catch (RuntimeException ignored) {}
                 recycleBitmaps(eventCrop, choiceCrop, full);
                 captureSession.finishCapture(generation);
-                captureFailed("화면 처리 중 오류가 발생했습니다: " + error.getMessage(), List.of());
+                captureFailed(generation, getString(R.string.capture_error_prefix) + error.getMessage(), List.of());
             }
         });
     }
@@ -624,7 +670,7 @@ public final class OverlayCaptureService extends Service {
                     && !currentMatcher.hasPlausibleChoiceSignal(choiceLines)) {
                 recycleBitmaps(eventBitmap, fullBitmap);
                 captureSession.finishCapture(generation);
-                mainHandler.post(() -> showStamina(stamina));
+                mainHandler.post(() -> showStamina(generation, stamina));
                 return;
             }
 
@@ -667,7 +713,7 @@ public final class OverlayCaptureService extends Service {
             if (stamina != null) {
                 recycleBitmaps(fullBitmap);
                 captureSession.finishCapture(generation);
-                mainHandler.post(() -> showStamina(stamina));
+                mainHandler.post(() -> showStamina(generation, stamina));
             } else {
                 recognizeFull(fullBitmap, generation, List.of(), null, null);
             }
@@ -685,7 +731,7 @@ public final class OverlayCaptureService extends Service {
         if (decision.action == JourneyRecognitionCoordinator.Action.DATA_UNAVAILABLE) {
             recycleBitmaps(fullBitmap);
             captureSession.finishCapture(generation);
-            captureFailed("선택지 데이터를 아직 준비하고 있습니다. 잠시 후 다시 눌러 주세요.", List.of());
+            captureFailed(generation, getString(R.string.data_not_ready), List.of());
             return;
         }
         if (decision.action == JourneyRecognitionCoordinator.Action.SHOW_MATCH) {
@@ -693,7 +739,7 @@ public final class OverlayCaptureService extends Service {
                     fullBitmap, decision.match.event, decision.difficulty, arcanaAnchor);
             recycleBitmaps(fullBitmap);
             captureSession.finishCapture(generation);
-            mainHandler.post(() -> showMatch(
+            mainHandler.post(() -> showMatch(generation,
                     decision.match, decision.difficulty, stamina, recognizedArcanaIds));
         } else {
             recognizeFull(fullBitmap, generation, choiceLines, stamina, arcanaAnchor);
@@ -726,7 +772,7 @@ public final class OverlayCaptureService extends Service {
             if (decision.action == JourneyRecognitionCoordinator.Action.DATA_UNAVAILABLE) {
                 recycleBitmaps(fullBitmap);
                 captureSession.finishCapture(generation);
-                captureFailed("선택지 데이터를 아직 준비하고 있습니다. 잠시 후 다시 눌러 주세요.", List.of());
+                captureFailed(generation, getString(R.string.data_not_ready), List.of());
                 return;
             }
             if (decision.action == JourneyRecognitionCoordinator.Action.SHOW_MATCH) {
@@ -734,25 +780,25 @@ public final class OverlayCaptureService extends Service {
                         fullBitmap, decision.match.event, decision.difficulty, arcanaAnchor);
                 recycleBitmaps(fullBitmap);
                 captureSession.finishCapture(generation);
-                mainHandler.post(() -> showMatch(
+                mainHandler.post(() -> showMatch(generation,
                         decision.match, decision.difficulty, stamina, recognizedArcanaIds));
                 return;
             }
             recycleBitmaps(fullBitmap);
             captureSession.finishCapture(generation);
             if (stamina != null) {
-                mainHandler.post(() -> showStamina(stamina));
+                mainHandler.post(() -> showStamina(generation, stamina));
             } else if (decision.action == JourneyRecognitionCoordinator.Action.AMBIGUOUS) {
-                captureFailed("같은 선택지를 사용하는 이벤트가 있습니다. 왼쪽 이벤트명이 모두 보이도록 한 뒤 다시 눌러 주세요.", lines);
+                captureFailed(generation, getString(R.string.ambiguous_event), lines);
             } else {
-                captureFailed("선택지를 충분히 읽지 못했습니다. 선택지가 모두 보이는 화면에서 다시 눌러 주세요.", lines);
+                captureFailed(generation, getString(R.string.choices_unreadable), lines);
             }
         }).addOnFailureListener(worker, error -> {
             recycleBitmaps(fullBitmap);
             if (isProjectionSessionActive(generation)) {
                 captureSession.finishCapture(generation);
-                if (stamina != null) mainHandler.post(() -> showStamina(stamina));
-                else captureFailed("한국어 글자 인식에 실패했습니다: " + error.getMessage(), List.of());
+                if (stamina != null) mainHandler.post(() -> showStamina(generation, stamina));
+                else captureFailed(generation, getString(R.string.ocr_error_prefix) + error.getMessage(), List.of());
             } else {
                 captureSession.finishCapture(generation);
             }
@@ -777,11 +823,7 @@ public final class OverlayCaptureService extends Service {
         if (text == null || scaleX <= 0.0 || scaleY <= 0.0) return null;
         for (Text.TextBlock block : text.getTextBlocks()) {
             for (Text.Line line : block.getLines()) {
-                String normalized = JourneyMatcher.normalize(line.getText());
-                if (!normalized.contains("\uc544\ub974\uce74\ub098")
-                        || !normalized.contains("\uc774\ubca4\ud2b8")) {
-                    continue;
-                }
+                if (!language.isArcanaHeader(line.getText())) continue;
                 Rect box = line.getBoundingBox();
                 if (box == null || box.height() <= 0) continue;
                 return new ArcanaImageRecognizer.Anchor(
@@ -854,10 +896,10 @@ public final class OverlayCaptureService extends Service {
         return result;
     }
 
-    private void showMatch(JourneyModels.Match match, String difficulty,
+    private void showMatch(int generation, JourneyModels.Match match, String difficulty,
                            StaminaGaugeDetector.Result stamina,
                            Set<String> recognizedArcanaIds) {
-        if (!captureActive || destroying) return;
+        if (!isProjectionSessionActive(generation) || destroying) return;
         setBubbleGlyph("✓");
         mainHandler.postDelayed(() -> setBubbleGlyph("✦"), 900);
         dismissResult();
@@ -866,8 +908,8 @@ public final class OverlayCaptureService extends Service {
         addResultView(resultView);
     }
 
-    private void showStamina(StaminaGaugeDetector.Result stamina) {
-        if (!captureActive || destroying || stamina == null) return;
+    private void showStamina(int generation, StaminaGaugeDetector.Result stamina) {
+        if (!isProjectionSessionActive(generation) || destroying || stamina == null) return;
         setBubbleGlyph("✓");
         mainHandler.postDelayed(() -> setBubbleGlyph("✦"), 900);
         dismissResult();
@@ -876,17 +918,23 @@ public final class OverlayCaptureService extends Service {
     }
 
     private void captureFailed(String message, List<String> lines) {
+        captureFailed(captureSession.generation(), message, lines);
+    }
+
+    private void captureFailed(int generation, String message, List<String> lines) {
         mainHandler.post(() -> {
+            if (!isProjectionSessionActive(generation) || destroying) return;
             if (bubbleView != null) bubbleView.setVisibility(View.VISIBLE);
-            if (!captureActive || destroying) return;
             setBubbleGlyph("!");
             mainHandler.postDelayed(() -> setBubbleGlyph("✦"), 1200);
-            showError("인식하지 못했습니다", message, lines);
+            showError(getString(R.string.recognition_failed), message, lines);
         });
     }
 
     private void showError(String title, String message, List<String> lines) {
+        Context renderingContext = languageContext;
         mainHandler.post(() -> {
+            if (destroying || AppLanguage.of(renderingContext) != language) return;
             dismissResult();
             resultView = OverlayResultView.error(this, title, message, lines, this::dismissResult);
             addResultView(resultView);
@@ -911,47 +959,49 @@ public final class OverlayCaptureService extends Service {
     }
 
     private void showInfo(String title, String message) {
+        Context renderingContext = languageContext;
         mainHandler.post(() -> {
-            if (destroying) return;
+            if (destroying || AppLanguage.of(renderingContext) != language) return;
             dismissResult();
             resultView = OverlayResultView.info(this, title, message, this::dismissResult);
             addResultView(resultView);
         });
     }
 
-    private void updateInfoMessage(String message) {
+    private void updateInfoMessage(GameLanguage messageLanguage, String message) {
         mainHandler.post(() -> {
-            if (!destroying) OverlayResultView.updateInfo(resultView, message);
+            if (!destroying && messageLanguage == language) OverlayResultView.updateInfo(resultView, message);
         });
     }
 
     private void startDatabaseUpdateFromOverlay() {
         dismissResult();
         if (!databaseUpdating.compareAndSet(false, true)) {
-            showInfo("DB 업데이트 중", "이미 최신 데이터를 확인하고 있습니다.");
+            showInfo(getString(R.string.update_busy), getString(R.string.already_checking));
             return;
         }
 
         setBubbleGlyph("↻");
-        showInfo("DB 업데이트", "최신 버전을 확인하고 있습니다…");
+        showInfo(getString(R.string.update_database), getString(R.string.checking_latest));
+        Context operationContext = languageContext;
         worker.execute(() -> {
             try {
                 JourneyDatabaseUpdater.UpdateResult result = JourneyDatabaseUpdater.update(
-                        this, this::updateInfoMessage);
-                if (result.data != null) matcherStore.reload(() -> result.data);
+                        operationContext, message -> updateInfoMessage(AppLanguage.of(operationContext), message));
+                if (result.data != null && result.data.language.equals(language.tag)) matcherStore.reload(() -> result.data);
                 databaseUpdating.set(false);
                 mainHandler.post(() -> {
-                    if (destroying) return;
+                    if (destroying || AppLanguage.of(operationContext) != language) return;
                     setBubbleGlyph(result.changed ? "✓" : "✦");
-                    showInfo(result.changed ? "DB 업데이트 완료" : "DB 업데이트", result.message);
+                    showInfo(result.changed ? getString(R.string.update_complete) : getString(R.string.update_database), result.message(languageContext));
                     if (result.changed) mainHandler.postDelayed(() -> setBubbleGlyph("✦"), 1200);
                 });
             } catch (Exception error) {
                 databaseUpdating.set(false);
                 mainHandler.post(() -> {
-                    if (destroying) return;
+                    if (destroying || AppLanguage.of(operationContext) != language) return;
                     setBubbleGlyph("!");
-                    showInfo("DB 업데이트 실패", friendlyUpdateError(error));
+                    showInfo(getString(R.string.update_failed), friendlyUpdateError(error));
                     mainHandler.postDelayed(() -> setBubbleGlyph("✦"), 1400);
                 });
             }
@@ -959,17 +1009,21 @@ public final class OverlayCaptureService extends Service {
     }
 
     private void reloadMatcher() {
+        Context selectedContext = languageContext;
         worker.execute(() -> {
             try {
-                matcherStore.reload(() -> JourneyRepository.load(this));
+                JourneyModels.Data loaded = JourneyRepository.load(selectedContext);
+                if (loaded.language.equals(language.tag)) matcherStore.reload(() -> loaded);
                 mainHandler.post(() -> {
-                    if (destroying) return;
+                    if (destroying || AppLanguage.of(selectedContext) != language) return;
                     setBubbleGlyph("✓");
                     mainHandler.postDelayed(() -> setBubbleGlyph("✦"), 900);
                 });
             } catch (Exception error) {
                 mainHandler.post(() -> {
-                    if (!destroying) showError("DB 다시 읽기 실패", "기존 데이터를 계속 사용합니다.", List.of());
+                    if (!destroying && AppLanguage.of(selectedContext) == language) {
+                        showError(getString(R.string.reload_failed), getString(R.string.keep_existing_data), List.of());
+                    }
                 });
             }
         });
@@ -978,7 +1032,7 @@ public final class OverlayCaptureService extends Service {
     private String friendlyUpdateError(Exception error) {
         String detail = error.getMessage();
         if (detail == null || detail.trim().isEmpty()) detail = error.getClass().getSimpleName();
-        return "현재 DB는 그대로 유지했습니다. 인터넷 연결과 DB 배포 서버 상태를 확인한 뒤 다시 시도해 주세요.\n\n" + detail;
+        return getString(R.string.overlay_update_error_detail) + detail;
     }
 
     private void addResultView(View view) {

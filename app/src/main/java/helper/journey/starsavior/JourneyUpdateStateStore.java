@@ -47,6 +47,6 @@ final class JourneyUpdateStateStore {
     }
 
     private static SharedPreferences preferences(Context context) {
-        return context.getApplicationContext().getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE);
+        return context.getApplicationContext().getSharedPreferences(PREFERENCES + "_v5_" + AppLanguage.of(context).tag, Context.MODE_PRIVATE);
     }
 }

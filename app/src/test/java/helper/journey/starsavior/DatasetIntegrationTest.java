@@ -44,13 +44,6 @@ public class DatasetIntegrationTest {
         assertEquals("예제 효과 A", match.event.choices.get(0).outcomes.get(0).success);
     }
 
-    @Test
-    public void sameProgressCopyMatchesTheApprovedMessage() {
-        assertEquals("선택에 따른 차이 없음", OverlayResultView.sameProgressTitle());
-        assertEquals("어느 쪽을 골라도 동일하게 진행됩니다.",
-                OverlayResultView.sameProgressMessage());
-    }
-
     private static Path exampleAsset() {
         Path asset = Path.of("app/src/main/assets/journey_choices.example.json");
         if (!Files.exists(asset)) asset = Path.of("src/main/assets/journey_choices.example.json");
