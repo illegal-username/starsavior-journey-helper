@@ -48,12 +48,6 @@ final class ArcanaRecognitionStatus {
         return new ArcanaRecognitionStatus(true, true, detectedSource);
     }
 
-    String message() {
-        if (!applicable) return "";
-        if (!recognized) return "아르카나 이미지 판별 실패 · 전체 결과 표시";
-        return "감지된 아르카나: " + detectedSource;
-    }
-
     private static boolean containsAny(List<String> values, Set<String> expected) {
         for (String value : values) {
             if (expected.contains(value)) return true;

@@ -86,43 +86,35 @@ final class JourneyDatabaseUpdater {
         final boolean busy;
         final boolean incompatible;
         final JourneyModels.Data data;
-        final String message;
+        private final int messageId;
+        private final Object[] arguments;
 
-        private UpdateResult(
-                boolean changed,
-                boolean busy,
-                boolean incompatible,
-                JourneyModels.Data data,
-                String message) {
+        private UpdateResult(boolean changed, boolean busy, boolean incompatible,
+                JourneyModels.Data data, int messageId, Object... arguments) {
             this.changed = changed;
             this.busy = busy;
             this.incompatible = incompatible;
             this.data = data;
-            this.message = message;
+            this.messageId = messageId;
+            this.arguments = arguments;
         }
+
+        String message(Context context) { return context.getString(messageId, arguments); }
 
         static UpdateResult busy() {
-            return new UpdateResult(false, true, false, null, "이미 DB를 업데이트하고 있습니다.");
+            return new UpdateResult(false, true, false, null, R.string.update_already_busy);
         }
-
         static UpdateResult current(JourneyModels.Data data) {
-            return new UpdateResult(false, false, false, data,
-                    String.format(Locale.KOREA, "이미 최신 DB입니다. (레코드 %,d개 · 선택지 %,d개)",
-                            data.recordCount, data.choiceCount));
+            return new UpdateResult(false, false, false, data, R.string.update_current,
+                    data.recordCount, data.choiceCount);
         }
-
         static UpdateResult incompatible(JourneyModels.Data data, JourneyDatabaseManifest manifest) {
-            return new UpdateResult(false, false, true, data,
-                    String.format(Locale.KOREA,
-                            "새 DB는 더 최신 앱이 필요합니다. 현재 앱을 업데이트한 뒤 다시 확인해 주세요. "
-                                    + "(필요 versionCode %d 이상)",
-                            manifest.minimumAppVersionCode));
+            return new UpdateResult(false, false, true, data, R.string.update_requires_version,
+                    manifest.minimumAppVersionCode);
         }
-
         static UpdateResult installed(JourneyModels.Data data) {
-            return new UpdateResult(true, false, false, data,
-                    String.format(Locale.KOREA, "최신 DB를 적용했습니다. (레코드 %,d개 · 선택지 %,d개)",
-                            data.recordCount, data.choiceCount));
+            return new UpdateResult(true, false, false, data, R.string.update_installed,
+                    data.recordCount, data.choiceCount);
         }
     }
 
@@ -145,7 +137,7 @@ final class JourneyDatabaseUpdater {
     }
 
     static CheckResult checkForUpdate(Context context, boolean force) throws Exception {
-        Context application = context.getApplicationContext();
+        Context application = context;
         JourneyModels.Data current = JourneyRepository.load(application);
         if (BuildConfig.BUNDLED_TEST_DATABASE) return CheckResult.current(current, false);
         if (!UPDATING.compareAndSet(false, true)) return CheckResult.busy(current);
@@ -158,32 +150,32 @@ final class JourneyDatabaseUpdater {
 
     static UpdateResult update(Context context, ProgressListener listener) throws Exception {
         if (!UPDATING.compareAndSet(false, true)) return UpdateResult.busy();
-        Context application = context.getApplicationContext();
+        Context application = context;
         try {
             JourneyModels.Data current = JourneyRepository.load(application);
             if (BuildConfig.BUNDLED_TEST_DATABASE) {
-                return new UpdateResult(false, false, false, current, "테스트 APK는 내장 DB를 사용합니다.");
+                return new UpdateResult(false, false, false, current, R.string.test_uses_bundled);
             }
-            progress(listener, "최신 버전을 확인하고 있습니다…");
+            progress(listener, application.getString(R.string.checking_latest));
             CheckResult check = checkLocked(application, current, true);
             if (check.incompatible && check.manifest != null) {
                 return UpdateResult.incompatible(current, check.manifest);
             }
             if (!check.available) return UpdateResult.current(current);
 
-            progress(listener, "선택지 DB를 받고 있습니다…");
+            progress(listener, application.getString(R.string.downloading_database));
             ensureNotInterrupted();
             String downloaded = check.downloadedDatabase;
             if (downloaded == null) {
                 downloaded = requireDatabaseResponse(
-                        request(DATABASE_URL, MAX_FILE_BYTES, "", "manual database update"));
+                        request(GameLanguage.require(current.language).databaseUrl(), MAX_FILE_BYTES, "", "manual database update"));
             }
             JourneyModels.Data candidate = JourneyRepository.parse(downloaded);
             validateRemoteDatabase(current, candidate);
             if (check.manifest != null) check.manifest.verifyCandidate(candidate);
             if (sameDatabase(current, candidate)) return UpdateResult.current(current);
 
-            progress(listener, "검증된 DB를 적용하고 있습니다…");
+            progress(listener, application.getString(R.string.applying_database));
             ensureNotInterrupted();
             JourneyModels.Data installed = JourneyRepository.installUpdated(application, downloaded);
             return UpdateResult.installed(installed);
@@ -193,6 +185,7 @@ final class JourneyDatabaseUpdater {
     }
 
     static boolean sameDatabase(JourneyModels.Data current, JourneyModels.Data candidate) {
+        if (!current.language.equals(candidate.language)) return false;
         if (!current.source.equals(candidate.source)) return false;
         if (!current.contentSha256.isEmpty() && !candidate.contentSha256.isEmpty()) {
             return current.contentSha256.equals(candidate.contentSha256);
@@ -204,11 +197,14 @@ final class JourneyDatabaseUpdater {
     static void validateRemoteDatabase(JourneyModels.Data current, JourneyModels.Data candidate)
             throws JSONException {
         JourneyRepository.validate(candidate);
-        if (!DATABASE_URL.equals(candidate.source)) {
-            throw new JSONException("DB 출처 주소가 일치하지 않습니다.");
+        JourneyRepository.requireLanguage(candidate, GameLanguage.require(current.language));
+        String expectedSource = candidate.schema == 4 ? DATABASE_URL
+                : GameLanguage.require(current.language).databaseUrl();
+        if (!expectedSource.equals(candidate.source)) {
+            throw new JSONException("Database source URL mismatch.");
         }
         if (candidate.upstreamRevision.trim().isEmpty()) {
-            throw new JSONException("DB 원본 버전이 비어 있습니다.");
+            throw new JSONException("Empty database source revision.");
         }
         validateCounts(current, candidate.recordCount, candidate.choiceCount);
     }
@@ -216,6 +212,7 @@ final class JourneyDatabaseUpdater {
     static void validateManifestAgainstCurrent(
             JourneyModels.Data current, JourneyDatabaseManifest manifest) throws JSONException {
         manifest.validate();
+        if (!current.language.equals(manifest.language)) throw new JSONException("Manifest language mismatch.");
         validateCounts(current, manifest.recordCount, manifest.choiceCount);
     }
 
@@ -224,7 +221,7 @@ final class JourneyDatabaseUpdater {
         JourneyUpdateStateStore.State state = JourneyUpdateStateStore.load(application);
         JourneyDatabaseManifest cachedManifest = state.manifest();
         HttpResponse response = request(
-                MANIFEST_URL,
+                GameLanguage.require(current.language).manifestUrl(),
                 MAX_MANIFEST_BYTES,
                 state.manifestEtag,
                 force ? "manual database update check" : "automatic database update check");
@@ -233,7 +230,7 @@ final class JourneyDatabaseUpdater {
             JourneyDatabaseManifest cached = cachedManifest;
             if (cached == null) {
                 response = request(
-                        MANIFEST_URL,
+                        GameLanguage.require(current.language).manifestUrl(),
                         MAX_MANIFEST_BYTES,
                         "",
                         force ? "manual database update check" : "automatic database update check");
@@ -249,7 +246,7 @@ final class JourneyDatabaseUpdater {
 
         if (response.status == HttpURLConnection.HTTP_NOT_FOUND) {
             String downloaded = requireDatabaseResponse(request(
-                    DATABASE_URL,
+                    GameLanguage.require(current.language).databaseUrl(),
                     MAX_FILE_BYTES,
                     "",
                     force ? "manual database update fallback" : "automatic database update fallback"));
@@ -261,7 +258,7 @@ final class JourneyDatabaseUpdater {
             return CheckResult.classify(current, synthetic, true, downloaded);
         }
 
-        String manifestJson = requireJsonResponse(response, "DB 릴리스 정보 확인");
+        String manifestJson = requireJsonResponse(response, "Database manifest request");
         JourneyDatabaseManifest manifest = JourneyDatabaseManifest.parse(manifestJson);
         validateManifestAgainstCurrent(current, manifest);
         JourneyUpdateStateStore.recordManifestSuccess(
@@ -271,7 +268,7 @@ final class JourneyDatabaseUpdater {
 
     private static JourneyDatabaseManifest manifestFrom(JourneyModels.Data data) throws JSONException {
         JourneyDatabaseManifest manifest = new JourneyDatabaseManifest(
-                JourneyDatabaseManifest.MANIFEST_SCHEMA,
+                data.schema == 4 ? 1 : JourneyDatabaseManifest.MANIFEST_SCHEMA,
                 data.schema,
                 data.contentSha256,
                 data.contentLength,
@@ -279,7 +276,7 @@ final class JourneyDatabaseUpdater {
                 data.generatedAt,
                 data.recordCount,
                 data.choiceCount,
-                1);
+                1, data.language);
         manifest.validate();
         return manifest;
     }
@@ -289,7 +286,7 @@ final class JourneyDatabaseUpdater {
         int minimumRecords = Math.max(20, current.recordCount / 2);
         int minimumChoices = Math.max(40, current.choiceCount / 2);
         if (candidateRecords < minimumRecords || candidateChoices < minimumChoices) {
-            throw new JSONException("새 DB의 데이터가 비정상적으로 적어 적용하지 않았습니다.");
+            throw new JSONException("The new database contains too few records; installation refused.");
         }
     }
 
@@ -305,14 +302,14 @@ final class JourneyDatabaseUpdater {
                 return new HttpResponse(status, "", responseEtag);
             }
             if (status < 200 || status >= 300) {
-                throw new IOException("데이터 서버 요청 실패 (HTTP " + status + ")");
+                throw new IOException("Database request failed (HTTP " + status + ")");
             }
             long declared = connection.getContentLengthLong();
-            if (declared > maximumBytes) throw new IOException("데이터 서버 응답이 너무 큽니다.");
+            if (declared > maximumBytes) throw new IOException("Database response is too large.");
             String contentType = connection.getContentType();
             if (contentType == null
                     || !contentType.toLowerCase(Locale.ROOT).startsWith("application/json")) {
-                throw new IOException("데이터 서버가 JSON으로 응답하지 않았습니다.");
+                throw new IOException("The database server did not return JSON.");
             }
 
             byte[] bytes;
@@ -342,12 +339,12 @@ final class JourneyDatabaseUpdater {
     }
 
     private static String requireDatabaseResponse(HttpResponse response) throws IOException {
-        return requireJsonResponse(response, "선택지 DB 다운로드");
+        return requireJsonResponse(response, "Choice database download");
     }
 
     private static String requireJsonResponse(HttpResponse response, String operation) throws IOException {
         if (response.status < 200 || response.status >= 300) {
-            throw new IOException(operation + " 실패 (HTTP " + response.status + ")");
+            throw new IOException(operation + " failed (HTTP " + response.status + ")");
         }
         return response.body;
     }
@@ -361,7 +358,7 @@ final class JourneyDatabaseUpdater {
             ensureNotInterrupted();
             fileBytes += count;
             if (fileBytes > maximumBytes) {
-                throw new IOException("데이터 서버 응답 크기가 안전 제한을 넘었습니다.");
+                throw new IOException("Database response exceeds the size limit.");
             }
             output.write(buffer, 0, count);
         }
@@ -369,7 +366,7 @@ final class JourneyDatabaseUpdater {
     }
 
     private static void ensureNotInterrupted() throws IOException {
-        if (Thread.currentThread().isInterrupted()) throw new IOException("DB 업데이트가 취소되었습니다.");
+        if (Thread.currentThread().isInterrupted()) throw new IOException("Database update cancelled.");
     }
 
     private static void progress(ProgressListener listener, String message) {

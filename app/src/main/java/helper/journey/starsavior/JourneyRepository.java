@@ -30,27 +30,34 @@ public final class JourneyRepository {
     private JourneyRepository() {}
 
     public static JourneyModels.Data load(Context context) throws IOException, JSONException {
+        GameLanguage language = AppLanguage.of(context);
         synchronized (FILE_LOCK) {
             if (BuildConfig.BUNDLED_TEST_DATABASE) {
-                JourneyModels.Data bundledTest = tryLoadAsset(context, ASSET_NAME);
+                JourneyModels.Data bundledTest = tryLoadAsset(context, language.tag + "/" + ASSET_NAME, language);
                 if (bundledTest != null) return bundledTest;
-                throw new IOException("테스트 APK의 내장 선택지 DB를 읽지 못했습니다.");
+                throw new IOException("Cannot load the bundled database for this language.");
             }
 
             JourneyModels.Data updated = tryLoadFile(
-                    JourneyDatabaseFileStore.updated(context.getFilesDir()));
+                    JourneyDatabaseFileStore.updated(databaseDirectory(context)), language);
             if (updated != null) return updated;
 
             JourneyModels.Data previous = tryLoadFile(
-                    JourneyDatabaseFileStore.previous(context.getFilesDir()));
+                    JourneyDatabaseFileStore.previous(databaseDirectory(context)), language);
             if (previous != null) return previous;
 
-            JourneyModels.Data bundled = tryLoadAsset(context, ASSET_NAME);
+            if (language == GameLanguage.KOREAN) {
+                JourneyModels.Data legacy = tryLoadFile(JourneyDatabaseFileStore.updated(context.getFilesDir()), language);
+                if (legacy == null) legacy = tryLoadFile(JourneyDatabaseFileStore.previous(context.getFilesDir()), language);
+                if (legacy != null) return legacy;
+            }
+
+            JourneyModels.Data bundled = tryLoadAsset(context, language.tag + "/" + ASSET_NAME, language);
             if (bundled != null) return bundled;
 
-            JourneyModels.Data example = tryLoadAsset(context, EXAMPLE_ASSET_NAME);
+            JourneyModels.Data example = tryLoadAsset(context, language.tag + "/" + EXAMPLE_ASSET_NAME, language);
             if (example != null) return example;
-            throw new IOException("내장 또는 예제 선택지 DB를 읽지 못했습니다.");
+            throw new IOException("Cannot load the bundled or example database.");
         }
     }
 
@@ -61,22 +68,37 @@ public final class JourneyRepository {
     public static JourneyModels.Data installUpdated(Context context, String json) throws IOException, JSONException {
         JourneyModels.Data parsed = parse(json);
         validate(parsed);
+        requireLanguage(parsed, AppLanguage.of(context));
 
         synchronized (FILE_LOCK) {
-            JourneyDatabaseFileStore.install(context.getFilesDir(), json);
+            JourneyDatabaseFileStore.install(databaseDirectory(context), json);
         }
         return parsed;
     }
 
     public static boolean hasDownloadedDatabase(Context context) {
         synchronized (FILE_LOCK) {
-            return JourneyDatabaseFileStore.updated(context.getFilesDir()).isFile();
+            return JourneyDatabaseFileStore.updated(databaseDirectory(context)).isFile()
+                    || (AppLanguage.of(context) == GameLanguage.KOREAN
+                    && JourneyDatabaseFileStore.updated(context.getFilesDir()).isFile());
         }
+    }
+
+    static File databaseDirectory(Context context) {
+        return JourneyDatabaseFileStore.directory(context.getFilesDir(), AppLanguage.of(context));
+    }
+
+    static void requireLanguage(JourneyModels.Data data, GameLanguage language) throws JSONException {
+        if (!language.tag.equals(data.language)) throw new JSONException("Database language mismatch.");
     }
 
     static JourneyModels.Data parse(String json) throws JSONException {
         byte[] content = json.getBytes(StandardCharsets.UTF_8);
         JSONObject root = new JSONObject(json);
+        if (root.optInt("schema") == 4 && root.has("language")
+                && !"ko-KR".equals(root.optString("language"))) {
+            throw new JSONException("Legacy DB cannot declare another language.");
+        }
         Map<String, JourneyModels.ArcanaImageFeature> arcanaImageFeatures =
                 parseArcanaImageFeatures(root.optJSONObject("arcanaImageFeatures"));
         JSONArray records = root.getJSONArray("records");
@@ -108,10 +130,10 @@ public final class JourneyRepository {
                         for (int arcanaIndex = 0; arcanaIndex < arcanaIdsJson.length(); arcanaIndex++) {
                             String arcanaId = arcanaIdsJson.getString(arcanaIndex).trim();
                             if (arcanaId.isEmpty()) {
-                                throw new JSONException("아르카나 출처 ID가 비어 있습니다.");
+                                throw new JSONException("Arcana source ID is empty.");
                             }
                             if (!seenArcanaIds.add(arcanaId)) {
-                                throw new JSONException("아르카나 출처 ID가 중복되었습니다.");
+                                throw new JSONException("Duplicate Arcana source ID.");
                             }
                             arcanaIds.add(arcanaId);
                         }
@@ -148,7 +170,8 @@ public final class JourneyRepository {
                 sha256(content),
                 content.length,
                 events,
-                arcanaImageFeatures
+                arcanaImageFeatures,
+                root.optInt("schema", 1) == 4 ? "ko-KR" : root.getString("language")
         );
     }
 
@@ -190,16 +213,19 @@ public final class JourneyRepository {
     }
 
     static void validate(JourneyModels.Data data) throws JSONException {
-        if (data.schema != 4) throw new JSONException("지원하지 않는 DB 형식입니다.");
-        if (data.events.isEmpty()) throw new JSONException("선택지 레코드가 없습니다.");
-        if (data.recordCount != data.events.size()) throw new JSONException("레코드 개수가 일치하지 않습니다.");
+        if (data.schema != 4 && data.schema != 5) throw new JSONException("Unsupported database schema.");
+        try { GameLanguage.require(data.language); }
+        catch (IllegalArgumentException error) { throw new JSONException(error.getMessage()); }
+        if (data.schema == 4 && !"ko-KR".equals(data.language)) throw new JSONException("Legacy DB must be Korean.");
+        if (data.events.isEmpty()) throw new JSONException("No choice records.");
+        if (data.recordCount != data.events.size()) throw new JSONException("Record count mismatch.");
 
         int actualChoices = 0;
         Set<String> signatures = new HashSet<>();
         Set<String> ambiguousArcanaIds = new HashSet<>();
         for (JourneyModels.Event event : data.events) {
-            if (event.name.trim().isEmpty()) throw new JSONException("이벤트 이름이 비어 있습니다.");
-            if (event.choices.size() < 2) throw new JSONException("선택지가 두 개보다 적은 이벤트가 있습니다.");
+            if (event.name.trim().isEmpty()) throw new JSONException("Empty event name.");
+            if (event.choices.size() < 2) throw new JSONException("An event contains fewer than two choices.");
             StringBuilder signature = new StringBuilder(event.sameProgress
                     ? "same-progress|"
                     : "choice-results|");
@@ -207,15 +233,15 @@ public final class JourneyRepository {
             Set<String> eventArcanaIds = new HashSet<>();
             for (JourneyModels.Choice choice : event.choices) {
                 String normalized = JourneyMatcher.normalize(choice.text);
-                if (normalized.isEmpty()) throw new JSONException("선택지 문구가 비어 있습니다.");
-                if (choice.outcomes.isEmpty()) throw new JSONException("선택지 결과가 비어 있습니다.");
+                if (normalized.isEmpty()) throw new JSONException("Empty choice text.");
+                if (choice.outcomes.isEmpty()) throw new JSONException("Empty choice outcomes.");
                 Set<String> choiceTexts = new HashSet<>();
                 choiceTexts.add(normalized);
                 for (String alias : choice.aliases) {
                     String normalizedAlias = JourneyMatcher.normalize(alias);
-                    if (normalizedAlias.isEmpty()) throw new JSONException("선택지 별칭이 비어 있습니다.");
+                    if (normalizedAlias.isEmpty()) throw new JSONException("Empty choice alias.");
                     if (!choiceTexts.add(normalizedAlias)) {
-                        throw new JSONException("선택지 별칭이 중복되었습니다.");
+                        throw new JSONException("Duplicate choice alias.");
                     }
                 }
                 for (JourneyModels.Outcome outcome : choice.outcomes) {
@@ -223,10 +249,10 @@ public final class JourneyRepository {
                     eventArcanaIds.addAll(outcome.arcanaIds);
                     for (String arcanaId : outcome.arcanaIds) {
                         if (arcanaId.trim().isEmpty()) {
-                            throw new JSONException("아르카나 출처 ID가 비어 있습니다.");
+                            throw new JSONException("Arcana source ID is empty.");
                         }
                         if (!arcanaIds.add(arcanaId)) {
-                            throw new JSONException("아르카나 출처 ID가 중복되었습니다.");
+                            throw new JSONException("Duplicate Arcana source ID.");
                         }
                     }
                 }
@@ -246,9 +272,9 @@ public final class JourneyRepository {
             if (eventArcanaIds.size() > 1 && distinguishableArcanaSources) {
                 ambiguousArcanaIds.addAll(eventArcanaIds);
             }
-            if (!signatures.add(signature.toString())) throw new JSONException("중복 이벤트·선택지 그룹이 있습니다.");
+            if (!signatures.add(signature.toString())) throw new JSONException("Duplicate event-choice group.");
         }
-        if (data.choiceCount != actualChoices) throw new JSONException("선택지 개수가 일치하지 않습니다.");
+        if (data.choiceCount != actualChoices) throw new JSONException("Choice count mismatch.");
         for (Map.Entry<String, JourneyModels.ArcanaImageFeature> entry
                 : data.arcanaImageFeatures.entrySet()) {
             JourneyModels.ArcanaImageFeature feature = entry.getValue();
@@ -283,26 +309,28 @@ public final class JourneyRepository {
         if (!value.has(name) || value.isNull(name)) return false;
         Object raw = value.get(name);
         if (!(raw instanceof Boolean)) {
-            throw new JSONException(name + " 값은 boolean이어야 합니다.");
+            throw new JSONException(name + " must be a boolean.");
         }
         return (Boolean) raw;
     }
 
-    private static JourneyModels.Data tryLoadFile(File file) {
+    private static JourneyModels.Data tryLoadFile(File file, GameLanguage language) {
         if (!file.isFile()) return null;
         try (InputStream input = new FileInputStream(file)) {
             JourneyModels.Data data = parse(readUtf8(input));
             validate(data);
+            requireLanguage(data, language);
             return data;
         } catch (IOException | JSONException ignored) {
             return null;
         }
     }
 
-    private static JourneyModels.Data tryLoadAsset(Context context, String name) {
+    private static JourneyModels.Data tryLoadAsset(Context context, String name, GameLanguage language) {
         try (InputStream input = context.getAssets().open(name)) {
             JourneyModels.Data data = parse(readUtf8(input));
             validate(data);
+            requireLanguage(data, language);
             return data;
         } catch (IOException | JSONException ignored) {
             return null;

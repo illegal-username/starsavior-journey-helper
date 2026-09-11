@@ -30,6 +30,10 @@ final class JourneyDatabaseFileStore {
 
     private JourneyDatabaseFileStore() {}
 
+    static File directory(File files, GameLanguage language) {
+        return new File(new File(files, "databases-v5"), language.tag);
+    }
+
     static File updated(File directory) {
         return new File(directory, UPDATED_NAME);
     }
@@ -43,6 +47,9 @@ final class JourneyDatabaseFileStore {
     }
 
     static void install(File directory, String json, FileOperations operations) throws IOException {
+        if (!directory.isDirectory() && !directory.mkdirs()) {
+            throw new IOException("Cannot create database directory.");
+        }
         File current = updated(directory);
         File previous = previous(directory);
         File temporary = new File(directory, TEMP_NAME);
@@ -55,17 +62,17 @@ final class JourneyDatabaseFileStore {
         }
 
         if (previous.exists() && !operations.delete(previous)) {
-            throw new IOException("이전 DB 백업을 정리하지 못했습니다.");
+            throw new IOException("Cannot remove the previous database backup.");
         }
         if (current.exists() && !operations.rename(current, previous)) {
-            throw new IOException("현재 DB를 백업하지 못했습니다.");
+            throw new IOException("Cannot back up the current database.");
         }
         if (!operations.rename(temporary, current)) {
             boolean restored = !previous.exists() || operations.rename(previous, current);
             if (!restored) {
-                throw new IOException("새 DB 적용과 기존 DB 복구에 실패했습니다.");
+                throw new IOException("Database installation and restoration failed.");
             }
-            throw new IOException("새 DB를 적용하지 못했습니다.");
+            throw new IOException("Cannot install the new database.");
         }
     }
 }

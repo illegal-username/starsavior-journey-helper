@@ -20,9 +20,6 @@ public class ArcanaRecognitionStatusTest {
         assertTrue(status.applicable);
         assertTrue(status.recognized);
         assertEquals("린 · 하얀 달의 온기는 햇빛처럼", status.detectedSource);
-        assertEquals(
-                "감지된 아르카나: 린 · 하얀 달의 온기는 햇빛처럼",
-                status.message());
     }
 
     @Test
@@ -32,7 +29,7 @@ public class ArcanaRecognitionStatusTest {
 
         assertTrue(status.applicable);
         assertFalse(status.recognized);
-        assertEquals("아르카나 이미지 판별 실패 · 전체 결과 표시", status.message());
+        assertEquals("", status.detectedSource);
     }
 
     @Test
@@ -48,7 +45,7 @@ public class ArcanaRecognitionStatusTest {
                 event, "", Set.of("only"));
 
         assertFalse(status.applicable);
-        assertEquals("", status.message());
+        assertFalse(status.recognized);
     }
 
     private static JourneyModels.Event eventWithSources(String... ids) {

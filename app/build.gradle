@@ -44,8 +44,8 @@ android {
         applicationId 'helper.journey.starsavior'
         minSdk 26
         targetSdk 35
-        versionCode 48
-        versionName '2.1.11'
+        versionCode 51
+        versionName '2.2.0'
         buildConfigField 'boolean', 'BUNDLED_TEST_DATABASE', 'false'
 
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
@@ -97,8 +97,11 @@ android.applicationVariants.configureEach { variant ->
 }
 
 dependencies {
-    // The Korean OCR model is bundled: recognition works offline on first run.
+    // Bundle script models so the selected language also works offline on first run.
     implementation 'com.google.mlkit:text-recognition-korean:16.0.1'
+    implementation 'com.google.mlkit:text-recognition:16.0.1'
+    implementation 'com.google.mlkit:text-recognition-japanese:16.0.1'
+    implementation 'com.google.mlkit:text-recognition-chinese:16.0.1'
 
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.json:json:20240303'
@@ -122,11 +125,9 @@ def validateReleaseDatabaseBoundary = tasks.register('validateReleaseDatabaseBou
     group = 'verification'
     description = 'Fails if a real journey database could enter the production release source sets.'
     doLast {
-        List<File> forbidden = [
-                file('src/main/assets/journey_choices.json'),
-                file('src/release/assets/journey_choices.json')
-        ]
-        List<File> present = forbidden.findAll { it.isFile() }
+        List<File> present = ['src/main/assets', 'src/release/assets'].collectMany { directory ->
+            fileTree(directory).matching { include '**/journey_choices.json' }.files.toList()
+        }
         if (!present.isEmpty()) {
             throw new GradleException(
                     'Production release must not bundle journey_choices.json: '
@@ -144,7 +145,7 @@ def validateBundledTestBuild = tasks.register('validateBundledTestBuild') {
             throw new GradleException('Supply -PbundledTestDatabase=<external journey_choices.json>.')
         }
         File database = file(bundledTestDatabase.get()).canonicalFile
-        if (!database.isFile()) {
+        if (!database.isFile() && !database.isDirectory()) {
             throw new GradleException("Bundled test database does not exist: ${database}")
         }
         if (database.toPath().startsWith(rootDir.canonicalFile.toPath())) {
@@ -171,27 +172,38 @@ def prepareBundledTestDatabase = tasks.register('prepareBundledTestDatabase') {
     description = 'Validates and stages an external journey DB only in the generated internal assets directory.'
     dependsOn(validateBundledTestBuild)
     inputs.property('databasePath', bundledTestDatabase.orElse(''))
-    if (bundledTestDatabase.isPresent()) inputs.file(file(bundledTestDatabase.get()))
-    outputs.file(bundledTestAssetsDirectory.map { it.file('journey_choices.json') })
+    if (bundledTestDatabase.isPresent()) {
+        File input = file(bundledTestDatabase.get())
+        if (input.isDirectory()) inputs.files(fileTree(input).matching { include '**/journey_choices.json' })
+        else inputs.file(input)
+    }
+    outputs.dir(bundledTestAssetsDirectory)
     doLast {
         File source = file(bundledTestDatabase.get()).canonicalFile
-        Object parsed
-        try {
-            parsed = new JsonSlurper().parse(source, 'UTF-8')
-        } catch (Exception error) {
-            throw new GradleException('Bundled test database is not valid UTF-8 JSON.', error)
+        List<String> languages = ['ko-KR', 'en-US', 'ja-JP', 'zh-TW', 'zh-CN', 'fr-FR', 'de-DE', 'es-ES', 'pt-BR', 'id-ID', 'vi-VN']
+        List<File> databases = source.isFile() ? [source] : fileTree(source).matching {
+            include '**/journey_choices.json'
+        }.files.sort { it.path }
+        if (databases.isEmpty()) throw new GradleException('No test databases found.')
+        Map<String, File> byLanguage = [:]
+        for (File database : databases) {
+            Object parsed = new JsonSlurper().parse(database, 'UTF-8')
+            if (!(parsed instanceof Map) || parsed.schema != 5 || !languages.contains(parsed.language)
+                    || !(parsed.records instanceof List) || parsed.records.isEmpty()) {
+                throw new GradleException('Test DB must be a non-empty schema 5 language DB.')
+            }
+            if (byLanguage.containsKey(parsed.language)) throw new GradleException('Duplicate test DB language.')
+            byLanguage[parsed.language] = database
         }
-        if (!(parsed instanceof Map)
-                || parsed.schema != 4
-                || !(parsed.records instanceof List)
-                || parsed.records.isEmpty()) {
-            throw new GradleException('Bundled test database must be a non-empty schema 4 compact DB.')
-        }
-        File destinationDirectory = bundledTestAssetsDirectory.get().asFile
-        copy {
-            from source
-            into destinationDirectory
-            rename { 'journey_choices.json' }
+        // Sync removes stale generated language packs when the input set changes.
+        project.sync { spec ->
+            spec.into(bundledTestAssetsDirectory)
+            byLanguage.each { language, database ->
+                spec.from(database) { entry ->
+                    entry.into(language)
+                    entry.rename { 'journey_choices.json' }
+                }
+            }
         }
     }
 }

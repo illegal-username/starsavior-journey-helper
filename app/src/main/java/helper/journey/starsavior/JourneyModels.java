@@ -13,6 +13,7 @@ public final class JourneyModels {
 
     public static final class Data {
         public final int schema;
+        public final String language;
         public final String generatedAt;
         public final String source;
         public final String upstreamRevision;
@@ -39,6 +40,15 @@ public final class JourneyModels {
         public Data(int schema, String generatedAt, String source, String upstreamRevision,
                     int recordCount, int choiceCount, String contentSha256, int contentLength,
                     List<Event> events, Map<String, ArcanaImageFeature> arcanaImageFeatures) {
+            this(schema, generatedAt, source, upstreamRevision, recordCount, choiceCount,
+                    contentSha256, contentLength, events, arcanaImageFeatures, "ko-KR");
+        }
+
+        public Data(int schema, String generatedAt, String source, String upstreamRevision,
+                    int recordCount, int choiceCount, String contentSha256, int contentLength,
+                    List<Event> events, Map<String, ArcanaImageFeature> arcanaImageFeatures,
+                    String language) {
+            this.language = language;
             this.schema = schema;
             this.generatedAt = generatedAt;
             this.source = source;
