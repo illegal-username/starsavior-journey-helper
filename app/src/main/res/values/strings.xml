@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">"StarSavior Journey Helper"</string>
+    <string name="app_name">"SS Journey Helper"</string>
     <string name="notification_channel">"Read Journey choices"</string>
     <string name="startup_failed">"Could not open the app screen"</string>
     <string name="startup_recovery">"The recovery screen is keeping the app open. Use the button below to copy the error details for a report.\n\n%1$s: %2$s"</string>
@@ -61,7 +61,7 @@
     <string name="open_game">"Open StarSavior"</string>
     <string name="reconnect_capture">"Reconnect screen sharing"</string>
     <string name="overlay_settings_failed">"Cannot open overlay settings"</string>
-    <string name="overlay_settings_help">"In your phone settings, open Special app access → Display over other apps and allow StarSavior Journey Helper."</string>
+    <string name="overlay_settings_help">"In your phone settings, open Special app access → Display over other apps and allow SS Journey Helper."</string>
     <string name="close">"Close"</string>
     <string name="open_settings">"Open settings"</string>
     <string name="open_settings_manually">"Please open your phone settings manually."</string>

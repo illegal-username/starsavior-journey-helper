@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">"星之救援者旅程助手"</string>
+    <string name="app_name">"星救旅程助手"</string>
     <string name="notification_channel">"读取旅程选项画面"</string>
     <string name="startup_failed">"无法打开应用画面"</string>
     <string name="startup_recovery">"已打开恢复画面，避免应用关闭。可使用下方按钮复制错误信息并反馈。\n\n%1$s: %2$s"</string>
@@ -61,7 +61,7 @@
     <string name="open_game">"打开星之救援者"</string>
     <string name="reconnect_capture">"重新连接屏幕共享"</string>
     <string name="overlay_settings_failed">"无法打开悬浮窗设置"</string>
-    <string name="overlay_settings_help">"请在手机设置的“特殊应用权限”→“显示在其他应用上层”中，允许星之救援者旅程助手。"</string>
+    <string name="overlay_settings_help">"请在手机设置的“特殊应用权限”→“显示在其他应用上层”中，允许星救旅程助手。"</string>
     <string name="close">"关闭"</string>
     <string name="open_settings">"打开设置"</string>
     <string name="open_settings_manually">"请自行打开手机设置。"</string>

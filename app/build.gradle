@@ -44,8 +44,8 @@ android {
         applicationId 'helper.journey.starsavior'
         minSdk 26
         targetSdk 35
-        versionCode 51
-        versionName '2.2.0'
+        versionCode 52
+        versionName '2.2.1'
         buildConfigField 'boolean', 'BUNDLED_TEST_DATABASE', 'false'
 
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'

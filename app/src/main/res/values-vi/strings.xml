@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">"Trợ lý Hành trình StarSavior"</string>
+    <string name="app_name">"SS Journey Helper"</string>
     <string name="notification_channel">"Đọc lựa chọn Hành trình"</string>
     <string name="startup_failed">"Không thể mở ứng dụng"</string>
     <string name="startup_recovery">"Màn hình khôi phục giữ ứng dụng mở. Dùng nút bên dưới để sao chép chi tiết lỗi và gửi báo cáo.\n\n%1$s: %2$s"</string>
@@ -61,7 +61,7 @@
     <string name="open_game">"Mở StarSavior"</string>
     <string name="reconnect_capture">"Kết nối lại chia sẻ màn hình"</string>
     <string name="overlay_settings_failed">"Không thể mở cài đặt lớp phủ"</string>
-    <string name="overlay_settings_help">"Trong cài đặt điện thoại, mở Quyền truy cập đặc biệt → Hiển thị trên ứng dụng khác và cho phép Trợ lý Hành trình StarSavior."</string>
+    <string name="overlay_settings_help">"Trong cài đặt điện thoại, mở Quyền truy cập đặc biệt → Hiển thị trên ứng dụng khác và cho phép SS Journey Helper."</string>
     <string name="close">"Đóng"</string>
     <string name="open_settings">"Mở cài đặt"</string>
     <string name="open_settings_manually">"Vui lòng tự mở cài đặt điện thoại."</string>

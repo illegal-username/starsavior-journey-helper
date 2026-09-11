@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">"Assistant StarSavior · Le Périple"</string>
+    <string name="app_name">"SS Journey Helper"</string>
     <string name="notification_channel">"Lecture des choix du Périple"</string>
     <string name="startup_failed">"Impossible d’ouvrir l’application"</string>
     <string name="startup_recovery">"L’écran de récupération maintient l’application ouverte. Utilisez le bouton ci-dessous pour copier les détails de l’erreur et les signaler.\n\n%1$s : %2$s"</string>
@@ -61,7 +61,7 @@
     <string name="open_game">"Ouvrir StarSavior"</string>
     <string name="reconnect_capture">"Rétablir le partage d’écran"</string>
     <string name="overlay_settings_failed">"Impossible d’ouvrir les paramètres de superposition"</string>
-    <string name="overlay_settings_help">"Dans les paramètres du téléphone, ouvrez Accès spécial aux applications → Afficher par-dessus les autres applications, puis autorisez l’assistant StarSavior."</string>
+    <string name="overlay_settings_help">"Dans les paramètres du téléphone, ouvrez Accès spécial aux applications → Afficher par-dessus les autres applications, puis autorisez SS Journey Helper."</string>
     <string name="close">"Fermer"</string>
     <string name="open_settings">"Ouvrir les paramètres"</string>
     <string name="open_settings_manually">"Ouvrez les paramètres du téléphone manuellement."</string>
