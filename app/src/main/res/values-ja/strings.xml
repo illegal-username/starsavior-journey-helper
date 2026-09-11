@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">"スターセイヴァー 救援の旅ヘルパー"</string>
+    <string name="app_name">"スタセイ 救援の旅ヘルパー"</string>
     <string name="notification_channel">"救援の旅の選択肢を読み取り"</string>
     <string name="startup_failed">"アプリ画面を開けませんでした"</string>
     <string name="startup_recovery">"アプリの終了を防ぐため、復旧画面を開きました。下のボタンでエラー情報をコピーして報告できます。\n\n%1$s: %2$s"</string>
@@ -61,7 +61,7 @@
     <string name="open_game">"スターセイヴァーを開く"</string>
     <string name="reconnect_capture">"画面共有を再接続"</string>
     <string name="overlay_settings_failed">"オーバーレイ設定を開けません"</string>
-    <string name="overlay_settings_help">"端末設定の「特別なアプリアクセス」→「他のアプリの上に表示」で、救援の旅ヘルパーを許可してください。"</string>
+    <string name="overlay_settings_help">"端末設定の「特別なアプリアクセス」→「他のアプリの上に表示」で、スタセイ 救援の旅ヘルパーを許可してください。"</string>
     <string name="close">"閉じる"</string>
     <string name="open_settings">"設定を開く"</string>
     <string name="open_settings_manually">"端末の設定アプリを直接開いてください。"</string>

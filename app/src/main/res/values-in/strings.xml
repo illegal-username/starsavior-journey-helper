@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">"Asisten Perjalanan StarSavior"</string>
+    <string name="app_name">"SS Journey Helper"</string>
     <string name="notification_channel">"Baca pilihan Perjalanan"</string>
     <string name="startup_failed">"Tidak dapat membuka aplikasi"</string>
     <string name="startup_recovery">"Layar pemulihan menjaga aplikasi tetap terbuka. Gunakan tombol di bawah untuk menyalin detail kesalahan sebagai laporan.\n\n%1$s: %2$s"</string>
@@ -61,7 +61,7 @@
     <string name="open_game">"Buka StarSavior"</string>
     <string name="reconnect_capture">"Sambungkan ulang berbagi layar"</string>
     <string name="overlay_settings_failed">"Tidak dapat membuka pengaturan overlay"</string>
-    <string name="overlay_settings_help">"Di pengaturan ponsel, buka Akses aplikasi khusus → Tampilkan di atas aplikasi lain dan izinkan Asisten Perjalanan StarSavior."</string>
+    <string name="overlay_settings_help">"Di pengaturan ponsel, buka Akses aplikasi khusus → Tampilkan di atas aplikasi lain dan izinkan SS Journey Helper."</string>
     <string name="close">"Tutup"</string>
     <string name="open_settings">"Buka pengaturan"</string>
     <string name="open_settings_manually">"Buka pengaturan ponsel secara manual."</string>

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">"星之救援者旅程助手"</string>
+    <string name="app_name">"星救旅程助手"</string>
     <string name="notification_channel">"讀取旅程選項畫面"</string>
     <string name="startup_failed">"無法開啟應用程式畫面"</string>
     <string name="startup_recovery">"已開啟復原畫面，避免應用程式關閉。可使用下方按鈕複製錯誤資訊並回報。\n\n%1$s: %2$s"</string>
@@ -61,7 +61,7 @@
     <string name="open_game">"開啟星之救援者"</string>
     <string name="reconnect_capture">"重新連接畫面分享"</string>
     <string name="overlay_settings_failed">"無法開啟浮動視窗設定"</string>
-    <string name="overlay_settings_help">"請在手機設定的「特殊應用程式存取權」→「顯示在其他應用程式上層」中，允許星之救援者旅程助手。"</string>
+    <string name="overlay_settings_help">"請在手機設定的「特殊應用程式存取權」→「顯示在其他應用程式上層」中，允許星救旅程助手。"</string>
     <string name="close">"關閉"</string>
     <string name="open_settings">"開啟設定"</string>
     <string name="open_settings_manually">"請自行開啟手機設定。"</string>

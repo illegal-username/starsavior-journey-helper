@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">"Ayudante de Travesía de StarSavior"</string>
+    <string name="app_name">"SS Journey Helper"</string>
     <string name="notification_channel">"Leer opciones de Travesía"</string>
     <string name="startup_failed">"No se pudo abrir la aplicación"</string>
     <string name="startup_recovery">"La pantalla de recuperación mantiene abierta la aplicación. Usa el botón de abajo para copiar los detalles del error y enviarlos en un informe.\n\n%1$s: %2$s"</string>
@@ -61,7 +61,7 @@
     <string name="open_game">"Abrir StarSavior"</string>
     <string name="reconnect_capture">"Reconectar pantalla compartida"</string>
     <string name="overlay_settings_failed">"No se pudo abrir la configuración de superposición"</string>
-    <string name="overlay_settings_help">"En los ajustes del teléfono, abre Acceso especial de aplicaciones → Mostrar sobre otras aplicaciones y permite el ayudante de StarSavior."</string>
+    <string name="overlay_settings_help">"En los ajustes del teléfono, abre Acceso especial de aplicaciones → Mostrar sobre otras aplicaciones y permite SS Journey Helper."</string>
     <string name="close">"Cerrar"</string>
     <string name="open_settings">"Abrir ajustes"</string>
     <string name="open_settings_manually">"Abre los ajustes del teléfono manualmente."</string>

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">"StarSavior Reisehelfer"</string>
+    <string name="app_name">"SS Journey Helper"</string>
     <string name="notification_channel">"Reiseoptionen lesen"</string>
     <string name="startup_failed">"App konnte nicht geöffnet werden"</string>
     <string name="startup_recovery">"Der Wiederherstellungsbildschirm hält die App geöffnet. Kopiere die Fehlerdetails mit der Schaltfläche unten, um sie zu melden.\n\n%1$s: %2$s"</string>
@@ -61,7 +61,7 @@
     <string name="open_game">"StarSavior öffnen"</string>
     <string name="reconnect_capture">"Bildschirmfreigabe erneut verbinden"</string>
     <string name="overlay_settings_failed">"Einblendungseinstellungen konnten nicht geöffnet werden"</string>
-    <string name="overlay_settings_help">"Öffne in den Telefoneinstellungen Spezieller App-Zugriff → Über anderen Apps einblenden und erlaube den StarSavior Reisehelfer."</string>
+    <string name="overlay_settings_help">"Öffne in den Telefoneinstellungen Spezieller App-Zugriff → Über anderen Apps einblenden und erlaube SS Journey Helper."</string>
     <string name="close">"Schließen"</string>
     <string name="open_settings">"Einstellungen öffnen"</string>
     <string name="open_settings_manually">"Öffne die Telefoneinstellungen bitte manuell."</string>
