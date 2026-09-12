@@ -537,7 +537,9 @@ public final class MainActivity extends Activity {
                             if (!destroyed && dataState != null) setStatus(dataState, message, false);
                         }));
 
-                if (result.data != null && OverlayCaptureService.isRunning()) {
+                if (!destroyed && result.data != null
+                        && AppLanguage.selected(this).tag.equals(result.data.language)
+                        && OverlayCaptureService.isRunning()) {
                     try {
                         startService(new Intent(this, OverlayCaptureService.class)
                                 .setAction(OverlayCaptureService.ACTION_RELOAD_DATA));
@@ -601,6 +603,8 @@ public final class MainActivity extends Activity {
     }
 
     private String friendlyUpdateError(Exception error) {
+        int messageId = JourneyDatabaseUpdater.errorMessageId(error);
+        if (messageId != 0) return getString(messageId);
         String detail = error.getMessage();
         if (detail == null || detail.trim().isEmpty()) detail = error.getClass().getSimpleName();
         return getString(R.string.update_error_detail) + detail;

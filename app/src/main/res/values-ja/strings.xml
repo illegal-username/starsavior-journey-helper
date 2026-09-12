@@ -133,4 +133,7 @@
     <string name="language_title">"ゲーム・ヘルパーの言語"</string>
     <string name="system_language">"システムの言語"</string>
     <string name="language_help">"ゲームに表示される言語を選んでください。ヘルパーの案内と選択肢の認識にも適用されます。初期設定はシステムの言語で、未対応の場合は英語を使用します。変更後は画面共有を再度許可してください。"</string>
+    <string name="update_metadata_unavailable">"DBの更新情報を確認できなかったため、適用しませんでした。しばらくしてから再試行してください。"</string>
+    <string name="update_validation_failed">"ダウンロードしたDBを検証できなかったため、適用しませんでした。しばらくしてから再試行してください。"</string>
+    <string name="update_schema_unsupported">"このDBには新しいバージョンのアプリが必要です。アプリを更新してから再試行してください。"</string>
 </resources>

@@ -30,6 +30,39 @@ class VerifyTest(unittest.TestCase):
             self.assertFalse(evidence["passed"])
             self.assertEqual(7, evidence["steps"][0]["exitCode"])
 
+    def test_explicit_report_preserves_previous_evidence_on_success_and_failure(self):
+        for code in (0, 7):
+            with self.subTest(code=code), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                old = root / ".gradle/verification/latest.json"
+                old.parent.mkdir(parents=True)
+                old.write_text('{"passed": true}', encoding="utf-8")
+                report = root / "evidence/run.json"
+                with patch.object(verify, "ROOT", root), \
+                        patch.object(verify, "fingerprint", return_value="fixture"), \
+                        patch.object(verify.subprocess, "check_output", return_value="head\n"), \
+                        patch.object(verify.subprocess, "run", return_value=subprocess.CompletedProcess([], code)), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(code, verify.main(["--scope", "android", "--report", str(report)]))
+                self.assertEqual('{"passed": true}', old.read_text(encoding="utf-8"))
+                evidence = json.loads(report.read_text(encoding="utf-8"))
+                self.assertEqual(code == 0, evidence["passed"])
+                self.assertEqual(code, evidence["steps"][-1]["exitCode"])
+
+    def test_existing_explicit_report_is_rejected_before_any_subprocess(self):
+        with tempfile.TemporaryDirectory() as directory:
+            report = Path(directory) / "existing.json"
+            report.write_text("retained evidence", encoding="utf-8")
+            with patch.object(verify.subprocess, "run") as run, \
+                    patch.object(verify.subprocess, "check_output") as read, \
+                    contextlib.redirect_stderr(io.StringIO()), \
+                    self.assertRaises(SystemExit) as error:
+                verify.main(["--report", str(report)])
+            self.assertEqual(2, error.exception.code)
+            self.assertEqual("retained evidence", report.read_text(encoding="utf-8"))
+            run.assert_not_called()
+            read.assert_not_called()
+
     def test_plan_has_no_subprocess_or_report_side_effects(self):
         with patch.object(verify.subprocess, "run") as run, \
                 patch.object(verify.subprocess, "check_output") as read, \

@@ -133,4 +133,7 @@
     <string name="language_title">"Bahasa game dan asisten"</string>
     <string name="system_language">"Bahasa sistem"</string>
     <string name="language_help">"Pilih bahasa yang ditampilkan dalam game. Bahasa ini juga digunakan oleh asisten dan pembacaan pilihan. Secara default, bahasa sistem digunakan, atau bahasa Inggris jika tidak didukung. Setelah mengubahnya, izinkan berbagi layar lagi."</string>
+    <string name="update_metadata_unavailable">"Informasi pembaruan DB tidak dapat diverifikasi. Tidak ada DB yang diterapkan. Coba lagi nanti."</string>
+    <string name="update_validation_failed">"DB yang diunduh tidak lolos verifikasi dan tidak diterapkan. Coba lagi nanti."</string>
+    <string name="update_schema_unsupported">"DB ini memerlukan aplikasi yang lebih baru. Perbarui aplikasi, lalu coba lagi."</string>
 </resources>

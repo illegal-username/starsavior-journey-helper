@@ -133,4 +133,7 @@
     <string name="language_title">"Spiel- und Helfersprache"</string>
     <string name="system_language">"Systemsprache"</string>
     <string name="language_help">"Wähle die im Spiel angezeigte Sprache. Sie gilt auch für den Helfer und das Lesen der Optionen. Standard ist die Systemsprache; nicht unterstützte Sprachen verwenden Englisch. Erlaube nach einem Wechsel die Bildschirmfreigabe erneut."</string>
+    <string name="update_metadata_unavailable">"Die Update-Informationen der DB konnten nicht geprüft werden. Es wurde keine DB übernommen. Bitte später erneut versuchen."</string>
+    <string name="update_validation_failed">"Die heruntergeladene DB hat die Prüfung nicht bestanden und wurde nicht übernommen. Bitte später erneut versuchen."</string>
+    <string name="update_schema_unsupported">"Diese DB benötigt eine neuere App. Bitte die App aktualisieren und erneut versuchen."</string>
 </resources>

@@ -133,4 +133,7 @@
     <string name="language_title">"Idioma do jogo e do assistente"</string>
     <string name="system_language">"Idioma do sistema"</string>
     <string name="language_help">"Escolha o idioma exibido no jogo. Ele também se aplica ao assistente e à leitura das escolhas. Por padrão, é usado o idioma do sistema, ou inglês se não houver suporte. Após alterar, permita o compartilhamento de tela novamente."</string>
+    <string name="update_metadata_unavailable">"Não foi possível verificar as informações de atualização do BD. Nenhum BD foi aplicado. Tente novamente mais tarde."</string>
+    <string name="update_validation_failed">"O BD baixado não passou na verificação e não foi aplicado. Tente novamente mais tarde."</string>
+    <string name="update_schema_unsupported">"Este BD requer um aplicativo mais recente. Atualize o aplicativo e tente novamente."</string>
 </resources>

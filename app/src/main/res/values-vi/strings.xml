@@ -133,4 +133,7 @@
     <string name="language_title">"Ngôn ngữ trò chơi và trợ lý"</string>
     <string name="system_language">"Ngôn ngữ hệ thống"</string>
     <string name="language_help">"Chọn ngôn ngữ đang hiển thị trong trò chơi. Ngôn ngữ này cũng áp dụng cho trợ lý và việc đọc lựa chọn. Mặc định dùng ngôn ngữ hệ thống, hoặc tiếng Anh nếu không được hỗ trợ. Sau khi đổi, hãy cấp lại quyền chia sẻ màn hình."</string>
+    <string name="update_metadata_unavailable">"Không thể xác minh thông tin cập nhật DB. Chưa áp dụng DB nào. Vui lòng thử lại sau."</string>
+    <string name="update_validation_failed">"DB đã tải xuống không vượt qua bước xác minh và chưa được áp dụng. Vui lòng thử lại sau."</string>
+    <string name="update_schema_unsupported">"DB này yêu cầu ứng dụng mới hơn. Hãy cập nhật ứng dụng rồi thử lại."</string>
 </resources>

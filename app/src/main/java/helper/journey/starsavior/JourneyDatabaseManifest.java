@@ -103,6 +103,15 @@ final class JourneyDatabaseManifest {
         }
     }
 
+    void validateV5Contract(GameLanguage requested) throws JSONException {
+        validate();
+        if (manifestSchema != MANIFEST_SCHEMA || databaseSchema < DATABASE_SCHEMA) {
+            throw new JSONException("The v5 endpoint requires multilingual database metadata.");
+        }
+        if (!requested.tag.equals(language)) throw new JSONException("Manifest language mismatch.");
+        // Future database schemas remain valid metadata, but isCompatible refuses installation.
+    }
+
     boolean isCompatible(int appVersionCode) {
         return ((manifestSchema == MANIFEST_SCHEMA && databaseSchema == DATABASE_SCHEMA)
                 || (manifestSchema == 1 && databaseSchema == 4))
@@ -147,9 +156,12 @@ final class JourneyDatabaseManifest {
     }
 
     private static int checkedInt(JSONObject root, String name) throws JSONException {
-        long value = root.getLong(name);
-        if (value < Integer.MIN_VALUE || value > Integer.MAX_VALUE) {
-            throw new JSONException(name + " is out of range.");
+        Object raw = root.get(name);
+        if (!(raw instanceof Number)) throw new JSONException(name + " must be an integer.");
+        double value = ((Number) raw).doubleValue();
+        if (!Double.isFinite(value) || value != Math.rint(value)
+                || value < Integer.MIN_VALUE || value > Integer.MAX_VALUE) {
+            throw new JSONException(name + " is not a supported integer.");
         }
         return (int) value;
     }
