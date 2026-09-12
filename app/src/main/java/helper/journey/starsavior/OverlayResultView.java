@@ -63,12 +63,8 @@ final class OverlayResultView {
 
         if (showArcanaStatus) addArcanaStatus(context, panel, arcanaStatus);
 
-        MaxHeightScrollView scroll = new MaxHeightScrollView(context, maxScrollHeight(context));
-        scroll.setFillViewport(false);
-        scroll.setVerticalScrollBarEnabled(true);
         LinearLayout list = new LinearLayout(context);
         list.setOrientation(LinearLayout.VERTICAL);
-        scroll.addView(list, new ScrollView.LayoutParams(-1, -2));
 
         for (int index = 0; index < match.event.choices.size(); index++) {
             JourneyModels.Choice choice = match.event.choices.get(index);
@@ -110,7 +106,7 @@ final class OverlayResultView {
             list.addView(choiceCard, margins(context, -1, -2, 0, 0, 0, index == match.event.choices.size() - 1 ? 0 : 8));
         }
 
-        panel.addView(scroll, new LinearLayout.LayoutParams(-1, -2));
+        panel.addView(list, new LinearLayout.LayoutParams(-1, -2));
         return wrap(context, panel);
     }
 
@@ -189,10 +185,25 @@ final class OverlayResultView {
         return true;
     }
 
-    private static FrameLayout wrap(Context context, View content) {
+    private static FrameLayout wrap(Context context, LinearLayout panel) {
+        // Keep the title and close action visible while the entire body can scroll.
+        // Status messages must share the viewport so they cannot crowd out the results.
+        LinearLayout body = new LinearLayout(context);
+        body.setOrientation(LinearLayout.VERTICAL);
+        while (panel.getChildCount() > 1) {
+            View child = panel.getChildAt(1);
+            panel.removeViewAt(1);
+            body.addView(child);
+        }
+        MaxHeightScrollView scroll = new MaxHeightScrollView(context, maxScrollHeight(context));
+        scroll.setFillViewport(false);
+        scroll.setVerticalScrollBarEnabled(true);
+        scroll.addView(body, new ScrollView.LayoutParams(-1, -2));
+        panel.addView(scroll, new LinearLayout.LayoutParams(-1, -2));
+
         FrameLayout wrapper = new FrameLayout(context);
         wrapper.setPadding(Ui.dp(context, 4), Ui.dp(context, 4), Ui.dp(context, 4), Ui.dp(context, 4));
-        wrapper.addView(content, new FrameLayout.LayoutParams(-1, -2));
+        wrapper.addView(panel, new FrameLayout.LayoutParams(-1, -2));
         wrapper.setElevation(Ui.dp(context, 12));
         return wrapper;
     }
@@ -337,8 +348,15 @@ final class OverlayResultView {
 
         @Override
         protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-            int limitedHeight = MeasureSpec.makeMeasureSpec(maxHeight, MeasureSpec.AT_MOST);
-            super.onMeasure(widthMeasureSpec, limitedHeight);
+            int mode = MeasureSpec.getMode(heightMeasureSpec);
+            if (mode != MeasureSpec.EXACTLY) {
+                // The parent has already reserved space for the header and padding.
+                // Enlarging that space clips the viewport and can hide its scroll range.
+                int height = mode == MeasureSpec.UNSPECIFIED
+                        ? maxHeight : Math.min(maxHeight, MeasureSpec.getSize(heightMeasureSpec));
+                heightMeasureSpec = MeasureSpec.makeMeasureSpec(height, MeasureSpec.AT_MOST);
+            }
+            super.onMeasure(widthMeasureSpec, heightMeasureSpec);
         }
     }
 }
