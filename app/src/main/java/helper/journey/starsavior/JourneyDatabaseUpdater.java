@@ -7,6 +7,9 @@ import org.json.JSONException;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InterruptedIOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.CodingErrorAction;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -29,6 +32,38 @@ final class JourneyDatabaseUpdater {
         void onProgress(String message);
     }
 
+    interface HttpTransport {
+        HttpResponse request(String url, int maximumBytes, String etag, String purpose) throws IOException;
+    }
+
+    interface Backend {
+        JourneyModels.Data load(GameLanguage language) throws Exception;
+        JourneyModels.Data install(GameLanguage language, String json) throws Exception;
+        JourneyUpdateStateStore.State state(GameLanguage language) throws Exception;
+        void cache(GameLanguage language, String json, String etag) throws Exception;
+    }
+
+    interface StageListener { void onProgress(int messageId); }
+
+    static final class Session {
+        final GameLanguage language;
+        final Backend backend;
+        final boolean bundled;
+        Session(GameLanguage language, Backend backend, boolean bundled) {
+            this.language = language; this.backend = backend; this.bundled = bundled;
+        }
+    }
+
+    static final class MetadataUnavailableException extends IOException {
+        MetadataUnavailableException() { super("The required v5 database metadata is unavailable (HTTP 404)."); }
+    }
+
+    static int errorMessageId(Exception error) {
+        if (error instanceof MetadataUnavailableException) return R.string.update_metadata_unavailable;
+        if (error instanceof JSONException) return R.string.update_validation_failed;
+        return 0;
+    }
+
     static final class CheckResult {
         final boolean available;
         final boolean incompatible;
@@ -36,7 +71,6 @@ final class JourneyDatabaseUpdater {
         final boolean networkChecked;
         final JourneyModels.Data current;
         final JourneyDatabaseManifest manifest;
-        final String downloadedDatabase;
 
         private CheckResult(
                 boolean available,
@@ -44,40 +78,36 @@ final class JourneyDatabaseUpdater {
                 boolean busy,
                 boolean networkChecked,
                 JourneyModels.Data current,
-                JourneyDatabaseManifest manifest,
-                String downloadedDatabase) {
+                JourneyDatabaseManifest manifest) {
             this.available = available;
             this.incompatible = incompatible;
             this.busy = busy;
             this.networkChecked = networkChecked;
             this.current = current;
             this.manifest = manifest;
-            this.downloadedDatabase = downloadedDatabase;
         }
 
         static CheckResult busy(JourneyModels.Data current) {
-            return new CheckResult(false, false, true, false, current, null, null);
+            return new CheckResult(false, false, true, false, current, null);
         }
 
         static CheckResult classify(
                 JourneyModels.Data current,
                 JourneyDatabaseManifest manifest,
-                boolean networkChecked,
-                String downloadedDatabase) {
+                boolean networkChecked) {
             boolean compatible = manifest.isCompatible(BuildConfig.VERSION_CODE);
             boolean available = !manifest.matches(current);
             return new CheckResult(
                     available && compatible,
-                    available && !compatible,
+                    !compatible,
                     false,
                     networkChecked,
                     current,
-                    manifest,
-                    downloadedDatabase);
+                    manifest);
         }
 
         static CheckResult current(JourneyModels.Data current, boolean networkChecked) {
-            return new CheckResult(false, false, false, networkChecked, current, null, null);
+            return new CheckResult(false, false, false, networkChecked, current, null);
         }
     }
 
@@ -109,8 +139,9 @@ final class JourneyDatabaseUpdater {
                     data.recordCount, data.choiceCount);
         }
         static UpdateResult incompatible(JourneyModels.Data data, JourneyDatabaseManifest manifest) {
-            return new UpdateResult(false, false, true, data, R.string.update_requires_version,
-                    manifest.minimumAppVersionCode);
+            return manifest.minimumAppVersionCode > BuildConfig.VERSION_CODE
+                    ? new UpdateResult(false, false, true, data, R.string.update_requires_version, manifest.minimumAppVersionCode)
+                    : new UpdateResult(false, false, true, data, R.string.update_schema_unsupported);
         }
         static UpdateResult installed(JourneyModels.Data data) {
             return new UpdateResult(true, false, false, data, R.string.update_installed,
@@ -136,52 +167,83 @@ final class JourneyDatabaseUpdater {
         return UPDATING.get();
     }
 
+    private static Session session(Context context) {
+        GameLanguage language = AppLanguage.of(context);
+        Backend backend = new Backend() {
+            public JourneyModels.Data load(GameLanguage selected) throws Exception {
+                return JourneyRepository.load(context, selected);
+            }
+            public JourneyModels.Data install(GameLanguage selected, String json) throws Exception {
+                return JourneyRepository.installUpdated(context, json, selected);
+            }
+            public JourneyUpdateStateStore.State state(GameLanguage selected) {
+                return JourneyUpdateStateStore.load(context, selected);
+            }
+            public void cache(GameLanguage selected, String json, String etag) throws Exception {
+                JourneyUpdateStateStore.recordManifestSuccess(context, selected, json, etag);
+            }
+        };
+        return new Session(language, backend, BuildConfig.BUNDLED_TEST_DATABASE);
+    }
+
     static CheckResult checkForUpdate(Context context, boolean force) throws Exception {
-        Context application = context;
-        JourneyModels.Data current = JourneyRepository.load(application);
-        if (BuildConfig.BUNDLED_TEST_DATABASE) return CheckResult.current(current, false);
-        if (!UPDATING.compareAndSet(false, true)) return CheckResult.busy(current);
+        return checkForUpdate(session(context), force, JourneyDatabaseUpdater::request);
+    }
+
+    static CheckResult checkForUpdate(Session session, boolean force, HttpTransport transport) throws Exception {
+        if (!UPDATING.compareAndSet(false, true)) return CheckResult.busy(null);
         try {
-            return checkLocked(application, current, force);
+            ensureNotInterrupted();
+            JourneyModels.Data current = session.backend.load(session.language);
+            JourneyRepository.requireLanguage(current, session.language);
+            if (session.bundled) return CheckResult.current(current, false);
+            return checkLocked(session, current, force, transport);
         } finally {
             UPDATING.set(false);
         }
     }
 
     static UpdateResult update(Context context, ProgressListener listener) throws Exception {
+        return update(session(context), JourneyDatabaseUpdater::request,
+                id -> progress(listener, context.getString(id)));
+    }
+
+    static UpdateResult update(Session session, HttpTransport transport, StageListener listener) throws Exception {
         if (!UPDATING.compareAndSet(false, true)) return UpdateResult.busy();
-        Context application = context;
         try {
-            JourneyModels.Data current = JourneyRepository.load(application);
-            if (BuildConfig.BUNDLED_TEST_DATABASE) {
-                return new UpdateResult(false, false, false, current, R.string.test_uses_bundled);
-            }
-            progress(listener, application.getString(R.string.checking_latest));
-            CheckResult check = checkLocked(application, current, true);
-            if (check.incompatible && check.manifest != null) {
-                return UpdateResult.incompatible(current, check.manifest);
-            }
+            ensureNotInterrupted();
+            JourneyModels.Data current = session.backend.load(session.language);
+            JourneyRepository.requireLanguage(current, session.language);
+            if (session.bundled) return new UpdateResult(false, false, false, current, R.string.test_uses_bundled);
+            stage(listener, R.string.checking_latest);
+            CheckResult check = checkLocked(session, current, true, transport);
+            if (check.incompatible) return UpdateResult.incompatible(current, check.manifest);
             if (!check.available) return UpdateResult.current(current);
 
-            progress(listener, application.getString(R.string.downloading_database));
+            stage(listener, R.string.downloading_database);
             ensureNotInterrupted();
-            String downloaded = check.downloadedDatabase;
-            if (downloaded == null) {
-                downloaded = requireDatabaseResponse(
-                        request(GameLanguage.require(current.language).databaseUrl(), MAX_FILE_BYTES, "", "manual database update"));
-            }
+            String downloaded = requireDatabaseResponse(transport.request(
+                    session.language.databaseUrl(), MAX_FILE_BYTES, "", "manual database update"));
+            ensureNotInterrupted();
             JourneyModels.Data candidate = JourneyRepository.parse(downloaded);
             validateRemoteDatabase(current, candidate);
-            if (check.manifest != null) check.manifest.verifyCandidate(candidate);
+            if (candidate.schema != 5) throw new JSONException("A v5 update requires a schema 5 database.");
+            check.manifest.verifyCandidate(candidate);
             if (sameDatabase(current, candidate)) return UpdateResult.current(current);
 
-            progress(listener, application.getString(R.string.applying_database));
+            stage(listener, R.string.applying_database);
             ensureNotInterrupted();
-            JourneyModels.Data installed = JourneyRepository.installUpdated(application, downloaded);
+            JourneyModels.Data installed = session.backend.install(session.language, downloaded);
+            // File installation has committed; a late interrupt must not relabel it as uninstalled.
             return UpdateResult.installed(installed);
         } finally {
             UPDATING.set(false);
         }
+    }
+
+    private static void stage(StageListener listener, int messageId) {
+        if (listener == null) return;
+        try { listener.onProgress(messageId); } catch (RuntimeException ignored) {}
     }
 
     static boolean sameDatabase(JourneyModels.Data current, JourneyModels.Data candidate) {
@@ -216,69 +278,37 @@ final class JourneyDatabaseUpdater {
         validateCounts(current, manifest.recordCount, manifest.choiceCount);
     }
 
-    private static CheckResult checkLocked(
-            Context application, JourneyModels.Data current, boolean force) throws Exception {
-        JourneyUpdateStateStore.State state = JourneyUpdateStateStore.load(application);
-        JourneyDatabaseManifest cachedManifest = state.manifest();
-        HttpResponse response = request(
-                GameLanguage.require(current.language).manifestUrl(),
-                MAX_MANIFEST_BYTES,
-                state.manifestEtag,
-                force ? "manual database update check" : "automatic database update check");
-
+    private static CheckResult checkLocked(Session session, JourneyModels.Data current,
+            boolean force, HttpTransport transport) throws Exception {
+        JourneyUpdateStateStore.State state = session.backend.state(session.language);
+        JourneyDatabaseManifest cached = state.manifest(session.language);
+        if (cached != null) {
+            try { validateManifestAgainstCurrent(current, cached); }
+            catch (JSONException invalidForCurrent) { cached = null; }
+        }
+        String purpose = force ? "manual database update check" : "automatic database update check";
+        ensureNotInterrupted();
+        HttpResponse response = transport.request(session.language.manifestUrl(), MAX_MANIFEST_BYTES,
+                cached == null ? "" : state.manifestEtag, purpose);
+        ensureNotInterrupted();
         if (response.status == HttpURLConnection.HTTP_NOT_MODIFIED) {
-            JourneyDatabaseManifest cached = cachedManifest;
-            if (cached == null) {
-                response = request(
-                        GameLanguage.require(current.language).manifestUrl(),
-                        MAX_MANIFEST_BYTES,
-                        "",
-                        force ? "manual database update check" : "automatic database update check");
-            } else {
-                validateManifestAgainstCurrent(current, cached);
-                JourneyUpdateStateStore.recordManifestSuccess(
-                        application,
-                        state.manifestJson,
+            if (cached != null) {
+                session.backend.cache(session.language, state.manifestJson,
                         response.etag.isEmpty() ? state.manifestEtag : response.etag);
-                return CheckResult.classify(current, cached, true, null);
+                return CheckResult.classify(current, cached, true);
             }
+            // Never authorize an update from an absent, untrusted or wrong-language 304 cache.
+            response = transport.request(session.language.manifestUrl(), MAX_MANIFEST_BYTES, "", purpose);
+            ensureNotInterrupted();
         }
-
-        if (response.status == HttpURLConnection.HTTP_NOT_FOUND) {
-            String downloaded = requireDatabaseResponse(request(
-                    GameLanguage.require(current.language).databaseUrl(),
-                    MAX_FILE_BYTES,
-                    "",
-                    force ? "manual database update fallback" : "automatic database update fallback"));
-            JourneyModels.Data candidate = JourneyRepository.parse(downloaded);
-            validateRemoteDatabase(current, candidate);
-            JourneyDatabaseManifest synthetic = manifestFrom(candidate);
-            JourneyUpdateStateStore.recordManifestSuccess(
-                    application, synthetic.toJson(), "");
-            return CheckResult.classify(current, synthetic, true, downloaded);
-        }
-
-        String manifestJson = requireJsonResponse(response, "Database manifest request");
-        JourneyDatabaseManifest manifest = JourneyDatabaseManifest.parse(manifestJson);
+        if (response.status == HttpURLConnection.HTTP_NOT_FOUND) throw new MetadataUnavailableException();
+        String json = requireJsonResponse(response, "Database manifest request", MAX_MANIFEST_BYTES);
+        JourneyDatabaseManifest manifest = JourneyDatabaseManifest.parse(json);
+        manifest.validateV5Contract(session.language);
         validateManifestAgainstCurrent(current, manifest);
-        JourneyUpdateStateStore.recordManifestSuccess(
-                application, manifestJson, response.etag);
-        return CheckResult.classify(current, manifest, true, null);
-    }
-
-    private static JourneyDatabaseManifest manifestFrom(JourneyModels.Data data) throws JSONException {
-        JourneyDatabaseManifest manifest = new JourneyDatabaseManifest(
-                data.schema == 4 ? 1 : JourneyDatabaseManifest.MANIFEST_SCHEMA,
-                data.schema,
-                data.contentSha256,
-                data.contentLength,
-                data.upstreamRevision,
-                data.generatedAt,
-                data.recordCount,
-                data.choiceCount,
-                1, data.language);
-        manifest.validate();
-        return manifest;
+        ensureNotInterrupted();
+        session.backend.cache(session.language, json, response.etag);
+        return CheckResult.classify(current, manifest, true);
     }
 
     private static void validateCounts(
@@ -292,10 +322,12 @@ final class JourneyDatabaseUpdater {
 
     static HttpResponse request(
             String url, int maximumBytes, String etag, String purpose) throws IOException {
+        ensureNotInterrupted();
         HttpURLConnection connection = open(url, etag, purpose);
         try {
             connection.setRequestMethod("GET");
             int status = connection.getResponseCode();
+            ensureNotInterrupted();
             String responseEtag = connection.getHeaderField("ETag");
             if (status == HttpURLConnection.HTTP_NOT_MODIFIED
                     || status == HttpURLConnection.HTTP_NOT_FOUND) {
@@ -316,8 +348,9 @@ final class JourneyDatabaseUpdater {
             try (InputStream input = connection.getInputStream()) {
                 bytes = readLimited(input, maximumBytes);
             }
-            return new HttpResponse(
-                    status, new String(bytes, StandardCharsets.UTF_8), responseEtag);
+            if (declared >= 0 && declared != bytes.length) throw new IOException("Incomplete database response.");
+            ensureNotInterrupted();
+            return new HttpResponse(status, decodeUtf8(bytes), responseEtag);
         } finally {
             connection.disconnect();
         }
@@ -339,17 +372,23 @@ final class JourneyDatabaseUpdater {
     }
 
     private static String requireDatabaseResponse(HttpResponse response) throws IOException {
-        return requireJsonResponse(response, "Choice database download");
+        return requireJsonResponse(response, "Choice database download", MAX_FILE_BYTES);
     }
 
-    private static String requireJsonResponse(HttpResponse response, String operation) throws IOException {
+    private static String requireJsonResponse(HttpResponse response, String operation, int maximumBytes) throws IOException {
         if (response.status < 200 || response.status >= 300) {
             throw new IOException(operation + " failed (HTTP " + response.status + ")");
         }
+        if (response.body.getBytes(StandardCharsets.UTF_8).length > maximumBytes) throw new IOException("Database response is too large.");
         return response.body;
     }
 
-    private static byte[] readLimited(InputStream input, int maximumBytes) throws IOException {
+    static String decodeUtf8(byte[] bytes) throws IOException {
+        return StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString();
+    }
+
+    static byte[] readLimited(InputStream input, int maximumBytes) throws IOException {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         byte[] buffer = new byte[16 * 1024];
         int fileBytes = 0;
@@ -366,7 +405,7 @@ final class JourneyDatabaseUpdater {
     }
 
     private static void ensureNotInterrupted() throws IOException {
-        if (Thread.currentThread().isInterrupted()) throw new IOException("Database update cancelled.");
+        if (Thread.currentThread().isInterrupted()) throw new InterruptedIOException("Database update cancelled.");
     }
 
     private static void progress(ProgressListener listener, String message) {

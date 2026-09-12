@@ -30,7 +30,10 @@ public final class JourneyRepository {
     private JourneyRepository() {}
 
     public static JourneyModels.Data load(Context context) throws IOException, JSONException {
-        GameLanguage language = AppLanguage.of(context);
+        return load(context, AppLanguage.of(context));
+    }
+
+    static JourneyModels.Data load(Context context, GameLanguage language) throws IOException, JSONException {
         synchronized (FILE_LOCK) {
             if (BuildConfig.BUNDLED_TEST_DATABASE) {
                 JourneyModels.Data bundledTest = tryLoadAsset(context, language.tag + "/" + ASSET_NAME, language);
@@ -38,19 +41,8 @@ public final class JourneyRepository {
                 throw new IOException("Cannot load the bundled database for this language.");
             }
 
-            JourneyModels.Data updated = tryLoadFile(
-                    JourneyDatabaseFileStore.updated(databaseDirectory(context)), language);
-            if (updated != null) return updated;
-
-            JourneyModels.Data previous = tryLoadFile(
-                    JourneyDatabaseFileStore.previous(databaseDirectory(context)), language);
-            if (previous != null) return previous;
-
-            if (language == GameLanguage.KOREAN) {
-                JourneyModels.Data legacy = tryLoadFile(JourneyDatabaseFileStore.updated(context.getFilesDir()), language);
-                if (legacy == null) legacy = tryLoadFile(JourneyDatabaseFileStore.previous(context.getFilesDir()), language);
-                if (legacy != null) return legacy;
-            }
+            JourneyModels.Data downloaded = loadDownloaded(context.getFilesDir(), language);
+            if (downloaded != null) return downloaded;
 
             JourneyModels.Data bundled = tryLoadAsset(context, language.tag + "/" + ASSET_NAME, language);
             if (bundled != null) return bundled;
@@ -66,26 +58,41 @@ public final class JourneyRepository {
     }
 
     public static JourneyModels.Data installUpdated(Context context, String json) throws IOException, JSONException {
-        JourneyModels.Data parsed = parse(json);
-        validate(parsed);
-        requireLanguage(parsed, AppLanguage.of(context));
+        return installUpdated(context, json, AppLanguage.of(context));
+    }
 
+    static JourneyModels.Data installUpdated(Context context, String json, GameLanguage language)
+            throws IOException, JSONException {
+        JourneyModels.Data parsed = parseValidated(json, language);
         synchronized (FILE_LOCK) {
-            JourneyDatabaseFileStore.install(databaseDirectory(context), json);
+            JourneyDatabaseFileStore.install(JourneyDatabaseFileStore.directory(context.getFilesDir(), language),
+                    json, language);
         }
         return parsed;
     }
 
     public static boolean hasDownloadedDatabase(Context context) {
+        return loadDownloaded(context.getFilesDir(), AppLanguage.of(context)) != null;
+    }
+
+    static JourneyModels.Data loadDownloaded(File files, GameLanguage language) {
         synchronized (FILE_LOCK) {
-            return JourneyDatabaseFileStore.updated(databaseDirectory(context)).isFile()
-                    || (AppLanguage.of(context) == GameLanguage.KOREAN
-                    && JourneyDatabaseFileStore.updated(context.getFilesDir()).isFile());
+            File directory = JourneyDatabaseFileStore.directory(files, language);
+            JourneyModels.Data data = tryLoadFile(JourneyDatabaseFileStore.updated(directory), language);
+            if (data == null) data = tryLoadFile(JourneyDatabaseFileStore.previous(directory), language);
+            if (data == null && language == GameLanguage.KOREAN) {
+                data = tryLoadFile(JourneyDatabaseFileStore.updated(files), language);
+                if (data == null) data = tryLoadFile(JourneyDatabaseFileStore.previous(files), language);
+            }
+            return data;
         }
     }
 
-    static File databaseDirectory(Context context) {
-        return JourneyDatabaseFileStore.directory(context.getFilesDir(), AppLanguage.of(context));
+    static JourneyModels.Data parseValidated(String json, GameLanguage language) throws JSONException {
+        JourneyModels.Data data = parse(json);
+        validate(data);
+        requireLanguage(data, language);
+        return data;
     }
 
     static void requireLanguage(JourneyModels.Data data, GameLanguage language) throws JSONException {
@@ -317,10 +324,7 @@ public final class JourneyRepository {
     private static JourneyModels.Data tryLoadFile(File file, GameLanguage language) {
         if (!file.isFile()) return null;
         try (InputStream input = new FileInputStream(file)) {
-            JourneyModels.Data data = parse(readUtf8(input));
-            validate(data);
-            requireLanguage(data, language);
-            return data;
+            return parseValidated(readUtf8(input), language);
         } catch (IOException | JSONException ignored) {
             return null;
         }
@@ -328,10 +332,7 @@ public final class JourneyRepository {
 
     private static JourneyModels.Data tryLoadAsset(Context context, String name, GameLanguage language) {
         try (InputStream input = context.getAssets().open(name)) {
-            JourneyModels.Data data = parse(readUtf8(input));
-            validate(data);
-            requireLanguage(data, language);
-            return data;
+            return parseValidated(readUtf8(input), language);
         } catch (IOException | JSONException ignored) {
             return null;
         }

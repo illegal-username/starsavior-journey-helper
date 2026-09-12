@@ -133,4 +133,7 @@
     <string name="language_title">"게임·도우미 언어"</string>
     <string name="system_language">"시스템 언어"</string>
     <string name="language_help">"게임에 표시되는 언어를 선택하세요. 도우미 안내와 선택지 인식에도 함께 적용됩니다. 기본값은 시스템 언어이며, 지원하지 않는 언어는 영어를 사용합니다. 변경 후에는 화면 공유를 다시 허용해 주세요."</string>
+    <string name="update_metadata_unavailable">"DB 업데이트 정보를 확인할 수 없어 적용하지 않았습니다. 잠시 후 다시 시도해 주세요."</string>
+    <string name="update_validation_failed">"다운로드한 DB가 검증을 통과하지 못해 적용하지 않았습니다. 잠시 후 다시 시도해 주세요."</string>
+    <string name="update_schema_unsupported">"이 DB를 사용하려면 더 새로운 앱이 필요합니다. 앱을 업데이트한 뒤 다시 시도해 주세요."</string>
 </resources>

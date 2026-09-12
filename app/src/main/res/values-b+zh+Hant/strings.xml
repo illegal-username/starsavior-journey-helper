@@ -133,4 +133,7 @@
     <string name="language_title">"遊戲與助手語言"</string>
     <string name="system_language">"系統語言"</string>
     <string name="language_help">"請選擇遊戲顯示的語言。助手介面與選項辨識也會使用此語言。預設跟隨系統語言，不支援時使用英語。變更後請重新允許螢幕分享。"</string>
+    <string name="update_metadata_unavailable">"無法確認DB更新資訊，因此未套用。請稍後再試。"</string>
+    <string name="update_validation_failed">"下載的DB未通過驗證，因此未套用。請稍後再試。"</string>
+    <string name="update_schema_unsupported">"此DB需要較新版本的應用程式。請更新應用程式後再試。"</string>
 </resources>

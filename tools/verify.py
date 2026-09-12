@@ -58,6 +58,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--scope", choices=("source", "android", "stamina"), default="source")
     parser.add_argument("--corpus-root", default=os.environ.get("STAR_JOURNEY_STAMINA_CORPUS"))
     parser.add_argument("--plan", action="store_true", help="Print commands without running or writing anything.")
+    parser.add_argument("--report", type=Path, help="Write a new report here; refuse to replace an existing file.")
     args = parser.parse_args(argv)
     if args.scope == "stamina":
         if os.name != "nt":
@@ -71,6 +72,10 @@ def main(argv: list[str] | None = None) -> int:
             print(subprocess.list2cmdline(step))
         return 0
 
+    report_path = args.report.resolve() if args.report else ROOT / ".gradle/verification/latest.json"
+    if args.report and report_path.exists():
+        parser.error("The requested report already exists; choose a new report path.")
+
     report = {
         "startedAt": datetime.now(timezone.utc).isoformat(),
         "scope": args.scope,
@@ -80,7 +85,11 @@ def main(argv: list[str] | None = None) -> int:
         "steps": [],
     }
     exit_code = 1
-    report_path = ROOT / ".gradle/verification/latest.json"
+    report_stream = None
+    if args.report:
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        # Reserve the destination before running any checks; also reject a concurrent creator.
+        report_stream = report_path.open("x", encoding="utf-8")
     try:
         for step in steps:
             print(f"\n> {subprocess.list2cmdline(step)}", flush=True)
@@ -99,8 +108,15 @@ def main(argv: list[str] | None = None) -> int:
         report["passed"] = True
         return 0
     finally:
-        report_path.parent.mkdir(parents=True, exist_ok=True)
-        report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        serialized = json.dumps(report, ensure_ascii=False, indent=2) + "\n"
+        if report_stream is not None:
+            try:
+                report_stream.write(serialized)
+            finally:
+                report_stream.close()
+        else:
+            report_path.parent.mkdir(parents=True, exist_ok=True)
+            report_path.write_text(serialized, encoding="utf-8")
         print(f"\nVerification {'passed' if report['passed'] else 'failed'}: {report_path}")
 
 

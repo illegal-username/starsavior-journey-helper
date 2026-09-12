@@ -133,4 +133,7 @@
     <string name="language_title">"Langue du jeu et de l’assistant"</string>
     <string name="system_language">"Langue du système"</string>
     <string name="language_help">"Choisissez la langue affichée dans le jeu. Elle s’applique aussi à l’assistant et à la lecture des choix. Par défaut, la langue du système est utilisée, ou l’anglais si elle n’est pas prise en charge. Après un changement, autorisez à nouveau le partage d’écran."</string>
+    <string name="update_metadata_unavailable">"Les informations de mise à jour de la BD n’ont pas pu être vérifiées. Aucune BD n’a été appliquée. Réessayez plus tard."</string>
+    <string name="update_validation_failed">"La BD téléchargée n’a pas passé la vérification et n’a pas été appliquée. Réessayez plus tard."</string>
+    <string name="update_schema_unsupported">"Cette BD nécessite une version plus récente de l’application. Mettez l’application à jour et réessayez."</string>
 </resources>

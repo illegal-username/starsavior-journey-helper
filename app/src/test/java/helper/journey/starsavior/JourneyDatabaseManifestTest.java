@@ -41,6 +41,27 @@ public class JourneyDatabaseManifestTest {
         assertFalse(futureSchema.isCompatible(42));
     }
 
+    @Test
+    public void fractionalOrTextVersionCannotBeRoundedIntoCompatibility() throws Exception {
+        String meta = DatabaseTestData.manifest(DatabaseTestData.json(GameLanguage.KOREAN, "new", 20), 51);
+        for (String field : new String[] {"manifestSchema", "databaseSchema", "contentLength",
+                "recordCount", "choiceCount", "minimumAppVersionCode"}) {
+            assertThrows(JSONException.class, () -> JourneyDatabaseManifest.parse(
+                    new org.json.JSONObject(meta).put(field, 51.5).toString()));
+            assertThrows(JSONException.class, () -> JourneyDatabaseManifest.parse(
+                    new org.json.JSONObject(meta).put(field, "51").toString()));
+        }
+    }
+
+    @Test
+    public void v5EndpointRejectsLegacyMetadataWithoutRemovingLocalLegacyCompatibility() throws Exception {
+        JourneyDatabaseManifest legacy = JourneyDatabaseManifest.parse(json(HASH, 120, 36));
+        assertTrue(legacy.isCompatible(BuildConfig.VERSION_CODE));
+        assertThrows(JSONException.class, () -> legacy.validateV5Contract(GameLanguage.KOREAN));
+        String meta = DatabaseTestData.manifest(DatabaseTestData.json(GameLanguage.KOREAN, "new", 20), 51);
+        JourneyDatabaseManifest.parse(meta).validateV5Contract(GameLanguage.KOREAN);
+    }
+
     private static JourneyModels.Data data(String hash, int length) {
         return new JourneyModels.Data(
                 4,

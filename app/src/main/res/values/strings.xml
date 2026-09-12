@@ -134,4 +134,7 @@
     <string name="language_title">"Game and helper language"</string>
     <string name="system_language">"System language"</string>
     <string name="language_help">"Choose the language shown in the game. It also applies to the helper and choice recognition. The default follows the system language, or English if unsupported. After changing it, allow screen sharing again."</string>
+    <string name="update_metadata_unavailable">"The DB update information could not be verified. No DB was applied. Please try again later."</string>
+    <string name="update_validation_failed">"The downloaded DB did not pass verification and was not applied. Please try again later."</string>
+    <string name="update_schema_unsupported">"This DB requires a newer app. Update the app and try again."</string>
 </resources>
