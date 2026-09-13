@@ -3,6 +3,9 @@ package helper.journey.starsavior;
 import android.content.Context;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.os.Build;
+import android.view.DisplayCutout;
+import android.view.WindowInsets;
 import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
 import android.view.View;
@@ -78,6 +81,39 @@ final class Ui {
         button.setTextColor(BG);
         button.setBackground(rounded(context, ORANGE, 16));
         button.setElevation(dp(context, 3));
+    }
+
+    static void applySystemInsets(View view) {
+        final int left = view.getPaddingLeft();
+        final int top = view.getPaddingTop();
+        final int right = view.getPaddingRight();
+        final int bottom = view.getPaddingBottom();
+        view.setOnApplyWindowInsetsListener((target, insets) -> {
+            int safeLeft, safeTop, safeRight, safeBottom;
+            if (Build.VERSION.SDK_INT >= 30) {
+                android.graphics.Insets safe = insets.getInsets(
+                        WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
+                safeLeft = safe.left; safeTop = safe.top;
+                safeRight = safe.right; safeBottom = safe.bottom;
+            } else {
+                safeLeft = insets.getSystemWindowInsetLeft();
+                safeTop = insets.getSystemWindowInsetTop();
+                safeRight = insets.getSystemWindowInsetRight();
+                safeBottom = insets.getSystemWindowInsetBottom();
+                if (Build.VERSION.SDK_INT >= 28) {
+                    DisplayCutout cutout = insets.getDisplayCutout();
+                    if (cutout != null) {
+                        safeLeft = Math.max(safeLeft, cutout.getSafeInsetLeft());
+                        safeTop = Math.max(safeTop, cutout.getSafeInsetTop());
+                        safeRight = Math.max(safeRight, cutout.getSafeInsetRight());
+                        safeBottom = Math.max(safeBottom, cutout.getSafeInsetBottom());
+                    }
+                }
+            }
+            target.setPadding(left + safeLeft, top + safeTop, right + safeRight, bottom + safeBottom);
+            return insets;
+        });
+        view.requestApplyInsets();
     }
 
     static void setVisible(View view, boolean visible) {

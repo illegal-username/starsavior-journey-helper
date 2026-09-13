@@ -34,6 +34,7 @@ import android.view.View;
 import android.view.WindowManager;
 
 import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.Tasks;
 import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.text.Text;
 import com.google.mlkit.vision.text.TextRecognizer;
@@ -64,6 +65,7 @@ public final class OverlayCaptureService extends Service {
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
+    private final CaptureCallbackExecutor captureCallbacks = new CaptureCallbackExecutor(worker);
     private final AtomicBoolean databaseUpdating = new AtomicBoolean(false);
     private final CaptureSessionStateMachine captureSession = new CaptureSessionStateMachine();
     private final Object pipelineLock = new Object();
@@ -84,7 +86,7 @@ public final class OverlayCaptureService extends Service {
     private int captureWidth;
     private int captureHeight;
     private int densityDpi;
-    private boolean destroying;
+    private volatile boolean destroying;
     private Runnable captureTimeout;
     private long lastPermissionRequestAt;
     private StaminaGaugeDetector.Anchor staminaAnchor;
@@ -430,7 +432,7 @@ public final class OverlayCaptureService extends Service {
 
     private void showBubble() {
         mainHandler.post(() -> {
-            if (bubbleView != null || !Settings.canDrawOverlays(this)) return;
+            if (destroying || bubbleView != null || !Settings.canDrawOverlays(this)) return;
             BubbleIconView bubble = new BubbleIconView(this);
             bubble.setCircleProgress(BubbleAppearance.loadCircleProgress(this));
             bubble.setCaptureActive(captureActive);
@@ -450,8 +452,12 @@ public final class OverlayCaptureService extends Service {
             bubbleParams.x = Ui.dp(this, 12);
             bubbleParams.y = Ui.dp(this, 110);
             bubble.setOnTouchListener(new BubbleTouchListener());
-            windowManager.addView(bubble, bubbleParams);
-            bubbleView = bubble;
+            try {
+                windowManager.addView(bubble, bubbleParams);
+                bubbleView = bubble;
+            } catch (RuntimeException unavailableWindow) {
+                stopSelf();
+            }
         });
     }
 
@@ -570,15 +576,21 @@ public final class OverlayCaptureService extends Service {
             reader.setOnImageAvailableListener(null, null);
         }
         mainHandler.post(() -> {
+            if (destroying || !isProjectionSessionActive(generation)) return;
             if (bubbleView != null) bubbleView.setVisibility(View.VISIBLE);
             setBubbleGlyph("…");
         });
 
-        worker.execute(() -> {
+        captureCallbacks.execute(() -> {
             Bitmap full = null;
             Bitmap eventCrop = null;
             Bitmap choiceCrop = null;
             try {
+                if (!isProjectionSessionActive(generation)) {
+                    image.close();
+                    captureSession.finishCapture(generation);
+                    return;
+                }
                 full = imageToBitmap(image);
                 image.close();
                 if (!isProjectionSessionActive(generation)) {
@@ -655,8 +667,8 @@ public final class OverlayCaptureService extends Service {
             captureSession.finishCapture(generation);
             return;
         }
-        Task<Text> choiceTask = currentRecognizer.process(InputImage.fromBitmap(choiceBitmap, 0));
-        choiceTask.addOnSuccessListener(worker, choiceText -> {
+        Task<Text> choiceTask = processText(currentRecognizer, choiceBitmap);
+        choiceTask.addOnSuccessListener(captureCallbacks, choiceText -> {
             if (!isProjectionSessionActive(generation)) {
                 recycleBitmaps(eventBitmap, choiceBitmap, fullBitmap);
                 captureSession.finishCapture(generation);
@@ -680,8 +692,8 @@ public final class OverlayCaptureService extends Service {
                 captureSession.finishCapture(generation);
                 return;
             }
-            Task<Text> eventTask = eventRecognizer.process(InputImage.fromBitmap(eventBitmap, 0));
-            eventTask.addOnSuccessListener(worker, eventText -> {
+            Task<Text> eventTask = processText(eventRecognizer, eventBitmap);
+            eventTask.addOnSuccessListener(captureCallbacks, eventText -> {
                 if (!isProjectionSessionActive(generation)) {
                     recycleBitmaps(eventBitmap, fullBitmap);
                     captureSession.finishCapture(generation);
@@ -694,7 +706,7 @@ public final class OverlayCaptureService extends Service {
                 if (!eventBitmap.isRecycled()) eventBitmap.recycle();
                 matchOrFallback(
                         eventLines, choiceLines, fullBitmap, generation, stamina, arcanaAnchor);
-            }).addOnFailureListener(worker, ignored -> {
+            }).addOnFailureListener(captureCallbacks, ignored -> {
                 if (!eventBitmap.isRecycled()) eventBitmap.recycle();
                 if (!isProjectionSessionActive(generation)) {
                     recycleBitmaps(fullBitmap);
@@ -702,8 +714,9 @@ public final class OverlayCaptureService extends Service {
                     return;
                 }
                 matchOrFallback(List.of(), choiceLines, fullBitmap, generation, stamina, null);
-            });
-        }).addOnFailureListener(worker, error -> {
+            }).addOnCanceledListener(captureCallbacks,
+                    () -> recognitionCanceled(generation, eventBitmap, fullBitmap));
+        }).addOnFailureListener(captureCallbacks, error -> {
             recycleBitmaps(eventBitmap, choiceBitmap);
             if (!isProjectionSessionActive(generation)) {
                 recycleBitmaps(fullBitmap);
@@ -717,7 +730,8 @@ public final class OverlayCaptureService extends Service {
             } else {
                 recognizeFull(fullBitmap, generation, List.of(), null, null);
             }
-        });
+        }).addOnCanceledListener(captureCallbacks,
+                () -> recognitionCanceled(generation, eventBitmap, choiceBitmap, fullBitmap));
     }
 
     private void matchOrFallback(List<String> eventLines, List<String> choiceLines,
@@ -755,8 +769,8 @@ public final class OverlayCaptureService extends Service {
             captureSession.finishCapture(generation);
             return;
         }
-        Task<Text> task = currentRecognizer.process(InputImage.fromBitmap(fullBitmap, 0));
-        task.addOnSuccessListener(worker, text -> {
+        Task<Text> task = processText(currentRecognizer, fullBitmap);
+        task.addOnSuccessListener(captureCallbacks, text -> {
             if (!isProjectionSessionActive(generation)) {
                 recycleBitmaps(fullBitmap);
                 captureSession.finishCapture(generation);
@@ -793,7 +807,7 @@ public final class OverlayCaptureService extends Service {
             } else {
                 captureFailed(generation, getString(R.string.choices_unreadable), lines);
             }
-        }).addOnFailureListener(worker, error -> {
+        }).addOnFailureListener(captureCallbacks, error -> {
             recycleBitmaps(fullBitmap);
             if (isProjectionSessionActive(generation)) {
                 captureSession.finishCapture(generation);
@@ -802,7 +816,24 @@ public final class OverlayCaptureService extends Service {
             } else {
                 captureSession.finishCapture(generation);
             }
-        });
+        }).addOnCanceledListener(captureCallbacks,
+                () -> recognitionCanceled(generation, fullBitmap));
+    }
+
+    private Task<Text> processText(TextRecognizer current, Bitmap bitmap) {
+        try {
+            return current.process(InputImage.fromBitmap(bitmap, 0));
+        } catch (RuntimeException unavailableRecognizer) {
+            // close() can race with process(); use the same failure cleanup as an
+            // asynchronous engine failure instead of escaping from a worker callback.
+            return Tasks.forException(unavailableRecognizer);
+        }
+    }
+
+    private void recognitionCanceled(int generation, Bitmap... bitmaps) {
+        recycleBitmaps(bitmaps);
+        captureSession.finishCapture(generation);
+        captureFailed(generation, getString(R.string.capture_ended), List.of());
     }
 
     private ArcanaImageRecognizer.Anchor regionalArcanaAnchor(
@@ -927,7 +958,9 @@ public final class OverlayCaptureService extends Service {
             if (bubbleView != null) bubbleView.setVisibility(View.VISIBLE);
             setBubbleGlyph("!");
             mainHandler.postDelayed(() -> setBubbleGlyph("✦"), 1200);
-            showError(getString(R.string.recognition_failed), message, lines);
+            // Already on the main thread with a validated generation. Posting again
+            // would allow a projection-stop callback to invalidate it before rendering.
+            renderError(getString(R.string.recognition_failed), message, lines);
         });
     }
 
@@ -935,10 +968,14 @@ public final class OverlayCaptureService extends Service {
         Context renderingContext = languageContext;
         mainHandler.post(() -> {
             if (destroying || AppLanguage.of(renderingContext) != language) return;
-            dismissResult();
-            resultView = OverlayResultView.error(this, title, message, lines, this::dismissResult);
-            addResultView(resultView);
+            renderError(title, message, lines);
         });
+    }
+
+    private void renderError(String title, String message, List<String> lines) {
+        dismissResult();
+        resultView = OverlayResultView.error(this, title, message, lines, this::dismissResult);
+        addResultView(resultView);
     }
 
     private void showControlMenu() {
@@ -1099,6 +1136,7 @@ public final class OverlayCaptureService extends Service {
         running = false;
         captureActive = false;
         captureSession.destroy();
+        mainHandler.removeCallbacksAndMessages(null);
         databaseUpdating.set(false);
         dismissResult();
         if (bubbleView != null) {
@@ -1116,7 +1154,7 @@ public final class OverlayCaptureService extends Service {
             } catch (RuntimeException ignored) {}
         }
         closeRecognizer();
-        worker.shutdownNow();
+        captureCallbacks.shutdownNow();
         if (captureThread != null) captureThread.quitSafely();
         stopForeground(STOP_FOREGROUND_REMOVE);
         super.onDestroy();

@@ -5,6 +5,8 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.Rect;
 import android.os.Build;
+import android.text.TextUtils;
+import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -186,8 +188,8 @@ final class OverlayResultView {
     }
 
     private static FrameLayout wrap(Context context, LinearLayout panel) {
-        // Keep the title and close action visible while the entire body can scroll.
-        // Status messages must share the viewport so they cannot crowd out the results.
+        // Keep a compact heading and close action visible. An ellipsized heading
+        // is repeated in full inside the scrollable body so no title or result is lost.
         LinearLayout body = new LinearLayout(context);
         body.setOrientation(LinearLayout.VERTICAL);
         while (panel.getChildCount() > 1) {
@@ -224,7 +226,7 @@ final class OverlayResultView {
     }
 
     private static LinearLayout panel(Context context) {
-        LinearLayout panel = new LinearLayout(context);
+        ResultPanel panel = new ResultPanel(context);
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setPadding(Ui.dp(context, 16), Ui.dp(context, 14), Ui.dp(context, 16), Ui.dp(context, 15));
         panel.setBackground(Ui.roundedStroke(context, Color.argb(239, 27, 25, 45), 18, Color.rgb(91, 83, 137), 1));
@@ -237,15 +239,26 @@ final class OverlayResultView {
         header.setGravity(Gravity.CENTER_VERTICAL);
         TextView heading = Ui.text(context, title, 18, Ui.TEXT);
         heading.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        heading.setSingleLine(true);
+        heading.setEllipsize(TextUtils.TruncateAt.END);
         header.addView(heading, new LinearLayout.LayoutParams(0, -2, 1));
 
         TextView close = Ui.text(context, "×", 26, Ui.MUTED);
+        // This is an icon, not text: font scaling must not crop its fixed touch area.
+        close.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 26);
         close.setGravity(Gravity.CENTER);
+        close.setFocusable(true);
         close.setContentDescription(context.getString(R.string.close_result));
         close.setBackground(Ui.rounded(context, Color.rgb(50, 47, 75), 12));
         close.setOnClickListener(v -> closeAction.run());
         header.addView(close, new LinearLayout.LayoutParams(Ui.dp(context, 38), Ui.dp(context, 38)));
         panel.addView(header, new LinearLayout.LayoutParams(-1, -2));
+        TextView fullTitle = Ui.text(context, title, 18, Ui.TEXT);
+        fullTitle.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        fullTitle.setVisibility(View.GONE);
+        panel.addView(fullTitle, margins(context, -1, -2, 0, 0, 0, 8));
+        ((ResultPanel) panel).heading = heading;
+        ((ResultPanel) panel).fullTitle = fullTitle;
     }
 
     private static void addEffect(Context context, LinearLayout parent, String label, String value, int color) {
@@ -336,6 +349,25 @@ final class OverlayResultView {
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(width, height, weight);
         params.setMargins(Ui.dp(context, left), Ui.dp(context, top), Ui.dp(context, right), Ui.dp(context, bottom));
         return params;
+    }
+
+    private static final class ResultPanel extends LinearLayout {
+        private TextView heading;
+        private TextView fullTitle;
+
+        ResultPanel(Context context) { super(context); }
+
+        @Override
+        protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+            super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+            boolean truncated = heading.getLayout() != null
+                    && heading.getLayout().getEllipsisCount(0) > 0;
+            int visibility = truncated ? View.VISIBLE : View.GONE;
+            if (fullTitle.getVisibility() != visibility) {
+                fullTitle.setVisibility(visibility);
+                super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+            }
+        }
     }
 
     private static final class MaxHeightScrollView extends ScrollView {
