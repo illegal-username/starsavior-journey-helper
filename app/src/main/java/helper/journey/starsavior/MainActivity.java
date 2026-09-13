@@ -108,10 +108,15 @@ public final class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         destroyed = true;
-        mainHandler.removeCallbacks(appearanceUpdate);
-        mainHandler.removeCallbacks(captureRequest);
+        mainHandler.removeCallbacksAndMessages(null);
+        requestCaptureOnResume = false;
+        continueAfterOverlaySettings = false;
         loader.shutdown();
         super.onDestroy();
+    }
+
+    private boolean uiUnavailable() {
+        return destroyed || isFinishing() || isDestroyed();
     }
 
     private void configureSystemBars() {
@@ -119,6 +124,7 @@ public final class MainActivity extends Activity {
         window.setStatusBarColor(Color.rgb(23, 20, 43));
         window.setNavigationBarColor(Ui.BG);
         if (Build.VERSION.SDK_INT >= 30) {
+            window.setDecorFitsSystemWindows(false);
             WindowInsetsController controller = window.getDecorView().getWindowInsetsController();
             if (controller != null) controller.setSystemBarsAppearance(0, WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS);
         }
@@ -128,11 +134,16 @@ public final class MainActivity extends Activity {
         String details = Log.getStackTraceString(error);
         try {
             int side = Math.round(24 * getResources().getDisplayMetrics().density);
+            ScrollView scroll = new ScrollView(this);
+            scroll.setFillViewport(true);
+            scroll.setBackgroundColor(Color.rgb(14, 13, 24));
+            Ui.applySystemInsets(scroll);
             LinearLayout root = new LinearLayout(this);
             root.setOrientation(LinearLayout.VERTICAL);
             root.setGravity(Gravity.CENTER_VERTICAL);
             root.setPadding(side, side, side, side);
             root.setBackgroundColor(Color.rgb(14, 13, 24));
+            scroll.addView(root, new ScrollView.LayoutParams(-1, -2));
 
             TextView title = new TextView(this);
             title.setText(getString(R.string.startup_failed));
@@ -167,7 +178,8 @@ public final class MainActivity extends Activity {
                 Toast.makeText(this, getString(R.string.error_copied), Toast.LENGTH_SHORT).show();
             });
             root.addView(copy, new LinearLayout.LayoutParams(-1, -2));
-            setContentView(root);
+            setContentView(scroll);
+            configureSystemBars();
         } catch (Throwable ignored) {
             TextView fallback = new TextView(this);
             fallback.setText(String.format(AppLanguage.of(this).locale(), getString(R.string.startup_fallback),
@@ -176,6 +188,7 @@ public final class MainActivity extends Activity {
             fallback.setTextSize(18);
             fallback.setGravity(Gravity.CENTER);
             fallback.setBackgroundColor(Color.BLACK);
+            Ui.applySystemInsets(fallback);
             setContentView(fallback);
         }
     }
@@ -184,6 +197,7 @@ public final class MainActivity extends Activity {
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
         scroll.setBackgroundColor(Ui.BG);
+        Ui.applySystemInsets(scroll);
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -299,7 +313,7 @@ public final class MainActivity extends Activity {
                         AppLanguage.setLanguage(this, next);
                         requestCaptureOnResume = false;
                         continueAfterOverlaySettings = false;
-                        mainHandler.removeCallbacks(captureRequest);
+                        mainHandler.removeCallbacksAndMessages(null);
                         if (OverlayCaptureService.isRunning()) {
                             startService(new Intent(this, OverlayCaptureService.class)
                                     .setAction(OverlayCaptureService.ACTION_CHANGE_LANGUAGE));
@@ -401,6 +415,7 @@ public final class MainActivity extends Activity {
     }
 
     private void scheduleCaptureRequest() {
+        if (uiUnavailable()) return;
         mainHandler.removeCallbacks(captureRequest);
         mainHandler.postDelayed(captureRequest, 180);
     }
@@ -611,6 +626,7 @@ public final class MainActivity extends Activity {
     }
 
     private void refreshStatus() {
+        if (uiUnavailable()) return;
         boolean overlay = Settings.canDrawOverlays(this);
         boolean running = OverlayCaptureService.isRunning();
         boolean captureActive = OverlayCaptureService.isCaptureActive();
@@ -631,6 +647,7 @@ public final class MainActivity extends Activity {
     }
 
     private void startFlow() {
+        if (uiUnavailable()) return;
         if (OverlayCaptureService.isRunning() && OverlayCaptureService.isCaptureActive()) {
             launchGame();
             return;
@@ -673,6 +690,7 @@ public final class MainActivity extends Activity {
     }
 
     private void continueStartFlow() {
+        if (uiUnavailable()) return;
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQUEST_NOTIFICATIONS);
             return;
@@ -681,6 +699,7 @@ public final class MainActivity extends Activity {
     }
 
     private void requestScreenCapture() {
+        if (uiUnavailable()) return;
         MediaProjectionManager manager = getSystemService(MediaProjectionManager.class);
         startActivityForResult(manager.createScreenCaptureIntent(), REQUEST_CAPTURE);
     }
@@ -688,12 +707,13 @@ public final class MainActivity extends Activity {
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == REQUEST_NOTIFICATIONS) requestScreenCapture();
+        if (!uiUnavailable() && requestCode == REQUEST_NOTIFICATIONS) requestScreenCapture();
     }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (uiUnavailable()) return;
         if (requestCode == REQUEST_CAPTURE) {
             ScreenCapturePermissionDecision.Action decision =
                     ScreenCapturePermissionDecision.fromResult(
@@ -715,6 +735,7 @@ public final class MainActivity extends Activity {
     }
 
     private void launchGame() {
+        if (uiUnavailable()) return;
         if (BuildConfig.BUNDLED_TEST_DATABASE) {
             Toast.makeText(this, getString(R.string.test_open_gallery), Toast.LENGTH_LONG).show();
             moveTaskToBack(true);
