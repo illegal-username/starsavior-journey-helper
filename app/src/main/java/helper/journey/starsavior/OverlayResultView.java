@@ -264,6 +264,8 @@ final class OverlayResultView {
     private static void addEffect(Context context, LinearLayout parent, String label, String value, int color) {
         LinearLayout row = new LinearLayout(context);
         row.setOrientation(LinearLayout.HORIZONTAL);
+        // Baseline alignment can push wrapped text below the measured row height.
+        row.setBaselineAligned(false);
         row.setGravity(Gravity.TOP);
 
         TextView labelView = Ui.text(context, label, 11, color);

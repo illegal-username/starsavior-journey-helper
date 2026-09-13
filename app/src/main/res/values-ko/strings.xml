@@ -24,7 +24,6 @@
     <string name="how_step_4">"4. ✦ 아이콘을 길게 누르면 DB 업데이트와 도우미 종료 메뉴가 열립니다."</string>
     <string name="privacy_title">"화면 내용은 기기 안에서만 처리"</string>
     <string name="privacy_body">"캡처 이미지와 인식한 글자는 저장하거나 전송하지 않습니다. 광고·자체 추적 서버는 없습니다. 앱을 열면 최신 DB 여부를 확인하고, 사용자가 DB 업데이트를 누르면 데이터를 받기 위해 배포 서버에 접속합니다. ML Kit SDK는 호환성 정보와 성능 지표를 위해 Google과 통신할 수 있습니다."</string>
-    <string name="database_source">"선택지 DB 원본  ↗"</string>
     <string name="source_privacy">"오픈소스·개인정보 안내  ↗"</string>
     <string name="disclaimer">"비공식 팬 도우미이며 STUDIOBSIDE와 제휴·보증 관계가 없습니다."</string>
     <string name="floating_icon">"플로팅 아이콘"</string>

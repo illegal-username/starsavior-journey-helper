@@ -24,7 +24,6 @@
     <string name="how_step_4">"4. ✦アイコンを長押しすると、DB更新とヘルパー終了のメニューが開きます。"</string>
     <string name="privacy_title">"画面の内容は端末内でのみ処理"</string>
     <string name="privacy_body">"キャプチャ画像と認識した文字は保存・送信しません。広告や独自の追跡サーバーはありません。起動時にDBの更新を確認し、DB更新を押すと配信サーバーからデータを取得します。ML Kit SDKは互換性情報や性能指標のためにGoogleと通信する場合があります。"</string>
-    <string name="database_source">"選択肢DBの配信元  ↗"</string>
     <string name="source_privacy">"ソースコード・プライバシー  ↗"</string>
     <string name="disclaimer">"非公式のファン制作ヘルパーです。STUDIOBSIDEとの提携・保証関係はありません。"</string>
     <string name="floating_icon">"フローティングアイコン"</string>

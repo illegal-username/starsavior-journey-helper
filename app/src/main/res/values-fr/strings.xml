@@ -24,7 +24,6 @@
     <string name="how_step_4">"4. Maintenez l’icône ✦ pour ouvrir le menu de mise à jour de la base ou d’arrêt de l’assistant."</string>
     <string name="privacy_title">"Le contenu de l’écran reste sur votre appareil"</string>
     <string name="privacy_body">"Les images capturées et le texte reconnu ne sont ni enregistrés ni transmis. Cette application n’exploite aucun serveur publicitaire ou de suivi. À l’ouverture, elle vérifie si une nouvelle base est disponible. Le bouton de mise à jour télécharge la base depuis le serveur de distribution. Le SDK ML Kit peut communiquer avec Google pour des informations de compatibilité et des mesures de performances."</string>
-    <string name="database_source">"Source des choix ↗"</string>
     <string name="source_privacy">"Code source et confidentialité ↗"</string>
     <string name="disclaimer">"Assistant de fans non officiel, sans affiliation ni approbation de STUDIOBSIDE."</string>
     <string name="floating_icon">"Icône flottante"</string>

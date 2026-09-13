@@ -24,7 +24,6 @@
     <string name="how_step_4">"4. 长按✦图标可打开更新DB与关闭助手的菜单。"</string>
     <string name="privacy_title">"画面内容仅在设备内处理"</string>
     <string name="privacy_body">"截取的图像与识别出的文字不会保存或发送。本应用没有广告或自行设置的跟踪服务器。打开时会检查DB是否有更新，点击更新DB后会连接至发布服务器下载数据。ML Kit SDK可能会与Google通信，以获取兼容性信息及提供性能指标。"</string>
-    <string name="database_source">"选项DB来源  ↗"</string>
     <string name="source_privacy">"开源代码与隐私说明  ↗"</string>
     <string name="disclaimer">"本助手为非官方粉丝作品，与STUDIOBSIDE无合作或背书关系。"</string>
     <string name="floating_icon">"悬浮图标"</string>

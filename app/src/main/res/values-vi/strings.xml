@@ -24,7 +24,6 @@
     <string name="how_step_4">"4. Nhấn giữ biểu tượng ✦ để mở trình đơn cập nhật CSDL hoặc dừng trợ lý."</string>
     <string name="privacy_title">"Nội dung màn hình luôn ở trên thiết bị"</string>
     <string name="privacy_body">"Ảnh chụp và văn bản nhận dạng không được lưu hay gửi đi. Ứng dụng không vận hành máy chủ quảng cáo hoặc theo dõi. Khi mở, ứng dụng kiểm tra CSDL mới; nhấn Cập nhật CSDL sẽ tải dữ liệu từ máy chủ phân phối. SDK ML Kit có thể liên lạc với Google để lấy thông tin tương thích và số liệu hiệu suất."</string>
-    <string name="database_source">"Nguồn CSDL lựa chọn ↗"</string>
     <string name="source_privacy">"Mã nguồn và quyền riêng tư ↗"</string>
     <string name="disclaimer">"Trợ lý không chính thức do người hâm mộ tạo, không liên kết hay được STUDIOBSIDE bảo trợ."</string>
     <string name="floating_icon">"Biểu tượng nổi"</string>

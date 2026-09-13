@@ -24,7 +24,6 @@
     <string name="how_step_4">"4. Halte das ✦-Symbol gedrückt, um das Menü zum Aktualisieren der Datenbank oder Beenden des Helfers zu öffnen."</string>
     <string name="privacy_title">"Bildschirminhalte bleiben auf deinem Gerät"</string>
     <string name="privacy_body">"Erfasste Bilder und erkannter Text werden weder gespeichert noch übertragen. Diese App betreibt keine Werbe- oder Trackingserver. Beim Öffnen wird nach einer neuen Datenbank gesucht; die Aktualisierung lädt sie vom Verteilungsserver herunter. Das ML Kit SDK kann für Kompatibilitätsinformationen und Leistungsmetriken mit Google kommunizieren."</string>
-    <string name="database_source">"Quelle der Optionsdaten ↗"</string>
     <string name="source_privacy">"Quellcode und Datenschutz ↗"</string>
     <string name="disclaimer">"Inoffizieller Fan-Helfer, ohne Verbindung zu oder Unterstützung durch STUDIOBSIDE."</string>
     <string name="floating_icon">"Schwebendes Symbol"</string>

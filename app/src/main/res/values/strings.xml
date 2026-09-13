@@ -24,7 +24,6 @@
     <string name="how_step_4">"4. Hold the ✦ icon to open the menu for updating the DB or stopping the helper."</string>
     <string name="privacy_title">"Screen content stays on your device"</string>
     <string name="privacy_body">"Captured images and recognized text are neither saved nor transmitted. There are no ads or tracking servers operated by this app. Opening the app checks for a new DB; tapping Update DB connects to the distribution server to download it. The ML Kit SDK may communicate with Google for compatibility information and performance metrics."</string>
-    <string name="database_source">"Choice DB source  ↗"</string>
     <string name="source_privacy">"Source code and privacy  ↗"</string>
     <string name="disclaimer">"An unofficial fan helper, unaffiliated with and not endorsed by STUDIOBSIDE."</string>
     <string name="floating_icon">"Floating icon"</string>

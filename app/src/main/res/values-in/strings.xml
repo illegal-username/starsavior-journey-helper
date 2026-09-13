@@ -24,7 +24,6 @@
     <string name="how_step_4">"4. Tekan lama ikon ✦ untuk membuka menu pembaruan DB atau menghentikan asisten."</string>
     <string name="privacy_title">"Isi layar tetap di perangkat Anda"</string>
     <string name="privacy_body">"Gambar tangkapan dan teks yang dikenali tidak disimpan atau dikirim. Aplikasi ini tidak mengoperasikan server iklan atau pelacakan. Saat dibuka, aplikasi memeriksa DB baru; tombol Perbarui DB mengunduhnya dari server distribusi. SDK ML Kit dapat berkomunikasi dengan Google untuk informasi kompatibilitas dan metrik kinerja."</string>
-    <string name="database_source">"Sumber DB pilihan ↗"</string>
     <string name="source_privacy">"Kode sumber dan privasi ↗"</string>
     <string name="disclaimer">"Asisten penggemar tidak resmi, tidak berafiliasi dengan atau didukung oleh STUDIOBSIDE."</string>
     <string name="floating_icon">"Ikon mengambang"</string>
