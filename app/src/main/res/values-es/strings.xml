@@ -24,7 +24,6 @@
     <string name="how_step_4">"4. Mantén pulsado el icono ✦ para abrir el menú y actualizar la BD o detener el ayudante."</string>
     <string name="privacy_title">"El contenido de la pantalla permanece en tu dispositivo"</string>
     <string name="privacy_body">"Las imágenes capturadas y el texto reconocido no se guardan ni se transmiten. Esta aplicación no opera servidores de publicidad ni de seguimiento. Al abrirla se comprueba si hay una nueva BD; al pulsar Actualizar BD se descarga desde el servidor de distribución. El SDK de ML Kit puede comunicarse con Google para obtener información de compatibilidad y métricas de rendimiento."</string>
-    <string name="database_source">"Fuente de la BD de opciones ↗"</string>
     <string name="source_privacy">"Código fuente y privacidad ↗"</string>
     <string name="disclaimer">"Ayudante de fans no oficial, sin afiliación ni respaldo de STUDIOBSIDE."</string>
     <string name="floating_icon">"Icono flotante"</string>

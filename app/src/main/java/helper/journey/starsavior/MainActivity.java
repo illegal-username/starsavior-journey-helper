@@ -272,12 +272,6 @@ public final class MainActivity extends Activity {
         privacy.addView(privacyBody);
         root.addView(privacy, marginParams(-1, -2, 0, 0, 0, 14));
 
-        TextView source = Ui.text(this, getString(R.string.database_source), 14, Ui.BLUE);
-        source.setPadding(Ui.dp(this, 4), Ui.dp(this, 8), Ui.dp(this, 4), Ui.dp(this, 8));
-        source.setOnClickListener(v -> startActivity(new Intent(Intent.ACTION_VIEW,
-                Uri.parse(AppLanguage.of(this).databaseUrl()))));
-        root.addView(source);
-
         TextView openSource = Ui.text(this, getString(R.string.source_privacy), 14, Ui.BLUE);
         openSource.setPadding(Ui.dp(this, 4), Ui.dp(this, 8), Ui.dp(this, 4), Ui.dp(this, 8));
         openSource.setOnClickListener(v -> startActivity(new Intent(Intent.ACTION_VIEW,
