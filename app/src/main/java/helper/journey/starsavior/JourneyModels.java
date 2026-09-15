@@ -12,6 +12,7 @@ public final class JourneyModels {
     private JourneyModels() {}
 
     public static final class Data {
+        final RaidModels.Data raids;
         public final int schema;
         public final String language;
         public final String generatedAt;
@@ -48,6 +49,15 @@ public final class JourneyModels {
                     int recordCount, int choiceCount, String contentSha256, int contentLength,
                     List<Event> events, Map<String, ArcanaImageFeature> arcanaImageFeatures,
                     String language) {
+            this(schema, generatedAt, source, upstreamRevision, recordCount, choiceCount,
+                    contentSha256, contentLength, events, arcanaImageFeatures, language, RaidModels.Data.EMPTY);
+        }
+
+        Data(int schema, String generatedAt, String source, String upstreamRevision,
+             int recordCount, int choiceCount, String contentSha256, int contentLength,
+             List<Event> events, Map<String, ArcanaImageFeature> arcanaImageFeatures,
+             String language, RaidModels.Data raids) {
+            this.raids = raids;
             this.language = language;
             this.schema = schema;
             this.generatedAt = generatedAt;

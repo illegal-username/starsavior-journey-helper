@@ -292,7 +292,7 @@ public class JourneyDatabaseUpdateFlowTest {
                     Fixture fixture = new Fixture();
                     String meta = DatabaseTestData.manifest(sameHash ? fixture.old : fixture.next,
                             futureSchema ? 51 : BuildConfig.VERSION_CODE + 1);
-                    if (futureSchema) meta = change(meta, "databaseSchema", 6);
+                    if (futureSchema) meta = change(meta, "databaseSchema", 7);
                     if (cached) fixture.backend.cache(fixture.language, meta, "future");
                     Http http = new Http(cached ? response(304, "", "") : ok(meta, "future"));
                     JourneyDatabaseUpdater.UpdateResult result = JourneyDatabaseUpdater.update(fixture.session, http, null);

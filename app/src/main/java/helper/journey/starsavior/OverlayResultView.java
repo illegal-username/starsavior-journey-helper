@@ -187,7 +187,7 @@ final class OverlayResultView {
         return true;
     }
 
-    private static FrameLayout wrap(Context context, LinearLayout panel) {
+    static FrameLayout wrap(Context context, LinearLayout panel) {
         // Keep a compact heading and close action visible. An ellipsized heading
         // is repeated in full inside the scrollable body so no title or result is lost.
         LinearLayout body = new LinearLayout(context);
@@ -225,7 +225,7 @@ final class OverlayResultView {
         return Math.min(Ui.dp(context, 480), Math.round(screenHeight * 0.66f));
     }
 
-    private static LinearLayout panel(Context context) {
+    static LinearLayout panel(Context context) {
         ResultPanel panel = new ResultPanel(context);
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setPadding(Ui.dp(context, 16), Ui.dp(context, 14), Ui.dp(context, 16), Ui.dp(context, 15));
@@ -233,7 +233,7 @@ final class OverlayResultView {
         return panel;
     }
 
-    private static void addHeader(Context context, LinearLayout panel, String title, Runnable closeAction) {
+    static void addHeader(Context context, LinearLayout panel, String title, Runnable closeAction) {
         LinearLayout header = new LinearLayout(context);
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
@@ -261,7 +261,7 @@ final class OverlayResultView {
         ((ResultPanel) panel).fullTitle = fullTitle;
     }
 
-    private static void addEffect(Context context, LinearLayout parent, String label, String value, int color) {
+    static void addEffect(Context context, LinearLayout parent, String label, String value, int color) {
         LinearLayout row = new LinearLayout(context);
         row.setOrientation(LinearLayout.HORIZONTAL);
         // Baseline alignment can push wrapped text below the measured row height.
@@ -341,12 +341,12 @@ final class OverlayResultView {
         panel.addView(notice, margins(context, -1, -2, 0, 0, 0, 0));
     }
 
-    private static LinearLayout.LayoutParams margins(Context context, int width, int height,
+    static LinearLayout.LayoutParams margins(Context context, int width, int height,
                                                        int left, int top, int right, int bottom) {
         return margins(context, width, height, left, top, right, bottom, 0);
     }
 
-    private static LinearLayout.LayoutParams margins(Context context, int width, int height,
+    static LinearLayout.LayoutParams margins(Context context, int width, int height,
                                                        int left, int top, int right, int bottom, float weight) {
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(width, height, weight);
         params.setMargins(Ui.dp(context, left), Ui.dp(context, top), Ui.dp(context, right), Ui.dp(context, bottom));

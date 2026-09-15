@@ -15,6 +15,14 @@ public class JourneyUpdateStateStoreTest {
         }
     }
 
+    @Test public void previousVerifiedContractCannotReuseItsEtagAfterSchemaUpgrade() throws Exception {
+        String meta = DatabaseTestData.manifest(DatabaseTestData.json(GameLanguage.KOREAN, "old", 20), 51);
+        JourneyUpdateStateStore.State current = JourneyUpdateStateStore.State.verified(meta, "etag", GameLanguage.KOREAN);
+        assertNotNull(current.manifest(GameLanguage.KOREAN));
+        assertNull(new JourneyUpdateStateStore.State(meta, "old-etag", 1, current.manifestUrl)
+                .manifest(GameLanguage.KOREAN));
+    }
+
     @Test public void verifiedMetadataIsBoundToLanguageAndEndpoint() throws Exception {
         for (GameLanguage language : GameLanguage.values()) {
             String meta = DatabaseTestData.manifest(DatabaseTestData.json(language, "new", 20), 51);

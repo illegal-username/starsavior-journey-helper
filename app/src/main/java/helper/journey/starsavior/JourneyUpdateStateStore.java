@@ -10,7 +10,7 @@ final class JourneyUpdateStateStore {
     private static final String MANIFEST_ETAG = "manifest_etag";
     private static final String CONTRACT_VERSION = "metadata_contract_version";
     private static final String MANIFEST_URL = "manifest_url";
-    private static final int VERIFIED_METADATA_CONTRACT = 1;
+    private static final int VERIFIED_METADATA_CONTRACT = 2;
 
     static final class State {
         final String manifestJson;

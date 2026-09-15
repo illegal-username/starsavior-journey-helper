@@ -101,6 +101,9 @@ final class JourneyDatabaseManifest {
         if (minimumAppVersionCode < 1) {
             throw new JSONException("Invalid minimum app version.");
         }
+        if (databaseSchema == 6 && minimumAppVersionCode < 57) {
+            throw new JSONException("Raid databases require app versionCode 57 or later.");
+        }
     }
 
     void validateV5Contract(GameLanguage requested) throws JSONException {
@@ -113,7 +116,7 @@ final class JourneyDatabaseManifest {
     }
 
     boolean isCompatible(int appVersionCode) {
-        return ((manifestSchema == MANIFEST_SCHEMA && databaseSchema == DATABASE_SCHEMA)
+        return ((manifestSchema == MANIFEST_SCHEMA && (databaseSchema == DATABASE_SCHEMA || databaseSchema == 6))
                 || (manifestSchema == 1 && databaseSchema == 4))
                 && minimumAppVersionCode <= appVersionCode;
     }

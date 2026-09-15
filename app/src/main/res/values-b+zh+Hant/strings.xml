@@ -135,4 +135,17 @@
     <string name="update_metadata_unavailable">"無法確認DB更新資訊，因此未套用。請稍後再試。"</string>
     <string name="update_validation_failed">"下載的DB未通過驗證，因此未套用。請稍後再試。"</string>
     <string name="update_schema_unsupported">"此DB需要較新版本的應用程式。請更新應用程式後再試。"</string>
+    <string name="raid_journey">"旅程難度：%1$s"</string>
+    <string name="raid_unknown_journey">"尚未確認旅程難度・各候選報酬"</string>
+    <string name="raid_rewards_note">"此為基本報酬。旅程及角色加成可能影響實際獲得量。"</string>
+    <string name="raid_tier">"討伐 %1$s"</string>
+    <string name="raid_selected">"已選擇"</string>
+    <string name="raid_mission_bonus">"每項戰鬥任務%1$s +%2$d（最多%3$d項）"</string>
+    <string name="raid_data_unavailable">"需要包含討伐資料的資料庫。"</string>
+    <string name="raid_unreadable">"請在討伐名稱及建議綜合階級可見時重新辨識。"</string>
+    <string name="raid_screen_rank">"建議綜合等級"</string>
+    <string name="raid_screen_tier_1">"低階委託"</string>
+    <string name="raid_screen_tier_2">"中階委託"</string>
+    <string name="raid_screen_tier_3">"高階委託"</string>
+    <string name="raid_common_rewards">"共同獎勵"</string>
 </resources>

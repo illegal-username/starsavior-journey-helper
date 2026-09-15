@@ -188,7 +188,13 @@ public final class OverlayLifecycleTest {
             assertNotNull(started);
             assertEquals(OverlayCaptureService.ACTION_START, started.getAction());
             Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(650));
-            assertNotNull(ShadowAlertDialog.getLatestAlertDialog());
+            if (BuildConfig.BUNDLED_TEST_DATABASE) {
+                assertTrue(Shadows.shadowOf(activity).isTaskMovedToBack());
+                assertNull(ShadowAlertDialog.getLatestAlertDialog());
+            } else {
+                assertFalse(Shadows.shadowOf(activity).isTaskMovedToBack());
+                assertNotNull(ShadowAlertDialog.getLatestAlertDialog());
+            }
         } finally { activity.onDestroy(); }
     }
 

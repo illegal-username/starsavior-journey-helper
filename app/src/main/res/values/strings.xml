@@ -136,4 +136,17 @@
     <string name="update_metadata_unavailable">"The DB update information could not be verified. No DB was applied. Please try again later."</string>
     <string name="update_validation_failed">"The downloaded DB did not pass verification and was not applied. Please try again later."</string>
     <string name="update_schema_unsupported">"This DB requires a newer app. Update the app and try again."</string>
+    <string name="raid_journey">"Journey difficulty: %1$s"</string>
+    <string name="raid_unknown_journey">"Journey difficulty unknown · rewards by candidate"</string>
+    <string name="raid_rewards_note">"Base rewards. Journey and character modifiers may change the amounts received."</string>
+    <string name="raid_tier">"Raid %1$s"</string>
+    <string name="raid_selected">"Selected"</string>
+    <string name="raid_mission_bonus">"%1$s +%2$d per battle mission (up to %3$d missions)"</string>
+    <string name="raid_data_unavailable">"A database containing raid data is required."</string>
+    <string name="raid_unreadable">"Scan again with the raid name and recommended overall rank visible."</string>
+    <string name="raid_screen_rank">"Rec. Overall Rank"</string>
+    <string name="raid_screen_tier_1">"Basic Quest"</string>
+    <string name="raid_screen_tier_2">"Intermediate Quest"</string>
+    <string name="raid_screen_tier_3">"Advanced Quest"</string>
+    <string name="raid_common_rewards">"Shared rewards"</string>
 </resources>

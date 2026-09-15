@@ -108,6 +108,11 @@ public final class JourneyRepository {
         }
         Map<String, JourneyModels.ArcanaImageFeature> arcanaImageFeatures =
                 parseArcanaImageFeatures(root.optJSONObject("arcanaImageFeatures"));
+        if (root.optInt("schema") != 6 && root.has("raids")) {
+            throw new JSONException("Raid data requires database schema 6.");
+        }
+        RaidModels.Data raids = root.optInt("schema") == 6
+                ? RaidRepository.parse(root.getJSONObject("raids")) : RaidModels.Data.EMPTY;
         JSONArray records = root.getJSONArray("records");
         List<JourneyModels.Event> events = new ArrayList<>(records.length());
 
@@ -178,7 +183,8 @@ public final class JourneyRepository {
                 content.length,
                 events,
                 arcanaImageFeatures,
-                root.optInt("schema", 1) == 4 ? "ko-KR" : root.getString("language")
+                root.optInt("schema", 1) == 4 ? "ko-KR" : root.getString("language"),
+                raids
         );
     }
 
@@ -220,7 +226,11 @@ public final class JourneyRepository {
     }
 
     static void validate(JourneyModels.Data data) throws JSONException {
-        if (data.schema != 4 && data.schema != 5) throw new JSONException("Unsupported database schema.");
+        if (data.schema != 4 && data.schema != 5 && data.schema != 6) throw new JSONException("Unsupported database schema.");
+        if ((data.schema == 6 && data.raids.events.isEmpty())
+                || (data.schema != 6 && !data.raids.events.isEmpty())) {
+            throw new JSONException("Raid block and database schema disagree.");
+        }
         try { GameLanguage.require(data.language); }
         catch (IllegalArgumentException error) { throw new JSONException(error.getMessage()); }
         if (data.schema == 4 && !"ko-KR".equals(data.language)) throw new JSONException("Legacy DB must be Korean.");

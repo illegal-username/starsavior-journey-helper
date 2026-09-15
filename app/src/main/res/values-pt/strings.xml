@@ -135,4 +135,17 @@
     <string name="update_metadata_unavailable">"Não foi possível verificar as informações de atualização do BD. Nenhum BD foi aplicado. Tente novamente mais tarde."</string>
     <string name="update_validation_failed">"O BD baixado não passou na verificação e não foi aplicado. Tente novamente mais tarde."</string>
     <string name="update_schema_unsupported">"Este BD requer um aplicativo mais recente. Atualize o aplicativo e tente novamente."</string>
+    <string name="raid_journey">"Dificuldade da Jornada: %1$s"</string>
+    <string name="raid_unknown_journey">"Dificuldade desconhecida · recompensas por opção"</string>
+    <string name="raid_rewards_note">"Recompensas básicas. Bônus da Jornada e dos personagens podem alterar as quantidades."</string>
+    <string name="raid_tier">"Incursão %1$s"</string>
+    <string name="raid_selected">"Selecionado"</string>
+    <string name="raid_mission_bonus">"%1$s +%2$d por missão de batalha (até %3$d missões)"</string>
+    <string name="raid_data_unavailable">"É necessária uma base com dados de incursões."</string>
+    <string name="raid_unreadable">"Leia novamente com o nome e o ranque geral recomendado visíveis."</string>
+    <string name="raid_screen_rank">"Rank Geral Recomendado"</string>
+    <string name="raid_screen_tier_1">"Missão de Nível Baixo"</string>
+    <string name="raid_screen_tier_2">"Missão Intermediária"</string>
+    <string name="raid_screen_tier_3">"Missão Avançada"</string>
+    <string name="raid_common_rewards">"Recompensas comuns"</string>
 </resources>
