@@ -1,5 +1,15 @@
 # 변경 기록
 
+## 2.2.8 · 2026-09-16
+
+### 한국어
+
+- 토벌 결과창에서도 현재 스태미나와 변화 미리보기를 표시합니다.
+
+### English
+
+- Raid results now show current stamina and previewed changes.
+
 ## 2.2.7 · 2026-09-16
 
 ### 한국어

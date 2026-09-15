@@ -498,7 +498,7 @@ public class StaminaGaugeDetectorTest {
                 Math.abs(expected - actual) <= tolerance);
     }
 
-    private static final class Fixture {
+    static final class Fixture {
         final int width;
         final int height;
         final StaminaGaugeDetector.Region region;

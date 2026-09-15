@@ -284,8 +284,8 @@ final class OverlayResultView {
         parent.addView(row, margins(context, -1, -2, 0, 6, 0, 0));
     }
 
-    private static void addJourneyStatus(Context context, LinearLayout panel,
-                                         StaminaGaugeDetector.Result stamina) {
+    static void addJourneyStatus(Context context, LinearLayout panel,
+                                 StaminaGaugeDetector.Result stamina) {
         StringBuilder text = new StringBuilder();
         if (stamina != null) {
             if (stamina.hasPreview()) {

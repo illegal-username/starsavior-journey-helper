@@ -30,7 +30,9 @@ public class RaidResultViewTest {
         RaidModels.Event event = new RaidModels.Event("Example raid", "Example journey", options);
         RaidModels.Data data = new RaidModels.Data("Recommended rank", "coin", List.of(), List.of(event));
         View view = RaidResultView.render(context, data,
-                new RaidModels.Match(true, List.of(event), 2, 15702, true, false), () -> {});
+                new RaidModels.Match(true, List.of(event), 2, 15702, true, false),
+                new StaminaGaugeDetector.Result(61, 78, StaminaGaugeDetector.Direction.GAIN, null, 1),
+                () -> {});
         view.measure(View.MeasureSpec.makeMeasureSpec(320, View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(520, View.MeasureSpec.AT_MOST));
         view.layout(0, 0, view.getMeasuredWidth(), view.getMeasuredHeight());
@@ -49,6 +51,11 @@ public class RaidResultViewTest {
             assertTrue(text.getBottom() <= parent.getHeight());
         }
         assertEquals(6, rewards);
+        TextView stamina = UiTestSupport.text(view, context.getString(R.string.stamina_after, 61, 78));
+        assertNotNull(stamina);
+        assertNotNull(stamina.getLayout());
+        assertTrue(stamina.getHeight() >= stamina.getLayout().getHeight()
+                + stamina.getCompoundPaddingTop() + stamina.getCompoundPaddingBottom());
         assertRanksHidden(texts, 15701, 15702, 15703);
         for (String tier : List.of("I", "II", "III")) {
             assertTrue(texts.stream().anyMatch(t -> t.getText().toString()
@@ -67,7 +74,7 @@ public class RaidResultViewTest {
         RaidModels.Data data = new RaidModels.Data("Recommended rank", "coin", List.of(), events);
         assertTrue(RaidResultView.hasSharedSingleRewards(events));
         View view = RaidResultView.render(context, data,
-                new RaidModels.Match(true, events, 0, -1, false, false), () -> {});
+                new RaidModels.Match(true, events, 0, -1, false, false), null, () -> {});
         List<TextView> texts = new ArrayList<>();
         collect(view, texts);
         assertEquals(1, texts.stream().filter(t -> t.getText().toString().contains("Emergency victory")).count());
@@ -88,7 +95,7 @@ public class RaidResultViewTest {
         assertFalse(RaidResultView.hasSharedSingleRewards(different));
         RaidModels.Data data = new RaidModels.Data("Recommended rank", "coin", List.of(), different);
         View view = RaidResultView.render(context, data,
-                new RaidModels.Match(true, different, 0, 997, false, true), () -> {});
+                new RaidModels.Match(true, different, 0, 997, false, true), null, () -> {});
         List<TextView> texts = new ArrayList<>();
         collect(view,texts);
         assertEquals(2,texts.stream().filter(t -> t.getText().toString().contains("Emergency victory")).count());
@@ -96,7 +103,7 @@ public class RaidResultViewTest {
         assertTrue(texts.stream().anyMatch(t -> t.getText().toString()
                 .equals(context.getString(R.string.raid_unknown_journey))));
         View resolved = RaidResultView.render(context,data,
-                new RaidModels.Match(true,List.of(different.get(0)),0,131,true,false),() -> {});
+                new RaidModels.Match(true,List.of(different.get(0)),0,131,true,false),null,() -> {});
         texts.clear(); collect(resolved,texts);
         assertRanksHidden(texts, 131);
         assertEquals(1, texts.stream().filter(t -> t.getText().toString().contains("Emergency victory")).count());
