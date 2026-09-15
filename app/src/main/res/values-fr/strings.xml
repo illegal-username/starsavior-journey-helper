@@ -137,7 +137,6 @@
     <string name="update_schema_unsupported">"Cette BD nécessite une version plus récente de l’application. Mettez l’application à jour et réessayez."</string>
     <string name="raid_journey">"Difficulté du Périple : %1$s"</string>
     <string name="raid_unknown_journey">"Difficulté inconnue · récompenses par possibilité"</string>
-    <string name="raid_rewards_note">"Récompenses de base. Les bonus du Périple et des personnages peuvent modifier les quantités."</string>
     <string name="raid_tier">"Raid %1$s"</string>
     <string name="raid_selected">"Sélectionné"</string>
     <string name="raid_mission_bonus">"%1$s +%2$d par mission de combat (jusqu’à %3$d missions)"</string>

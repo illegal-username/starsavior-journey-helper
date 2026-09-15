@@ -20,8 +20,6 @@ final class RaidResultView {
                 : context.getString(R.string.raid_unknown_journey);
         TextView subtitle = Ui.text(context, status, 13, match.difficultyResolved ? Ui.GREEN : Ui.ORANGE);
         panel.addView(subtitle, OverlayResultView.margins(context, -1, -2, 0, 3, 0, 8));
-        TextView note = Ui.text(context, context.getString(R.string.raid_rewards_note), 11, Ui.MUTED);
-        panel.addView(note, OverlayResultView.margins(context, -1, -2, 0, 0, 0, 10));
 
         boolean shared = hasSharedSingleRewards(match.events);
         if (shared) {

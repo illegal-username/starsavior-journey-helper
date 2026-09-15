@@ -137,7 +137,6 @@
     <string name="update_schema_unsupported">"DB ini memerlukan aplikasi yang lebih baru. Perbarui aplikasi, lalu coba lagi."</string>
     <string name="raid_journey">"Kesulitan Perjalanan: %1$s"</string>
     <string name="raid_unknown_journey">"Kesulitan belum diketahui · hadiah setiap kandidat"</string>
-    <string name="raid_rewards_note">"Hadiah dasar. Bonus Perjalanan dan karakter dapat mengubah jumlah yang diterima."</string>
     <string name="raid_tier">"Penaklukan %1$s"</string>
     <string name="raid_selected">"Dipilih"</string>
     <string name="raid_mission_bonus">"%1$s +%2$d per misi pertempuran (hingga %3$d misi)"</string>

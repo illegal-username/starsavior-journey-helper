@@ -137,7 +137,6 @@
     <string name="update_schema_unsupported">"Diese DB benötigt eine neuere App. Bitte die App aktualisieren und erneut versuchen."</string>
     <string name="raid_journey">"Reiseschwierigkeit: %1$s"</string>
     <string name="raid_unknown_journey">"Reiseschwierigkeit unbekannt · mögliche Belohnungen"</string>
-    <string name="raid_rewards_note">"Grundbelohnungen. Reise- und Charakterboni können die erhaltenen Mengen verändern."</string>
     <string name="raid_tier">"Jagd %1$s"</string>
     <string name="raid_selected">"Ausgewählt"</string>
     <string name="raid_mission_bonus">"%1$s +%2$d pro Kampfmission (bis zu %3$d Missionen)"</string>

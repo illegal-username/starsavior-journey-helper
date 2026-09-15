@@ -1,5 +1,15 @@
 # 변경 기록
 
+## 2.2.7 · 2026-09-16
+
+### 한국어
+
+- 토벌 결과창의 불필요한 안내 문구를 제거했습니다.
+
+### English
+
+- Removed an unnecessary notice from raid results.
+
 ## 2.2.6 · 2026-09-16
 
 - 새 토벌 DB를 받을 때 검증 오류로 업데이트가 실패하던 문제를 수정했습니다.
@@ -10,13 +20,19 @@ After installing the update, tap **Update DB / Get new DB** again.
 
 ## 2.2.5 · 2026-09-15
 
-- 여정 토벌 화면을 인식해 토벌 I·II·III별 성공·실패 기본 보상과 임무 추가 보상을 안내합니다.
-- 플로라 긴급 토벌 의뢰와 칼라이드 긴급 의뢰도 지원합니다. 여정 난이도가 불명확하고 후보 보상이 같으면 공통 보상을 한 번 표시합니다.
-- 여정 난이도와 토벌 단계를 별도로 판단하며, 권장 종합랭크는 내부 인식에만 사용합니다.
-- 기존 선택지·대화 인식과 분리된 토벌 데이터와 안내를 11개 언어로 제공합니다.
+### 한국어
 
-기존 공개판 및 build57 토벌 시험판 위에 APK를 설치하면 업데이트됩니다. 설치 후 **DB 업데이트 / 새 DB 받기**를 눌러 토벌 데이터를 적용하세요.
-표시된 보상은 게임 내 추가 보정 전 기본값입니다.
+- 토벌 I·II·III별 성공·실패 보상 안내를 추가했습니다.
+- 플로라 긴급 토벌 의뢰와 칼라이드 긴급 의뢰 인식을 지원합니다.
+
+업데이트 후 **DB 업데이트 / 새 DB 받기**를 눌러 주세요.
+
+### English
+
+- Added victory and defeat reward previews for Raid tiers I, II, and III.
+- Added recognition for **Flora Emergency Hunt Quest** and **Kalaid Emergency Quest**.
+
+After installing the update, tap **Update DB / Get new DB**.
 
 ## 2.2.4 · 2026-09-13
 
