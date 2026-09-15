@@ -789,7 +789,8 @@ public final class OverlayCaptureService extends Service {
             if (raid.raidScreen) {
                 recycleBitmaps(fullBitmap);
                 captureSession.finishCapture(generation);
-                if (!raid.events.isEmpty()) mainHandler.post(() -> showRaid(generation, raidData, raid));
+                if (!raid.events.isEmpty()) mainHandler.post(() -> showRaid(generation, raidData, raid, stamina));
+                else if (stamina != null) mainHandler.post(() -> showStamina(generation, stamina));
                 else captureFailed(generation, getString(raidData.events.isEmpty()
                         ? R.string.raid_data_unavailable : R.string.raid_unreadable), List.of());
                 return;
@@ -962,12 +963,13 @@ public final class OverlayCaptureService extends Service {
         return lines;
     }
 
-    private void showRaid(int generation, RaidModels.Data data, RaidModels.Match match) {
+    private void showRaid(int generation, RaidModels.Data data, RaidModels.Match match,
+                          StaminaGaugeDetector.Result stamina) {
         if (!isProjectionSessionActive(generation) || destroying) return;
         setBubbleGlyph("✓");
         mainHandler.postDelayed(() -> setBubbleGlyph("✦"), 900);
         dismissResult();
-        resultView = RaidResultView.render(this, data, match, this::dismissResult);
+        resultView = RaidResultView.render(this, data, match, stamina, this::dismissResult);
         addResultView(resultView);
     }
 

@@ -11,10 +11,12 @@ import java.util.List;
 final class RaidResultView {
     private RaidResultView() {}
 
-    static View render(Context context, RaidModels.Data data, RaidModels.Match match, Runnable close) {
+    static View render(Context context, RaidModels.Data data, RaidModels.Match match,
+                       StaminaGaugeDetector.Result stamina, Runnable close) {
         LinearLayout panel = OverlayResultView.panel(context);
         panel.setTag("raid_result");
         OverlayResultView.addHeader(context, panel, match.events.get(0).name, close);
+        OverlayResultView.addJourneyStatus(context, panel, stamina);
         String status = match.difficultyResolved
                 ? context.getString(R.string.raid_journey, match.events.get(0).journeyDifficulty)
                 : context.getString(R.string.raid_unknown_journey);

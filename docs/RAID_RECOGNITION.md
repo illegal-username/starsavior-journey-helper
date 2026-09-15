@@ -25,6 +25,11 @@ can be joined when their size and column agree. When journey
 difficulty is unknown and every candidate has identical rewards, the result
 shows the shared rewards once and retains each journey candidate.
 
+Stamina uses the same capture-time detector and stabilization as other screens.
+Its current and preview values pass through raid recognition to the shared status
+renderer. A missing gauge adds no stamina row. If no raid record matches, a
+detected gauge remains available through the usual stamina-only result.
+
 ## Data contract
 
 Database schema 6 adds a required `raids` block to the existing language-specific
