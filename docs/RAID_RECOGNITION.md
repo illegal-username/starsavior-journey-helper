@@ -23,7 +23,7 @@ Recommended ranks are internal evidence only and never appear in the result UI.
 Selectable raids list all three tiers with their victory/defeat rewards. Single-battle emergency requests have no Roman tier. Adjacent title lines
 can be joined when their size and column agree. When journey
 difficulty is unknown and every candidate has identical rewards, the result
-shows the shared rewards once and retains each journey candidate. These are base rewards; current game modifiers are not predicted.
+shows the shared rewards once and retains each journey candidate.
 
 ## Data contract
 

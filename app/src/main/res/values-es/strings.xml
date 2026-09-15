@@ -137,7 +137,6 @@
     <string name="update_schema_unsupported">"Esta BD requiere una aplicación más reciente. Actualiza la aplicación e inténtalo de nuevo."</string>
     <string name="raid_journey">"Dificultad de La Travesía: %1$s"</string>
     <string name="raid_unknown_journey">"Dificultad desconocida · recompensas por opción"</string>
-    <string name="raid_rewards_note">"Recompensas base. Los modificadores de la Travesía y del personaje pueden cambiar las cantidades."</string>
     <string name="raid_tier">"Incursión %1$s"</string>
     <string name="raid_selected">"Seleccionado"</string>
     <string name="raid_mission_bonus">"%1$s +%2$d por misión de combate (hasta %3$d misiones)"</string>

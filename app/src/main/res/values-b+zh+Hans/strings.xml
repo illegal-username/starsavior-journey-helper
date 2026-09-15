@@ -137,7 +137,6 @@
     <string name="update_schema_unsupported">"此DB需要较新版本的应用。请更新应用后重试。"</string>
     <string name="raid_journey">"旅程难度：%1$s"</string>
     <string name="raid_unknown_journey">"尚未确认旅程难度・各候选奖励"</string>
-    <string name="raid_rewards_note">"此为基础奖励。旅程及角色加成可能影响实际获得量。"</string>
     <string name="raid_tier">"讨伐 %1$s"</string>
     <string name="raid_selected">"已选择"</string>
     <string name="raid_mission_bonus">"每项战斗任务%1$s +%2$d（最多%3$d项）"</string>

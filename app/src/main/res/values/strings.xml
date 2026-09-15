@@ -138,7 +138,6 @@
     <string name="update_schema_unsupported">"This DB requires a newer app. Update the app and try again."</string>
     <string name="raid_journey">"Journey difficulty: %1$s"</string>
     <string name="raid_unknown_journey">"Journey difficulty unknown · rewards by candidate"</string>
-    <string name="raid_rewards_note">"Base rewards. Journey and character modifiers may change the amounts received."</string>
     <string name="raid_tier">"Raid %1$s"</string>
     <string name="raid_selected">"Selected"</string>
     <string name="raid_mission_bonus">"%1$s +%2$d per battle mission (up to %3$d missions)"</string>

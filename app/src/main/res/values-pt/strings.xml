@@ -137,7 +137,6 @@
     <string name="update_schema_unsupported">"Este BD requer um aplicativo mais recente. Atualize o aplicativo e tente novamente."</string>
     <string name="raid_journey">"Dificuldade da Jornada: %1$s"</string>
     <string name="raid_unknown_journey">"Dificuldade desconhecida · recompensas por opção"</string>
-    <string name="raid_rewards_note">"Recompensas básicas. Bônus da Jornada e dos personagens podem alterar as quantidades."</string>
     <string name="raid_tier">"Incursão %1$s"</string>
     <string name="raid_selected">"Selecionado"</string>
     <string name="raid_mission_bonus">"%1$s +%2$d por missão de batalha (até %3$d missões)"</string>

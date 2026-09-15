@@ -137,7 +137,6 @@
     <string name="update_schema_unsupported">"このDBには新しいバージョンのアプリが必要です。アプリを更新してから再試行してください。"</string>
     <string name="raid_journey">"救援の旅の難易度：%1$s"</string>
     <string name="raid_unknown_journey">"救援の旅の難易度は未確認・候補ごとの報酬"</string>
-    <string name="raid_rewards_note">"基本報酬です。救援の旅やキャラクターの補正で獲得量が変わる場合があります。"</string>
     <string name="raid_tier">"討伐 %1$s"</string>
     <string name="raid_selected">"選択中"</string>
     <string name="raid_mission_bonus">"戦闘ミッションごとに%1$s +%2$d（最大%3$d件）"</string>
