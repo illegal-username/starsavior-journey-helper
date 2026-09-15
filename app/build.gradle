@@ -44,8 +44,8 @@ android {
         applicationId 'helper.journey.starsavior'
         minSdk 26
         targetSdk 35
-        versionCode 56
-        versionName '2.2.4'
+        versionCode 58
+        versionName '2.2.5'
         buildConfigField 'boolean', 'BUNDLED_TEST_DATABASE', 'false'
 
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
@@ -204,9 +204,9 @@ def prepareBundledTestDatabase = tasks.register('prepareBundledTestDatabase') {
         Map<String, File> byLanguage = [:]
         for (File database : databases) {
             Object parsed = new JsonSlurper().parse(database, 'UTF-8')
-            if (!(parsed instanceof Map) || parsed.schema != 5 || !languages.contains(parsed.language)
+            if (!(parsed instanceof Map) || !(parsed.schema in [5, 6]) || !languages.contains(parsed.language)
                     || !(parsed.records instanceof List) || parsed.records.isEmpty()) {
-                throw new GradleException('Test DB must be a non-empty schema 5 language DB.')
+                throw new GradleException('Test DB must be a non-empty schema 5 or 6 language DB.')
             }
             if (byLanguage.containsKey(parsed.language)) throw new GradleException('Duplicate test DB language.')
             byLanguage[parsed.language] = database

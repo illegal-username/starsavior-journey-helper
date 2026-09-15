@@ -135,4 +135,17 @@
     <string name="update_metadata_unavailable">"Không thể xác minh thông tin cập nhật DB. Chưa áp dụng DB nào. Vui lòng thử lại sau."</string>
     <string name="update_validation_failed">"DB đã tải xuống không vượt qua bước xác minh và chưa được áp dụng. Vui lòng thử lại sau."</string>
     <string name="update_schema_unsupported">"DB này yêu cầu ứng dụng mới hơn. Hãy cập nhật ứng dụng rồi thử lại."</string>
+    <string name="raid_journey">"Độ khó Hành Trình: %1$s"</string>
+    <string name="raid_unknown_journey">"Chưa rõ độ khó · phần thưởng theo từng khả năng"</string>
+    <string name="raid_rewards_note">"Phần thưởng cơ bản. Hiệu ứng Hành Trình và nhân vật có thể thay đổi số lượng nhận được."</string>
+    <string name="raid_tier">"Thảo phạt %1$s"</string>
+    <string name="raid_selected">"Đang chọn"</string>
+    <string name="raid_mission_bonus">"%1$s +%2$d mỗi nhiệm vụ chiến đấu (tối đa %3$d nhiệm vụ)"</string>
+    <string name="raid_data_unavailable">"Cần cơ sở dữ liệu có thông tin thảo phạt."</string>
+    <string name="raid_unreadable">"Quét lại khi thấy tên thảo phạt và hạng tổng thể đề xuất."</string>
+    <string name="raid_screen_rank">"Hạng tổng thể đề xuất"</string>
+    <string name="raid_screen_tier_1">"Nhiệm vụ cấp thấp"</string>
+    <string name="raid_screen_tier_2">"Nhiệm vụ trung cấp"</string>
+    <string name="raid_screen_tier_3">"Nhiệm vụ nâng cao"</string>
+    <string name="raid_common_rewards">"Phần thưởng chung"</string>
 </resources>

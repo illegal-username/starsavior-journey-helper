@@ -135,4 +135,17 @@
     <string name="update_metadata_unavailable">"DBの更新情報を確認できなかったため、適用しませんでした。しばらくしてから再試行してください。"</string>
     <string name="update_validation_failed">"ダウンロードしたDBを検証できなかったため、適用しませんでした。しばらくしてから再試行してください。"</string>
     <string name="update_schema_unsupported">"このDBには新しいバージョンのアプリが必要です。アプリを更新してから再試行してください。"</string>
+    <string name="raid_journey">"救援の旅の難易度：%1$s"</string>
+    <string name="raid_unknown_journey">"救援の旅の難易度は未確認・候補ごとの報酬"</string>
+    <string name="raid_rewards_note">"基本報酬です。救援の旅やキャラクターの補正で獲得量が変わる場合があります。"</string>
+    <string name="raid_tier">"討伐 %1$s"</string>
+    <string name="raid_selected">"選択中"</string>
+    <string name="raid_mission_bonus">"戦闘ミッションごとに%1$s +%2$d（最大%3$d件）"</string>
+    <string name="raid_data_unavailable">"討伐データを含むDBが必要です。"</string>
+    <string name="raid_unreadable">"討伐名と推奨総合ランクが見える状態で再認識してください。"</string>
+    <string name="raid_screen_rank">"推奨総合ランク"</string>
+    <string name="raid_screen_tier_1">"下級依頼"</string>
+    <string name="raid_screen_tier_2">"中級依頼"</string>
+    <string name="raid_screen_tier_3">"上級依頼"</string>
+    <string name="raid_common_rewards">"共通報酬"</string>
 </resources>

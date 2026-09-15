@@ -135,4 +135,17 @@
     <string name="update_metadata_unavailable">"Informasi pembaruan DB tidak dapat diverifikasi. Tidak ada DB yang diterapkan. Coba lagi nanti."</string>
     <string name="update_validation_failed">"DB yang diunduh tidak lolos verifikasi dan tidak diterapkan. Coba lagi nanti."</string>
     <string name="update_schema_unsupported">"DB ini memerlukan aplikasi yang lebih baru. Perbarui aplikasi, lalu coba lagi."</string>
+    <string name="raid_journey">"Kesulitan Perjalanan: %1$s"</string>
+    <string name="raid_unknown_journey">"Kesulitan belum diketahui · hadiah setiap kandidat"</string>
+    <string name="raid_rewards_note">"Hadiah dasar. Bonus Perjalanan dan karakter dapat mengubah jumlah yang diterima."</string>
+    <string name="raid_tier">"Penaklukan %1$s"</string>
+    <string name="raid_selected">"Dipilih"</string>
+    <string name="raid_mission_bonus">"%1$s +%2$d per misi pertempuran (hingga %3$d misi)"</string>
+    <string name="raid_data_unavailable">"Diperlukan database yang berisi data penaklukan."</string>
+    <string name="raid_unreadable">"Pindai lagi saat nama penaklukan dan rank keseluruhan rekomendasi terlihat."</string>
+    <string name="raid_screen_rank">"Peringkat Keseluruhan yang Direkomendasikan"</string>
+    <string name="raid_screen_tier_1">"Quest Tingkat Rendah"</string>
+    <string name="raid_screen_tier_2">"Quest Tingkat Menengah"</string>
+    <string name="raid_screen_tier_3">"Permintaan Tingkat Lanjut"</string>
+    <string name="raid_common_rewards">"Hadiah yang sama"</string>
 </resources>

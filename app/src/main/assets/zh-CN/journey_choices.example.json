@@ -1,5 +1,5 @@
 {
-  "schema": 5,
+  "schema": 6,
   "language": "zh-CN",
   "source": "public-example",
   "generatedAt": "",
@@ -98,5 +98,71 @@
       ],
       "sameProgress": true
     }
-  ]
+  ],
+  "raids": {
+    "schema": 1,
+    "labels": {
+      "rank": "建议综合等级",
+      "tiers": [
+        "低阶委托",
+        "中阶委托",
+        "高阶委托"
+      ],
+      "coin": "Example coin"
+    },
+    "records": [
+      {
+        "name": "Example raid",
+        "journeyDifficulty": "Example journey",
+        "options": [
+          {
+            "tier": 1,
+            "title": "Example raid I",
+            "recommendedRank": 24,
+            "victoryCoin": 13,
+            "missionBonusCoin": 3,
+            "missionCount": 2,
+            "success": "Example success reward",
+            "failure": "Example failure reward"
+          },
+          {
+            "tier": 2,
+            "title": "Example raid II",
+            "recommendedRank": 31,
+            "victoryCoin": 26,
+            "missionBonusCoin": 3,
+            "missionCount": 2,
+            "success": "Example success reward",
+            "failure": "Example failure reward"
+          },
+          {
+            "tier": 3,
+            "title": "Example raid III",
+            "recommendedRank": 38,
+            "victoryCoin": 39,
+            "missionBonusCoin": 3,
+            "missionCount": 2,
+            "success": "Example success reward",
+            "failure": "Example failure reward"
+          }
+        ]
+      },
+      {
+        "name": "Example emergency request",
+        "journeyDifficulty": "Example journey",
+        "options": [
+          {
+            "tier": 0,
+            "title": "Example emergency request",
+            "recommendedRank": 173,
+            "victoryCoin": 23,
+            "missionBonusCoin": 7,
+            "missionCount": 3,
+            "success": "Example emergency victory reward",
+            "failure": "Example emergency defeat reward"
+          }
+        ]
+      }
+    ]
+  }
 }

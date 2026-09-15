@@ -135,4 +135,17 @@
     <string name="update_metadata_unavailable">"Les informations de mise à jour de la BD n’ont pas pu être vérifiées. Aucune BD n’a été appliquée. Réessayez plus tard."</string>
     <string name="update_validation_failed">"La BD téléchargée n’a pas passé la vérification et n’a pas été appliquée. Réessayez plus tard."</string>
     <string name="update_schema_unsupported">"Cette BD nécessite une version plus récente de l’application. Mettez l’application à jour et réessayez."</string>
+    <string name="raid_journey">"Difficulté du Périple : %1$s"</string>
+    <string name="raid_unknown_journey">"Difficulté inconnue · récompenses par possibilité"</string>
+    <string name="raid_rewards_note">"Récompenses de base. Les bonus du Périple et des personnages peuvent modifier les quantités."</string>
+    <string name="raid_tier">"Raid %1$s"</string>
+    <string name="raid_selected">"Sélectionné"</string>
+    <string name="raid_mission_bonus">"%1$s +%2$d par mission de combat (jusqu’à %3$d missions)"</string>
+    <string name="raid_data_unavailable">"Une base contenant les raids est nécessaire."</string>
+    <string name="raid_unreadable">"Relancez la lecture avec le nom du raid et le rang global conseillé visibles."</string>
+    <string name="raid_screen_rank">"Rang global recommandé"</string>
+    <string name="raid_screen_tier_1">"Quête de rang inférieur"</string>
+    <string name="raid_screen_tier_2">"Quête de rang intermédiaire"</string>
+    <string name="raid_screen_tier_3">"Quête de rang supérieur"</string>
+    <string name="raid_common_rewards">"Récompenses communes"</string>
 </resources>

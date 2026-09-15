@@ -677,6 +677,12 @@ public final class OverlayCaptureService extends Service {
             List<String> choiceLines = extractLines(choiceText);
             if (!choiceBitmap.isRecycled()) choiceBitmap.recycle();
 
+            RaidMatcher raidMatcher = raidMatcher(matcherStore.currentData());
+            if (raidMatcher.hasRegionalSignal(choiceLines)) {
+                recycleBitmaps(eventBitmap);
+                recognizeFull(fullBitmap, generation, choiceLines, stamina, null);
+                return;
+            }
             JourneyMatcher currentMatcher = matcherStore.current();
             if (stamina != null && currentMatcher != null
                     && !currentMatcher.hasPlausibleChoiceSignal(choiceLines)) {
@@ -777,6 +783,17 @@ public final class OverlayCaptureService extends Service {
                 return;
             }
             List<String> lines = extractLines(text);
+            JourneyModels.Data raidSnapshot = matcherStore.currentData();
+            RaidModels.Data raidData = raidSnapshot == null ? RaidModels.Data.EMPTY : raidSnapshot.raids;
+            RaidModels.Match raid = raidMatcher(raidSnapshot).match(extractRaidLines(text));
+            if (raid.raidScreen) {
+                recycleBitmaps(fullBitmap);
+                captureSession.finishCapture(generation);
+                if (!raid.events.isEmpty()) mainHandler.post(() -> showRaid(generation, raidData, raid));
+                else captureFailed(generation, getString(raidData.events.isEmpty()
+                        ? R.string.raid_data_unavailable : R.string.raid_unreadable), List.of());
+                return;
+            }
             ArcanaImageRecognizer.Anchor detectedArcanaAnchor = fullArcanaAnchor(text);
             ArcanaImageRecognizer.Anchor arcanaAnchor = detectedArcanaAnchor == null
                     ? regionalArcanaAnchor : detectedArcanaAnchor;
@@ -925,6 +942,33 @@ public final class OverlayCaptureService extends Service {
             if (!trimmed.isEmpty()) result.add(trimmed);
         }
         return result;
+    }
+
+    private RaidMatcher raidMatcher(JourneyModels.Data current) {
+        return new RaidMatcher(current == null ? RaidModels.Data.EMPTY : current.raids,
+                getString(R.string.raid_screen_rank), List.of(getString(R.string.raid_screen_tier_1),
+                        getString(R.string.raid_screen_tier_2), getString(R.string.raid_screen_tier_3)));
+    }
+
+    private List<RaidModels.Line> extractRaidLines(Text text) {
+        List<RaidModels.Line> lines = new ArrayList<>();
+        for (Text.TextBlock block : text.getTextBlocks()) {
+            for (Text.Line line : block.getLines()) {
+                Rect box = line.getBoundingBox();
+                if (box != null) lines.add(new RaidModels.Line(line.getText(),
+                        box.left, box.top, box.right, box.bottom));
+            }
+        }
+        return lines;
+    }
+
+    private void showRaid(int generation, RaidModels.Data data, RaidModels.Match match) {
+        if (!isProjectionSessionActive(generation) || destroying) return;
+        setBubbleGlyph("✓");
+        mainHandler.postDelayed(() -> setBubbleGlyph("✦"), 900);
+        dismissResult();
+        resultView = RaidResultView.render(this, data, match, this::dismissResult);
+        addResultView(resultView);
     }
 
     private void showMatch(int generation, JourneyModels.Match match, String difficulty,

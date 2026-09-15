@@ -135,4 +135,17 @@
     <string name="update_metadata_unavailable">"无法确认DB更新信息，因此未应用。请稍后重试。"</string>
     <string name="update_validation_failed">"下载的DB未通过验证，因此未应用。请稍后重试。"</string>
     <string name="update_schema_unsupported">"此DB需要较新版本的应用。请更新应用后重试。"</string>
+    <string name="raid_journey">"旅程难度：%1$s"</string>
+    <string name="raid_unknown_journey">"尚未确认旅程难度・各候选奖励"</string>
+    <string name="raid_rewards_note">"此为基础奖励。旅程及角色加成可能影响实际获得量。"</string>
+    <string name="raid_tier">"讨伐 %1$s"</string>
+    <string name="raid_selected">"已选择"</string>
+    <string name="raid_mission_bonus">"每项战斗任务%1$s +%2$d（最多%3$d项）"</string>
+    <string name="raid_data_unavailable">"需要包含讨伐数据的数据库。"</string>
+    <string name="raid_unreadable">"请在讨伐名称及建议综合等级可见时重新识别。"</string>
+    <string name="raid_screen_rank">"建议综合等级"</string>
+    <string name="raid_screen_tier_1">"低阶委托"</string>
+    <string name="raid_screen_tier_2">"中阶委托"</string>
+    <string name="raid_screen_tier_3">"高阶委托"</string>
+    <string name="raid_common_rewards">"共同奖励"</string>
 </resources>

@@ -135,4 +135,17 @@
     <string name="update_metadata_unavailable">"DB 업데이트 정보를 확인할 수 없어 적용하지 않았습니다. 잠시 후 다시 시도해 주세요."</string>
     <string name="update_validation_failed">"다운로드한 DB가 검증을 통과하지 못해 적용하지 않았습니다. 잠시 후 다시 시도해 주세요."</string>
     <string name="update_schema_unsupported">"이 DB를 사용하려면 더 새로운 앱이 필요합니다. 앱을 업데이트한 뒤 다시 시도해 주세요."</string>
+    <string name="raid_journey">"여정 난이도: %1$s"</string>
+    <string name="raid_unknown_journey">"여정 난이도 미확인 · 후보별 보상"</string>
+    <string name="raid_rewards_note">"기본 보상입니다. 여정·캐릭터 보정에 따라 실제 지급량이 달라질 수 있습니다."</string>
+    <string name="raid_tier">"토벌 %1$s"</string>
+    <string name="raid_selected">"현재 선택"</string>
+    <string name="raid_mission_bonus">"전투 미션당 %1$s +%2$d (최대 %3$d개)"</string>
+    <string name="raid_data_unavailable">"토벌 데이터가 포함된 DB가 필요합니다."</string>
+    <string name="raid_unreadable">"토벌 이름과 권장 종합랭크가 보이도록 다시 인식해 주세요."</string>
+    <string name="raid_screen_rank">"권장 종합랭크"</string>
+    <string name="raid_screen_tier_1">"하급 의뢰"</string>
+    <string name="raid_screen_tier_2">"중급 의뢰"</string>
+    <string name="raid_screen_tier_3">"상급 의뢰"</string>
+    <string name="raid_common_rewards">"공통 보상"</string>
 </resources>
