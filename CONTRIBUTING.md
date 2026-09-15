@@ -83,3 +83,5 @@ internal 빌드는 화면 공유 허용 후 이전 화면으로 돌아가므로 
 필터와 분리하며, 공통 다운로드와 메타 해시 검증만 공유합니다. schema 4/5 선택지
 호환은 유지합니다. external internal DB는 schema 5/6을 받을 수 있습니다.
 세부 계약과 검증 경계는 [토벌 인식 설계](docs/RAID_RECOGNITION.md)를 참고하세요.
+
+토벌 스키마를 변경할 때는 내장 DB 인식뿐 아니라 `JourneyDatabaseUpdater.update`의 메타 확인·다운로드·검증·저장·재로드 경로를 검사하세요. `JourneyDatabaseUpdateFlowTest`는 예제·schema 5·schema 6에서 새 토벌 DB로 갱신하는 경우와 HTTP 304 캐시 경로를 포함합니다.
