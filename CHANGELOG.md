@@ -1,5 +1,13 @@
 # 변경 기록
 
+## 2.2.6 · 2026-09-16
+
+- 새 토벌 DB를 받을 때 검증 오류로 업데이트가 실패하던 문제를 수정했습니다.
+- Fixed a validation error that prevented the new raid database from updating.
+
+설치 후 **DB 업데이트 / 새 DB 받기**를 다시 눌러 주세요.
+After installing the update, tap **Update DB / Get new DB** again.
+
 ## 2.2.5 · 2026-09-15
 
 - 여정 토벌 화면을 인식해 토벌 I·II·III별 성공·실패 기본 보상과 임무 추가 보상을 안내합니다.

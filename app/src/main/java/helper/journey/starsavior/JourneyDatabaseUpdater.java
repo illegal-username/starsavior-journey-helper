@@ -227,7 +227,7 @@ final class JourneyDatabaseUpdater {
             ensureNotInterrupted();
             JourneyModels.Data candidate = JourneyRepository.parse(downloaded);
             validateRemoteDatabase(current, candidate);
-            if (candidate.schema != 5) throw new JSONException("A v5 update requires a schema 5 database.");
+            if (candidate.schema < 5) throw new JSONException("A language-specific update requires a multilingual database.");
             check.manifest.verifyCandidate(candidate);
             if (sameDatabase(current, candidate)) return UpdateResult.current(current);
 

@@ -150,6 +150,66 @@ public class JourneyDatabaseUpdateFlowTest {
         }
     }
 
+    @Test public void raidUpdatesInstallAndReloadFromExampleV5AndV6InEveryLanguage() throws Exception {
+        for (GameLanguage language : GameLanguage.values()) {
+            for (int startingSchema : new int[] {0, 5, 6}) {
+                for (boolean cached : new boolean[] {false, true}) {
+                    Fixture fixture = new Fixture(language, startingSchema == 0);
+                    if (startingSchema == 6) fixture.backend.seed(language,
+                            new JSONObject(fixture.old).put("schema", 6)
+                                    .put("raids", RaidRecognitionTest.block()).toString());
+                    String previous = fixture.backend.load(language).contentSha256;
+                    String next = new JSONObject(fixture.next).put("schema", 6)
+                            .put("raids", RaidRecognitionTest.block()).toString() + "\n";
+                    String meta = DatabaseTestData.manifest(next, 58);
+                    if (cached) fixture.backend.cache(language, meta, "raid-meta");
+                    Http http = new Http(cached ? response(304, "", "") : ok(meta, "raid-meta"), ok(next, ""));
+                    JourneyDatabaseUpdater.UpdateResult result = JourneyDatabaseUpdater.update(fixture.session, http, null);
+                    assertTrue(result.changed);
+                    assertFalse(result.incompatible);
+                    assertEquals(Arrays.asList(language.manifestUrl(), language.databaseUrl()), http.urls);
+                    assertEquals(cached ? "raid-meta" : "", http.etags.get(0));
+                    JourneyModels.Data reloaded = fixture.backend.load(language);
+                    assertEquals(6, reloaded.schema);
+                    assertFalse(reloaded.raids.events.isEmpty());
+                    assertEquals(JourneyRepository.parse(next).contentSha256, reloaded.contentSha256);
+                    assertEquals(result.data.contentSha256, reloaded.contentSha256);
+                    assertEquals(fixture.otherHash, fixture.backend.load(fixture.other).contentSha256);
+                    File directory = JourneyDatabaseFileStore.directory(fixture.backend.files, language);
+                    assertEquals(next, new String(Files.readAllBytes(JourneyDatabaseFileStore.updated(directory).toPath()), StandardCharsets.UTF_8));
+                    if (startingSchema != 0) assertEquals(previous, JourneyRepository.parse(new String(Files.readAllBytes(
+                            JourneyDatabaseFileStore.previous(directory).toPath()), StandardCharsets.UTF_8)).contentSha256);
+                    JourneyDatabaseUpdater.UpdateResult again = JourneyDatabaseUpdater.update(fixture.session,
+                            new Http(response(304, "", "")), null);
+                    assertFalse(again.changed);
+                    assertFalse(again.incompatible);
+                }
+            }
+        }
+    }
+
+    @Test public void raidMetadataRejectsWrongBodySchemaAndDamagedRaidBeforeInstall() throws Exception {
+        for (boolean damagedRaid : new boolean[] {false, true}) {
+            Fixture fixture = new Fixture();
+            JSONObject next = new JSONObject(fixture.next).put("schema", 6).put("raids", RaidRecognitionTest.block());
+            if (damagedRaid) {
+                next.getJSONObject("raids").getJSONArray("records").getJSONObject(0)
+                        .getJSONArray("options").getJSONObject(0).put("recommendedRank", -1);
+                String body = next.toString();
+                String meta = new JSONObject(DatabaseTestData.manifest(fixture.next, 58))
+                        .put("databaseSchema", 6).put("contentSha256", JourneyRepository.sha256(body.getBytes(StandardCharsets.UTF_8)))
+                        .put("contentLength", body.getBytes(StandardCharsets.UTF_8).length).toString();
+                assertThrows(JSONException.class, () -> JourneyDatabaseUpdater.update(fixture.session,
+                        new Http(ok(meta, ""), ok(body, "")), null));
+            } else {
+                String meta = new JSONObject(DatabaseTestData.manifest(fixture.next, 58)).put("databaseSchema", 6).toString();
+                assertThrows(JSONException.class, () -> JourneyDatabaseUpdater.update(fixture.session,
+                        new Http(ok(meta, ""), ok(fixture.next, "")), null));
+            }
+            fixture.unchanged();
+        }
+    }
+
     @Test public void multibyteJsonIsInstalledWithItsExactManifestHashAndByteLength() throws Exception {
         Fixture fixture = new Fixture();
         JSONObject database = new JSONObject(fixture.next);
