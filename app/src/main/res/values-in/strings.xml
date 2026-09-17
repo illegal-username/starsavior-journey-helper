@@ -147,4 +147,9 @@
     <string name="raid_screen_tier_2">"Quest Tingkat Menengah"</string>
     <string name="raid_screen_tier_3">"Permintaan Tingkat Lanjut"</string>
     <string name="raid_common_rewards">"Hadiah yang sama"</string>
+    <string name="item_description">"Deskripsi"</string>
+    <string name="item_effect">"Efek"</string>
+    <string name="item_details_unavailable">"Detail item tidak tersedia."</string>
+    <string name="item_close_details">"Tutup detail item"</string>
+    <string name="item_tap_hint">"Ketuk nama item yang bergaris bawah untuk melihat detailnya."</string>
 </resources>

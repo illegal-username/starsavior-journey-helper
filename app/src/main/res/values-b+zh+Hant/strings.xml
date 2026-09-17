@@ -147,4 +147,9 @@
     <string name="raid_screen_tier_2">"中階委託"</string>
     <string name="raid_screen_tier_3">"高階委託"</string>
     <string name="raid_common_rewards">"共同獎勵"</string>
+    <string name="item_description">"說明"</string>
+    <string name="item_effect">"效果"</string>
+    <string name="item_details_unavailable">"暫無道具詳細資訊。"</string>
+    <string name="item_close_details">"收起道具詳情"</string>
+    <string name="item_tap_hint">"點擊有底線的道具名稱即可查看詳情。"</string>
 </resources>

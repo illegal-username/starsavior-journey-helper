@@ -101,6 +101,9 @@ final class JourneyDatabaseManifest {
         if (minimumAppVersionCode < 1) {
             throw new JSONException("Invalid minimum app version.");
         }
+        if (databaseSchema == 7 && minimumAppVersionCode < 65) {
+            throw new JSONException("Item details require app versionCode 65 or later.");
+        }
         if (databaseSchema == 6 && minimumAppVersionCode < 57) {
             throw new JSONException("Raid databases require app versionCode 57 or later.");
         }
@@ -116,7 +119,7 @@ final class JourneyDatabaseManifest {
     }
 
     boolean isCompatible(int appVersionCode) {
-        return ((manifestSchema == MANIFEST_SCHEMA && (databaseSchema == DATABASE_SCHEMA || databaseSchema == 6))
+        return ((manifestSchema == MANIFEST_SCHEMA && (databaseSchema == DATABASE_SCHEMA || databaseSchema == 6 || databaseSchema == 7))
                 || (manifestSchema == 1 && databaseSchema == 4))
                 && minimumAppVersionCode <= appVersionCode;
     }

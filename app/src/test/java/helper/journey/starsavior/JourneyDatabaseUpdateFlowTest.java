@@ -150,6 +150,48 @@ public class JourneyDatabaseUpdateFlowTest {
         }
     }
 
+    @Test public void itemUpdatesDownloadInstallReloadAndCacheInEveryLanguage() throws Exception {
+        for (GameLanguage language : GameLanguage.values()) {
+            for (int startingSchema : new int[] {0, 5, 6, 7}) {
+                for (boolean cached : new boolean[] {false, true}) {
+                    Fixture fixture = new Fixture(language, startingSchema == 0);
+                    if (startingSchema == 6) fixture.backend.seed(language,
+                            new JSONObject(fixture.old).put("schema", 6).put("raids", RaidRecognitionTest.block()).toString());
+                    if (startingSchema == 7) fixture.backend.seed(language,
+                            new JSONObject(fixture.old).put("schema", 7).put("items", new org.json.JSONArray()).toString());
+                    String next = ItemDetailsTest.candidate(language).toString() + "\n";
+                    String meta = DatabaseTestData.manifest(next, 65);
+                    if (cached) fixture.backend.cache(language, meta, "items-meta");
+                    Http http = new Http(cached ? response(304, "", "") : ok(meta, "items-meta"), ok(next, ""));
+                    JourneyDatabaseUpdater.UpdateResult result = JourneyDatabaseUpdater.update(fixture.session, http, null);
+                    assertTrue(result.changed); assertFalse(result.incompatible);
+                    JourneyModels.Data reloaded = fixture.backend.load(language);
+                    assertEquals(7, reloaded.schema);
+                    assertEquals("Second description", reloaded.events.get(0).choices.get(0).outcomes.get(0).items.success.get(1).item.description);
+                    assertEquals("first", reloaded.raids.events.get(0).options.get(0).items.failure.get(0).item.id);
+                    assertEquals(result.data.contentSha256, reloaded.contentSha256);
+                    assertEquals(fixture.otherHash, fixture.backend.load(fixture.other).contentSha256);
+                    assertEquals(cached ? "items-meta" : "", http.etags.get(0));
+                    assertFalse(JourneyDatabaseUpdater.update(fixture.session, new Http(response(304, "", "")), null).changed);
+                }
+            }
+        }
+    }
+
+    @Test public void damagedItemBodyWithMatchingHashPreservesInstalledDatabase() throws Exception {
+        Fixture fixture = new Fixture();
+        JSONObject candidate = ItemDetailsTest.candidate(fixture.language);
+        String valid = candidate.toString();
+        candidate.remove("items");
+        String body = candidate.toString();
+        String meta = new JSONObject(DatabaseTestData.manifest(valid, 65))
+                .put("contentSha256", JourneyRepository.sha256(body.getBytes(StandardCharsets.UTF_8)))
+                .put("contentLength", body.getBytes(StandardCharsets.UTF_8).length).toString();
+        assertThrows(JSONException.class, () -> JourneyDatabaseUpdater.update(fixture.session,
+                new Http(ok(meta, "bad"), ok(body, "")), null));
+        fixture.unchanged(); fixture.retry();
+    }
+
     @Test public void raidUpdatesInstallAndReloadFromExampleV5AndV6InEveryLanguage() throws Exception {
         for (GameLanguage language : GameLanguage.values()) {
             for (int startingSchema : new int[] {0, 5, 6}) {
@@ -352,7 +394,7 @@ public class JourneyDatabaseUpdateFlowTest {
                     Fixture fixture = new Fixture();
                     String meta = DatabaseTestData.manifest(sameHash ? fixture.old : fixture.next,
                             futureSchema ? 51 : BuildConfig.VERSION_CODE + 1);
-                    if (futureSchema) meta = change(meta, "databaseSchema", 7);
+                    if (futureSchema) meta = change(meta, "databaseSchema", 8);
                     if (cached) fixture.backend.cache(fixture.language, meta, "future");
                     Http http = new Http(cached ? response(304, "", "") : ok(meta, "future"));
                     JourneyDatabaseUpdater.UpdateResult result = JourneyDatabaseUpdater.update(fixture.session, http, null);

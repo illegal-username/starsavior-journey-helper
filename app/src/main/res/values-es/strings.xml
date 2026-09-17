@@ -147,4 +147,9 @@
     <string name="raid_screen_tier_2">"Encargo intermedio"</string>
     <string name="raid_screen_tier_3">"Encargo avanzado"</string>
     <string name="raid_common_rewards">"Recompensas comunes"</string>
+    <string name="item_description">"Descripción"</string>
+    <string name="item_effect">"Efecto"</string>
+    <string name="item_details_unavailable">"No hay detalles disponibles sobre este objeto."</string>
+    <string name="item_close_details">"Cerrar detalles del objeto"</string>
+    <string name="item_tap_hint">"Toca el nombre subrayado de un objeto para ver sus detalles."</string>
 </resources>

@@ -1,9 +1,9 @@
 {
-  "schema": 6,
+  "schema": 7,
   "language": "zh-CN",
   "source": "public-example",
   "generatedAt": "",
-  "upstreamRevision": "example-v5",
+  "upstreamRevision": "example-v7",
   "recordCount": 3,
   "choiceCount": 6,
   "records": [
@@ -18,8 +18,15 @@
               "label": "",
               "difficulty": "",
               "condition": "",
-              "success": "示例效果A",
-              "failure": ""
+              "success": "Example item · 示例效果A",
+              "failure": "",
+              "successItems": [
+                {
+                  "itemId": "example-item",
+                  "start": 0,
+                  "end": 12
+                }
+              ]
             }
           ]
         },
@@ -122,8 +129,15 @@
             "victoryCoin": 13,
             "missionBonusCoin": 3,
             "missionCount": 2,
-            "success": "Example success reward",
-            "failure": "Example failure reward"
+            "success": "Example item · Example success reward",
+            "failure": "Example failure reward",
+            "successItems": [
+              {
+                "itemId": "example-item",
+                "start": 0,
+                "end": 12
+              }
+            ]
           },
           {
             "tier": 2,
@@ -164,5 +178,13 @@
         ]
       }
     ]
-  }
+  },
+  "items": [
+    {
+      "id": "example-item",
+      "name": "Example item",
+      "description": "A synthetic item used to demonstrate item details.",
+      "effect": "Example stat +7"
+    }
+  ]
 }

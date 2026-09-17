@@ -147,4 +147,9 @@
     <string name="raid_screen_tier_2">"Missão Intermediária"</string>
     <string name="raid_screen_tier_3">"Missão Avançada"</string>
     <string name="raid_common_rewards">"Recompensas comuns"</string>
+    <string name="item_description">"Descrição"</string>
+    <string name="item_effect">"Efeito"</string>
+    <string name="item_details_unavailable">"Não há detalhes disponíveis sobre este item."</string>
+    <string name="item_close_details">"Fechar detalhes do item"</string>
+    <string name="item_tap_hint">"Toque no nome sublinhado de um item para ver os detalhes."</string>
 </resources>

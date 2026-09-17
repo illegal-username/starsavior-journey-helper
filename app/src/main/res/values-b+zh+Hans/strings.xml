@@ -147,4 +147,9 @@
     <string name="raid_screen_tier_2">"中阶委托"</string>
     <string name="raid_screen_tier_3">"高阶委托"</string>
     <string name="raid_common_rewards">"共同奖励"</string>
+    <string name="item_description">"说明"</string>
+    <string name="item_effect">"效果"</string>
+    <string name="item_details_unavailable">"暂无物品详细信息。"</string>
+    <string name="item_close_details">"收起道具详情"</string>
+    <string name="item_tap_hint">"点击带下划线的物品名称可查看详情。"</string>
 </resources>

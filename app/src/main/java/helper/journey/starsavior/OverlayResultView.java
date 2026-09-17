@@ -100,9 +100,9 @@ final class OverlayResultView {
                     variant.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
                     choiceCard.addView(variant, margins(context, -1, -2, 0, 8, 0, 2));
                 }
-                if (!outcome.condition.isEmpty()) addEffect(context, choiceCard, context.getString(R.string.condition_label), outcome.condition, Ui.ORANGE);
-                addEffect(context, choiceCard, outcome.failure.isEmpty() ? context.getString(R.string.effect_label) : context.getString(R.string.success_label), outcome.success, Ui.GREEN);
-                if (!outcome.failure.isEmpty()) addEffect(context, choiceCard, context.getString(R.string.failure_label), outcome.failure, Ui.RED);
+                if (!outcome.condition.isEmpty()) addEffect(context, choiceCard, context.getString(R.string.condition_label), outcome.condition, Ui.ORANGE, outcome.items.condition, 0);
+                addEffect(context, choiceCard, outcome.failure.isEmpty() ? context.getString(R.string.effect_label) : context.getString(R.string.success_label), outcome.success, Ui.GREEN, outcome.items.success, 0);
+                if (!outcome.failure.isEmpty()) addEffect(context, choiceCard, context.getString(R.string.failure_label), outcome.failure, Ui.RED, outcome.items.failure, 0);
             }
 
             list.addView(choiceCard, margins(context, -1, -2, 0, 0, 0, index == match.event.choices.size() - 1 ? 0 : 8));
@@ -188,6 +188,10 @@ final class OverlayResultView {
     }
 
     static FrameLayout wrap(Context context, LinearLayout panel) {
+        if (ItemDetailsView.hasLinks(panel)) {
+            TextView hint = Ui.text(context, context.getString(R.string.item_tap_hint), 11, Ui.MUTED);
+            panel.addView(hint, 2, margins(context, -1, -2, 0, 4, 0, 8));
+        }
         // Keep a compact heading and close action visible. An ellipsized heading
         // is repeated in full inside the scrollable body so no title or result is lost.
         LinearLayout body = new LinearLayout(context);
@@ -262,6 +266,11 @@ final class OverlayResultView {
     }
 
     static void addEffect(Context context, LinearLayout parent, String label, String value, int color) {
+        addEffect(context, parent, label, value, color, List.of(), 0);
+    }
+
+    static void addEffect(Context context, LinearLayout parent, String label, String value, int color,
+                          List<ItemDetails.Link> links, int offset) {
         LinearLayout row = new LinearLayout(context);
         row.setOrientation(LinearLayout.HORIZONTAL);
         // Baseline alignment can push wrapped text below the measured row height.
@@ -280,7 +289,15 @@ final class OverlayResultView {
 
         TextView valueView = Ui.text(context, value, 12, Ui.TEXT);
         valueView.setLineSpacing(0, 1.13f);
-        row.addView(valueView, margins(context, 0, -2, 8, 1, 0, 0, 1));
+        if (links.isEmpty()) {
+            row.addView(valueView, margins(context, 0, -2, 8, 1, 0, 0, 1));
+        } else {
+            LinearLayout column = new LinearLayout(context);
+            column.setOrientation(LinearLayout.VERTICAL);
+            column.addView(valueView, new LinearLayout.LayoutParams(-1, -2));
+            ItemDetailsView.bind(valueView, column, links, offset);
+            row.addView(column, margins(context, 0, -2, 8, 1, 0, 0, 1));
+        }
         parent.addView(row, margins(context, -1, -2, 0, 6, 0, 0));
     }
 

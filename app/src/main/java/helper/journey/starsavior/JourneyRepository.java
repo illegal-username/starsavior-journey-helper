@@ -108,11 +108,13 @@ public final class JourneyRepository {
         }
         Map<String, JourneyModels.ArcanaImageFeature> arcanaImageFeatures =
                 parseArcanaImageFeatures(root.optJSONObject("arcanaImageFeatures"));
-        if (root.optInt("schema") != 6 && root.has("raids")) {
+        Map<String, ItemDetails.Item> items = ItemDetails.parseCatalog(root);
+        if (root.optInt("schema") < 6 && root.has("raids")) {
             throw new JSONException("Raid data requires database schema 6.");
         }
-        RaidModels.Data raids = root.optInt("schema") == 6
-                ? RaidRepository.parse(root.getJSONObject("raids")) : RaidModels.Data.EMPTY;
+        RaidModels.Data raids = root.optInt("schema") == 6 || root.has("raids")
+                ? RaidRepository.parse(root.getJSONObject("raids"), items, root.optInt("schema") == 7)
+                : RaidModels.Data.EMPTY;
         JSONArray records = root.getJSONArray("records");
         List<JourneyModels.Event> events = new ArrayList<>(records.length());
 
@@ -156,7 +158,7 @@ public final class JourneyRepository {
                             outcomeJson.optString("condition"),
                             outcomeJson.optString("success"),
                             outcomeJson.optString("failure"),
-                            arcanaIds
+                            arcanaIds, ItemDetails.parse(outcomeJson, items, root.optInt("schema") == 7)
                     ));
                 }
 
@@ -226,9 +228,9 @@ public final class JourneyRepository {
     }
 
     static void validate(JourneyModels.Data data) throws JSONException {
-        if (data.schema != 4 && data.schema != 5 && data.schema != 6) throw new JSONException("Unsupported database schema.");
+        if (data.schema != 4 && data.schema != 5 && data.schema != 6 && data.schema != 7) throw new JSONException("Unsupported database schema.");
         if ((data.schema == 6 && data.raids.events.isEmpty())
-                || (data.schema != 6 && !data.raids.events.isEmpty())) {
+                || (data.schema < 6 && !data.raids.events.isEmpty())) {
             throw new JSONException("Raid block and database schema disagree.");
         }
         try { GameLanguage.require(data.language); }

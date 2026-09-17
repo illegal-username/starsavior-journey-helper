@@ -157,6 +157,7 @@ public final class JourneyModels {
         public final String success;
         public final String failure;
         public final List<String> arcanaIds;
+        final ItemDetails.References items;
 
         public Outcome(String label, String difficulty, String condition, String success, String failure) {
             this(label, difficulty, condition, success, failure, List.of());
@@ -164,6 +165,12 @@ public final class JourneyModels {
 
         public Outcome(String label, String difficulty, String condition, String success, String failure,
                        List<String> arcanaIds) {
+            this(label, difficulty, condition, success, failure, arcanaIds, ItemDetails.References.EMPTY);
+        }
+
+        Outcome(String label, String difficulty, String condition, String success, String failure,
+                List<String> arcanaIds, ItemDetails.References items) {
+            this.items = items;
             this.label = label;
             this.difficulty = difficulty == null ? "" : difficulty.trim();
             this.condition = condition;
