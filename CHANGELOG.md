@@ -5,12 +5,12 @@
 ### 한국어
 
 - 아이템 설명에서 **이 아이템 검색하기**로 관련 이벤트를 확인하세요. 모든 결과가 펼쳐져 표시되며, 검색 창에서도 아이템 설명을 볼 수 있습니다.
-- 최신 게임 데이터를 반영했습니다. 설치 후 **DB 업데이트**를 눌러 주세요. 시험판 사용자는 이 정식 APK를 덮어설치해 주세요.
+- 프로페서 M의 여정 이벤트를 포함해 11개 언어의 게임 데이터를 갱신했습니다. 언어별 번역이 없는 내용만 제외하고, 나머지 데이터는 갱신합니다. 설치 후 **DB 업데이트**를 눌러 주세요. 시험판 사용자는 이 정식 APK를 덮어설치해 주세요.
 
 ### English
 
 - Use **Search this item** in item details to find related events. Results start expanded, and item descriptions are available within the search window.
-- Updated game data is available. After installing, select **Update database**. Test-build users should install this production APK over the test build.
+- Refreshed game data in all 11 languages, including Professor M journey events. Content without a translation is excluded only in the affected language; other data still updates. After installing, select **Update database**. Test-build users should install this production APK over the test build.
 
 ## 2.2.9 · 2026-09-17
 
