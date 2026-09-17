@@ -153,4 +153,12 @@
     <string name="item_details_unavailable">"Item details are not available."</string>
     <string name="item_close_details">"Close item details"</string>
     <string name="item_tap_hint">"Tap an underlined item name to see its details."</string>
+
+    <string name="item_search_events">Search events for this item</string>
+    <string name="item_search_title">Item events · %1$s</string>
+    <string name="item_search_description">Events that reference this item in conditions or rewards.</string>
+    <string name="event_search_empty">No related events in the current database.</string>
+    <string name="event_search_count">%1$d related events</string>
+    <string name="event_search_expand">Expand %1$s</string>
+    <string name="event_search_collapse">Collapse %1$s</string>
 </resources>

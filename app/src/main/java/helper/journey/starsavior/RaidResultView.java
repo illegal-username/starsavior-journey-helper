@@ -13,6 +13,12 @@ final class RaidResultView {
 
     static View render(Context context, RaidModels.Data data, RaidModels.Match match,
                        StaminaGaugeDetector.Result stamina, Runnable close) {
+        return render(context, data, match, stamina, close, null);
+    }
+
+    static View render(Context context, RaidModels.Data data, RaidModels.Match match,
+                       StaminaGaugeDetector.Result stamina, Runnable close,
+                       java.util.function.Consumer<ItemDetails.Item> searchItem) {
         LinearLayout panel = OverlayResultView.panel(context);
         panel.setTag("raid_result");
         OverlayResultView.addHeader(context, panel, match.events.get(0).name, close);
@@ -63,9 +69,9 @@ final class RaidResultView {
                 }
                 String coinPrefix = data.coinLabel + " +" + option.victoryCoin + " · ";
                 OverlayResultView.addEffect(context, card, context.getString(R.string.success_label),
-                        coinPrefix + option.success, Ui.GREEN, option.items.success, coinPrefix.length());
+                        coinPrefix + option.success, Ui.GREEN, option.items.success, coinPrefix.length(), searchItem);
                 OverlayResultView.addEffect(context, card, context.getString(R.string.failure_label),
-                        option.failure, Ui.RED, option.items.failure, 0);
+                        option.failure, Ui.RED, option.items.failure, 0, searchItem);
                 if (option.missionBonusCoin > 0 && option.missionCount > 0) {
                     TextView bonus = Ui.text(context, context.getString(R.string.raid_mission_bonus,
                             data.coinLabel, option.missionBonusCoin, option.missionCount), 11, Ui.MUTED);

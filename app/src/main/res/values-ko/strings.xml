@@ -152,4 +152,12 @@
     <string name="item_details_unavailable">"등록된 아이템 상세 정보가 없습니다."</string>
     <string name="item_close_details">"아이템 설명 접기"</string>
     <string name="item_tap_hint">"밑줄 친 아이템 이름을 누르면 상세 정보를 볼 수 있습니다."</string>
+
+    <string name="item_search_events">이 아이템 검색하기</string>
+    <string name="item_search_title">아이템 관련 이벤트 · %1$s</string>
+    <string name="item_search_description">이 아이템이 조건이나 보상에 등장하는 이벤트입니다.</string>
+    <string name="event_search_empty">현재 DB에 관련 이벤트가 없습니다.</string>
+    <string name="event_search_count">관련 이벤트 %1$d개</string>
+    <string name="event_search_expand">%1$s 펼치기</string>
+    <string name="event_search_collapse">%1$s 접기</string>
 </resources>

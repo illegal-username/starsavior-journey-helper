@@ -1,5 +1,17 @@
 # 변경 기록
 
+## 2.2.10 · 2026-09-17
+
+### 한국어
+
+- 아이템 설명에서 **이 아이템 검색하기**로 관련 이벤트를 확인하세요. 모든 결과가 펼쳐져 표시되며, 검색 창에서도 아이템 설명을 볼 수 있습니다.
+- 최신 게임 데이터를 반영했습니다. 설치 후 **DB 업데이트**를 눌러 주세요. 시험판 사용자는 이 정식 APK를 덮어설치해 주세요.
+
+### English
+
+- Use **Search this item** in item details to find related events. Results start expanded, and item descriptions are available within the search window.
+- Updated game data is available. After installing, select **Update database**. Test-build users should install this production APK over the test build.
+
 ## 2.2.9 · 2026-09-17
 
 ### 한국어

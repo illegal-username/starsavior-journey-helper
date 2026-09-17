@@ -152,4 +152,12 @@
     <string name="item_details_unavailable">"Chưa có thông tin chi tiết về vật phẩm."</string>
     <string name="item_close_details">"Đóng chi tiết vật phẩm"</string>
     <string name="item_tap_hint">"Nhấn vào tên vật phẩm được gạch chân để xem chi tiết."</string>
+
+    <string name="item_search_events">Tìm sự kiện cho vật phẩm này</string>
+    <string name="item_search_title">Sự kiện vật phẩm · %1$s</string>
+    <string name="item_search_description">Các sự kiện có vật phẩm này trong điều kiện hoặc phần thưởng.</string>
+    <string name="event_search_empty">Không có sự kiện liên quan trong cơ sở dữ liệu hiện tại.</string>
+    <string name="event_search_count">%1$d sự kiện liên quan</string>
+    <string name="event_search_expand">Mở rộng %1$s</string>
+    <string name="event_search_collapse">Thu gọn %1$s</string>
 </resources>

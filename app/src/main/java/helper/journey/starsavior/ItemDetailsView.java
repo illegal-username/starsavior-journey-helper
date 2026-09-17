@@ -19,8 +19,13 @@ final class ItemDetailsView {
     private ItemDetailsView() {}
 
     static void bind(TextView view, LinearLayout column, List<ItemDetails.Link> links, int offset) {
+        bind(view, column, links, offset, null);
+    }
+
+    static void bind(TextView view, LinearLayout column, List<ItemDetails.Link> links, int offset,
+                     java.util.function.Consumer<ItemDetails.Item> searchItem) {
         if (links.isEmpty()) return;
-        InlineDetails details = new InlineDetails(column);
+        InlineDetails details = new InlineDetails(column, searchItem);
         SpannableString text = new SpannableString(view.getText());
         for (ItemDetails.Link link : links) {
             text.setSpan(new ClickableSpan() {
@@ -49,7 +54,12 @@ final class ItemDetailsView {
         private View panel;
         private String itemId;
 
-        InlineDetails(LinearLayout column) { this.column = column; }
+        private final java.util.function.Consumer<ItemDetails.Item> searchItem;
+
+        InlineDetails(LinearLayout column, java.util.function.Consumer<ItemDetails.Item> searchItem) {
+            this.column = column;
+            this.searchItem = searchItem;
+        }
 
         void toggle(ItemDetails.Item item) {
             boolean wasOpen = item.id.equals(itemId);
@@ -81,6 +91,14 @@ final class ItemDetailsView {
             if (item.description.isEmpty() && item.effect.isEmpty()) {
                 detail.addView(Ui.text(context, context.getString(R.string.item_details_unavailable), 11, Ui.MUTED),
                         new LinearLayout.LayoutParams(-1, -2));
+            }
+            if (searchItem != null) {
+                TextView search = Ui.text(context, context.getString(R.string.item_search_events), 11, Ui.BLUE);
+                search.setMinHeight(Ui.dp(context, 40));
+                search.setGravity(Gravity.CENTER_VERTICAL);
+                search.setFocusable(true);
+                search.setOnClickListener(v -> searchItem.accept(item));
+                detail.addView(search, new LinearLayout.LayoutParams(-1, -2));
             }
             panel = detail;
             itemId = item.id;

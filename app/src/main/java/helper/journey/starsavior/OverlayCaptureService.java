@@ -77,6 +77,7 @@ public final class OverlayCaptureService extends Service {
     private WindowManager.LayoutParams bubbleParams;
     private BubbleIconView bubbleView;
     private View resultView;
+    private View itemSearchView;
     private MediaProjection mediaProjection;
     private VirtualDisplay virtualDisplay;
     private ImageReader imageReader;
@@ -969,7 +970,10 @@ public final class OverlayCaptureService extends Service {
         setBubbleGlyph("✓");
         mainHandler.postDelayed(() -> setBubbleGlyph("✦"), 900);
         dismissResult();
-        resultView = RaidResultView.render(this, data, match, stamina, this::dismissResult);
+        JourneyModels.Data snapshot = matcherStore.currentData();
+        resultView = RaidResultView.render(this, data, match, stamina, this::dismissResult,
+                snapshot == null || snapshot.raids != data ? null
+                        : item -> showItemEvents(generation, snapshot, item));
         addResultView(resultView);
     }
 
@@ -980,8 +984,11 @@ public final class OverlayCaptureService extends Service {
         setBubbleGlyph("✓");
         mainHandler.postDelayed(() -> setBubbleGlyph("✦"), 900);
         dismissResult();
+        JourneyModels.Data snapshot = matcherStore.currentData();
+        boolean searchable = snapshot != null && snapshot.events.contains(match.event);
         resultView = OverlayResultView.match(
-                this, match, difficulty, stamina, recognizedArcanaIds, this::dismissResult);
+                this, match, difficulty, stamina, recognizedArcanaIds, this::dismissResult,
+                searchable ? item -> showItemEvents(generation, snapshot, item) : null);
         addResultView(resultView);
     }
 
@@ -1118,8 +1125,33 @@ public final class OverlayCaptureService extends Service {
         return getString(R.string.overlay_update_error_detail) + detail;
     }
 
+    private void showItemEvents(int generation, JourneyModels.Data snapshot, ItemDetails.Item item) {
+        if (destroying || !isProjectionSessionActive(generation) || resultView == null
+                || itemSearchView != null || snapshot != matcherStore.currentData()) return;
+        View view = ItemEventSearchView.render(this, item, ItemEventSearch.forItem(snapshot, item.id),
+                snapshot.raids, this::dismissItemSearch);
+        if (addOverlayView(view)) {
+            itemSearchView = view;
+            // Preserve the original scroll position and expanded item details for return.
+            resultView.setVisibility(View.GONE);
+        }
+    }
+
+    private void dismissItemSearch() {
+        View view = itemSearchView;
+        itemSearchView = null;
+        if (view != null) {
+            try { windowManager.removeView(view); } catch (Exception ignored) {}
+        }
+        if (resultView != null) resultView.setVisibility(View.VISIBLE);
+    }
+
     private void addResultView(View view) {
-        if (!Settings.canDrawOverlays(this)) return;
+        if (!addOverlayView(view)) resultView = null;
+    }
+
+    private boolean addOverlayView(View view) {
+        if (!Settings.canDrawOverlays(this)) return false;
         Rect bounds;
         if (Build.VERSION.SDK_INT >= 30) bounds = windowManager.getMaximumWindowMetrics().getBounds();
         else {
@@ -1144,8 +1176,9 @@ public final class OverlayCaptureService extends Service {
         params.y = Ui.dp(this, 12);
         try {
             windowManager.addView(view, params);
+            return true;
         } catch (Exception ignored) {
-            resultView = null;
+            return false;
         }
     }
 
@@ -1158,6 +1191,7 @@ public final class OverlayCaptureService extends Service {
         // Remove the view that is current at this exact moment.  Posting this
         // whole block unconditionally lets showMatch() install a new view first,
         // then the delayed removal accidentally closes that new result.
+        dismissItemSearch();
         View viewToRemove = resultView;
         resultView = null;
         if (viewToRemove == null) return;
