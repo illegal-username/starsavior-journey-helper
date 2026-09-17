@@ -7,6 +7,7 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /** Parses only the raid block; no raid is converted into a dialogue choice. */
@@ -14,6 +15,11 @@ final class RaidRepository {
     private RaidRepository() {}
 
     static RaidModels.Data parse(JSONObject root) throws JSONException {
+        return parse(root, Map.of(), false);
+    }
+
+    static RaidModels.Data parse(JSONObject root, Map<String, ItemDetails.Item> items,
+                                 boolean itemDetails) throws JSONException {
         if (integer(root, "schema", 1) != 1) throw new JSONException("Unsupported raid schema.");
         JSONObject labels = root.getJSONObject("labels");
         String rank = string(labels, "rank");
@@ -52,7 +58,7 @@ final class RaidRepository {
                 options.add(new RaidModels.Option(tier, string(option, "title"),
                         integer(option, "recommendedRank", 1), integer(option, "victoryCoin", 0),
                         integer(option, "missionBonusCoin", 0), integer(option, "missionCount", 0),
-                        string(option, "success"), string(option, "failure")));
+                        string(option, "success"), string(option, "failure"), ItemDetails.parse(option, items, itemDetails)));
             }
             events.add(new RaidModels.Event(name, difficulty, options));
         }
@@ -64,7 +70,7 @@ final class RaidRepository {
         if (!(value instanceof String) || ((String) value).trim().isEmpty()) {
             throw new JSONException("Invalid raid string: " + key);
         }
-        return ((String) value).trim();
+        return (String) value;
     }
 
     private static int integer(JSONObject object, String key, int minimum) throws JSONException {

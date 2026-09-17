@@ -147,4 +147,9 @@
     <string name="raid_screen_tier_2">"中級依頼"</string>
     <string name="raid_screen_tier_3">"上級依頼"</string>
     <string name="raid_common_rewards">"共通報酬"</string>
+    <string name="item_description">"説明"</string>
+    <string name="item_effect">"効果"</string>
+    <string name="item_details_unavailable">"アイテムの詳細情報はありません。"</string>
+    <string name="item_close_details">"アイテム詳細を閉じる"</string>
+    <string name="item_tap_hint">"下線付きのアイテム名をタップすると詳細を確認できます。"</string>
 </resources>

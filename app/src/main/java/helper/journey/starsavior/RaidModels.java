@@ -44,9 +44,18 @@ final class RaidModels {
         final int missionCount;
         final String success;
         final String failure;
+        final ItemDetails.References items;
 
         Option(int tier, String title, int recommendedRank, int victoryCoin,
                int missionBonusCoin, int missionCount, String success, String failure) {
+            this(tier, title, recommendedRank, victoryCoin, missionBonusCoin, missionCount,
+                    success, failure, ItemDetails.References.EMPTY);
+        }
+
+        Option(int tier, String title, int recommendedRank, int victoryCoin,
+               int missionBonusCoin, int missionCount, String success, String failure,
+               ItemDetails.References items) {
+            this.items = items;
             this.tier = tier;
             this.title = title;
             this.recommendedRank = recommendedRank;
@@ -60,7 +69,7 @@ final class RaidModels {
         boolean hasSameRewards(Option other) {
             return victoryCoin == other.victoryCoin && missionBonusCoin == other.missionBonusCoin
                     && missionCount == other.missionCount && success.equals(other.success)
-                    && failure.equals(other.failure);
+                    && failure.equals(other.failure) && items.sameAs(other.items);
         }
     }
 

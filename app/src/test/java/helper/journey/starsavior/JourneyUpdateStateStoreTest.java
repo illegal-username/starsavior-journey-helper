@@ -19,7 +19,7 @@ public class JourneyUpdateStateStoreTest {
         String meta = DatabaseTestData.manifest(DatabaseTestData.json(GameLanguage.KOREAN, "old", 20), 51);
         JourneyUpdateStateStore.State current = JourneyUpdateStateStore.State.verified(meta, "etag", GameLanguage.KOREAN);
         assertNotNull(current.manifest(GameLanguage.KOREAN));
-        assertNull(new JourneyUpdateStateStore.State(meta, "old-etag", 1, current.manifestUrl)
+        assertNull(new JourneyUpdateStateStore.State(meta, "old-etag", 2, current.manifestUrl)
                 .manifest(GameLanguage.KOREAN));
     }
 

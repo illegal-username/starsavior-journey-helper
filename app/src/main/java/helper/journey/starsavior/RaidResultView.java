@@ -61,10 +61,11 @@ final class RaidResultView {
                     title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
                     card.addView(title, new LinearLayout.LayoutParams(-1, -2));
                 }
+                String coinPrefix = data.coinLabel + " +" + option.victoryCoin + " · ";
                 OverlayResultView.addEffect(context, card, context.getString(R.string.success_label),
-                        data.coinLabel + " +" + option.victoryCoin + " · " + option.success, Ui.GREEN);
+                        coinPrefix + option.success, Ui.GREEN, option.items.success, coinPrefix.length());
                 OverlayResultView.addEffect(context, card, context.getString(R.string.failure_label),
-                        option.failure, Ui.RED);
+                        option.failure, Ui.RED, option.items.failure, 0);
                 if (option.missionBonusCoin > 0 && option.missionCount > 0) {
                     TextView bonus = Ui.text(context, context.getString(R.string.raid_mission_bonus,
                             data.coinLabel, option.missionBonusCoin, option.missionCount), 11, Ui.MUTED);

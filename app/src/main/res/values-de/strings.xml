@@ -147,4 +147,9 @@
     <string name="raid_screen_tier_2">"Mittlerer Auftrag"</string>
     <string name="raid_screen_tier_3">"Hoher Auftrag"</string>
     <string name="raid_common_rewards">"Gemeinsame Belohnungen"</string>
+    <string name="item_description">"Beschreibung"</string>
+    <string name="item_effect">"Effekt"</string>
+    <string name="item_details_unavailable">"Keine Details zu diesem Gegenstand verfügbar."</string>
+    <string name="item_close_details">"Gegenstandsdetails schließen"</string>
+    <string name="item_tap_hint">"Tippe auf einen unterstrichenen Gegenstandsnamen, um Details zu sehen."</string>
 </resources>

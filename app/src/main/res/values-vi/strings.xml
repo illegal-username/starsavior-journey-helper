@@ -147,4 +147,9 @@
     <string name="raid_screen_tier_2">"Nhiệm vụ trung cấp"</string>
     <string name="raid_screen_tier_3">"Nhiệm vụ nâng cao"</string>
     <string name="raid_common_rewards">"Phần thưởng chung"</string>
+    <string name="item_description">"Mô tả"</string>
+    <string name="item_effect">"Hiệu ứng"</string>
+    <string name="item_details_unavailable">"Chưa có thông tin chi tiết về vật phẩm."</string>
+    <string name="item_close_details">"Đóng chi tiết vật phẩm"</string>
+    <string name="item_tap_hint">"Nhấn vào tên vật phẩm được gạch chân để xem chi tiết."</string>
 </resources>

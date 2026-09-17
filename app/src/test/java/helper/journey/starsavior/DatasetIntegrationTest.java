@@ -41,7 +41,8 @@ public class DatasetIntegrationTest {
         assertTrue(match.isConfident());
         assertEquals("공개 예제 - 아침", match.event.name);
         assertEquals(1, match.event.choices.get(0).outcomes.size());
-        assertEquals("예제 효과 A", match.event.choices.get(0).outcomes.get(0).success);
+        assertEquals("Example item · 예제 효과 A", match.event.choices.get(0).outcomes.get(0).success);
+        assertEquals("example-item", match.event.choices.get(0).outcomes.get(0).items.success.get(0).item.id);
     }
 
     private static Path exampleAsset() {

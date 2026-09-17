@@ -81,7 +81,13 @@ internal 빌드는 화면 공유 허용 후 이전 화면으로 돌아가므로 
 
 토벌 기능은 schema 6의 별도 `raids` 영역을 사용합니다. 선택지 레코드·매칭·난이도
 필터와 분리하며, 공통 다운로드와 메타 해시 검증만 공유합니다. schema 4/5 선택지
-호환은 유지합니다. external internal DB는 schema 5/6을 받을 수 있습니다.
+호환은 유지합니다. external internal DB는 schema 5/6/7을 받을 수 있습니다.
 세부 계약과 검증 경계는 [토벌 인식 설계](docs/RAID_RECOGNITION.md)를 참고하세요.
 
 토벌 스키마를 변경할 때는 내장 DB 인식뿐 아니라 `JourneyDatabaseUpdater.update`의 메타 확인·다운로드·검증·저장·재로드 경로를 검사하세요. `JourneyDatabaseUpdateFlowTest`는 예제·schema 5·schema 6에서 새 토벌 DB로 갱신하는 경우와 HTTP 304 캐시 경로를 포함합니다.
+
+## 아이템 상세 데이터 검증
+
+Schema 7은 `items` 목록과 보상 문구별 `conditionItems` / `successItems` / `failureItems`를 사용합니다. 각 링크의 `itemId`는 목록의 `id`, `start`와 `end`는 표시 문자열의 UTF-16 시작·끝 위치(끝 제외)입니다. 지정 구간은 아이템 이름과 정확히 일치해야 하며 링크 중첩·누락된 ID·잘못된 범위는 거부합니다. 같은 이름도 ID로 구분하며 단순 이름 검색을 하지 않습니다. `raids`는 schema 7에서 선택 사항입니다.
+
+메타는 schema 2, 최소 앱 코드는 65입니다. 구형 metadata 캐시는 계약 버전을 올려 다시 확인합니다. `ItemDetailsTest`, `ItemDetailsViewTest`, `JourneyDatabaseUpdateFlowTest`는 표시·기존 DB 호환·신규 설치·업데이트·304 캐시·잘못된 본문 보존을 검증합니다. 생성기는 `--include-item-details`로 후보를 만들며, 앱 배포 후 DB/메타를 함께 게시합니다.

@@ -147,4 +147,9 @@
     <string name="raid_screen_tier_2">"Quête de rang intermédiaire"</string>
     <string name="raid_screen_tier_3">"Quête de rang supérieur"</string>
     <string name="raid_common_rewards">"Récompenses communes"</string>
+    <string name="item_description">"Description"</string>
+    <string name="item_effect">"Effet"</string>
+    <string name="item_details_unavailable">"Les détails de cet objet ne sont pas disponibles."</string>
+    <string name="item_close_details">"Fermer les détails de l’objet"</string>
+    <string name="item_tap_hint">"Touchez un nom d’objet souligné pour voir ses détails."</string>
 </resources>

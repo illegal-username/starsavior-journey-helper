@@ -1,5 +1,17 @@
 # 변경 기록
 
+## 2.2.9 · 2026-09-17
+
+### 한국어
+
+- 여정 선택지·토벌 보상의 아이템 이름을 누르면 기존 목록 안에 설명과 효과가 작게 펼쳐집니다. 다시 누르거나 ×로 접을 수 있습니다.
+- 앱 설치 후 **DB 업데이트**를 눌러 새 데이터를 받아 주세요. 테스트판 사용자는 이 정식 APK를 덮어설치해 주세요.
+
+### English
+
+- Tap an item name in journey choices or raid rewards to expand its description and effects within the list. Tap again or use × to collapse it.
+- After installing, select **Update database** to get the new data. Test-build users should install this production APK over the test build.
+
 ## 2.2.8 · 2026-09-16
 
 ### 한국어

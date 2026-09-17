@@ -49,7 +49,8 @@ public class GameLanguageTest {
             JourneyModels.Data data = example(language);
             JourneyRepository.validate(data);
             assertEquals(language.tag, data.language);
-            assertEquals(6, data.schema);
+            assertEquals(7, data.schema);
+            assertFalse(data.events.get(0).choices.get(0).outcomes.get(0).items.success.isEmpty());
             assertFalse(data.raids.events.isEmpty());
             JourneyModels.Event event = data.events.get(0);
             JourneyMatcher matcher = new JourneyMatcher(data.events, language);
