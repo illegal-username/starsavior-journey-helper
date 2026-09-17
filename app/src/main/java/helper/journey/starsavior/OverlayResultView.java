@@ -37,6 +37,12 @@ final class OverlayResultView {
     static View match(Context context, JourneyModels.Match match, String difficulty,
                       StaminaGaugeDetector.Result stamina, Set<String> recognizedArcanaIds,
                       Runnable closeAction) {
+        return match(context, match, difficulty, stamina, recognizedArcanaIds, closeAction, null);
+    }
+
+    static View match(Context context, JourneyModels.Match match, String difficulty,
+                      StaminaGaugeDetector.Result stamina, Set<String> recognizedArcanaIds,
+                      Runnable closeAction, java.util.function.Consumer<ItemDetails.Item> searchItem) {
         LinearLayout panel = panel(context);
         addHeader(context, panel, match.event.name, closeAction);
 
@@ -100,9 +106,9 @@ final class OverlayResultView {
                     variant.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
                     choiceCard.addView(variant, margins(context, -1, -2, 0, 8, 0, 2));
                 }
-                if (!outcome.condition.isEmpty()) addEffect(context, choiceCard, context.getString(R.string.condition_label), outcome.condition, Ui.ORANGE, outcome.items.condition, 0);
-                addEffect(context, choiceCard, outcome.failure.isEmpty() ? context.getString(R.string.effect_label) : context.getString(R.string.success_label), outcome.success, Ui.GREEN, outcome.items.success, 0);
-                if (!outcome.failure.isEmpty()) addEffect(context, choiceCard, context.getString(R.string.failure_label), outcome.failure, Ui.RED, outcome.items.failure, 0);
+                if (!outcome.condition.isEmpty()) addEffect(context, choiceCard, context.getString(R.string.condition_label), outcome.condition, Ui.ORANGE, outcome.items.condition, 0, searchItem);
+                addEffect(context, choiceCard, outcome.failure.isEmpty() ? context.getString(R.string.effect_label) : context.getString(R.string.success_label), outcome.success, Ui.GREEN, outcome.items.success, 0, searchItem);
+                if (!outcome.failure.isEmpty()) addEffect(context, choiceCard, context.getString(R.string.failure_label), outcome.failure, Ui.RED, outcome.items.failure, 0, searchItem);
             }
 
             list.addView(choiceCard, margins(context, -1, -2, 0, 0, 0, index == match.event.choices.size() - 1 ? 0 : 8));
@@ -271,6 +277,12 @@ final class OverlayResultView {
 
     static void addEffect(Context context, LinearLayout parent, String label, String value, int color,
                           List<ItemDetails.Link> links, int offset) {
+        addEffect(context, parent, label, value, color, links, offset, null);
+    }
+
+    static void addEffect(Context context, LinearLayout parent, String label, String value, int color,
+                          List<ItemDetails.Link> links, int offset,
+                          java.util.function.Consumer<ItemDetails.Item> searchItem) {
         LinearLayout row = new LinearLayout(context);
         row.setOrientation(LinearLayout.HORIZONTAL);
         // Baseline alignment can push wrapped text below the measured row height.
@@ -295,7 +307,7 @@ final class OverlayResultView {
             LinearLayout column = new LinearLayout(context);
             column.setOrientation(LinearLayout.VERTICAL);
             column.addView(valueView, new LinearLayout.LayoutParams(-1, -2));
-            ItemDetailsView.bind(valueView, column, links, offset);
+            ItemDetailsView.bind(valueView, column, links, offset, searchItem);
             row.addView(column, margins(context, 0, -2, 8, 1, 0, 0, 1));
         }
         parent.addView(row, margins(context, -1, -2, 0, 6, 0, 0));

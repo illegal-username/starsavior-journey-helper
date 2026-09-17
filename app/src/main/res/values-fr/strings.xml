@@ -152,4 +152,12 @@
     <string name="item_details_unavailable">"Les détails de cet objet ne sont pas disponibles."</string>
     <string name="item_close_details">"Fermer les détails de l’objet"</string>
     <string name="item_tap_hint">"Touchez un nom d’objet souligné pour voir ses détails."</string>
+
+    <string name="item_search_events">Rechercher les événements de cet objet</string>
+    <string name="item_search_title">Événements liés à cet objet · %1$s</string>
+    <string name="item_search_description">Événements mentionnant cet objet dans les conditions ou les récompenses.</string>
+    <string name="event_search_empty">Aucun événement associé dans la base actuelle.</string>
+    <string name="event_search_count">%1$d événements associés</string>
+    <string name="event_search_expand">Développer %1$s</string>
+    <string name="event_search_collapse">Réduire %1$s</string>
 </resources>

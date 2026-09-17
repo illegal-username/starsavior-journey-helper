@@ -152,4 +152,12 @@
     <string name="item_details_unavailable">"Não há detalhes disponíveis sobre este item."</string>
     <string name="item_close_details">"Fechar detalhes do item"</string>
     <string name="item_tap_hint">"Toque no nome sublinhado de um item para ver os detalhes."</string>
+
+    <string name="item_search_events">Buscar eventos deste item</string>
+    <string name="item_search_title">Eventos do item · %1$s</string>
+    <string name="item_search_description">Eventos que mencionam este item em condições ou recompensas.</string>
+    <string name="event_search_empty">Nenhum evento relacionado na base de dados atual.</string>
+    <string name="event_search_count">%1$d eventos relacionados</string>
+    <string name="event_search_expand">Expandir %1$s</string>
+    <string name="event_search_collapse">Recolher %1$s</string>
 </resources>

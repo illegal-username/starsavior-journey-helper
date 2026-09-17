@@ -152,4 +152,12 @@
     <string name="item_details_unavailable">"アイテムの詳細情報はありません。"</string>
     <string name="item_close_details">"アイテム詳細を閉じる"</string>
     <string name="item_tap_hint">"下線付きのアイテム名をタップすると詳細を確認できます。"</string>
+
+    <string name="item_search_events">このアイテムを検索</string>
+    <string name="item_search_title">アイテム関連イベント · %1$s</string>
+    <string name="item_search_description">このアイテムが条件や報酬に登場するイベントです。</string>
+    <string name="event_search_empty">現在のDBに関連イベントはありません。</string>
+    <string name="event_search_count">関連イベント：%1$d件</string>
+    <string name="event_search_expand">%1$sを開く</string>
+    <string name="event_search_collapse">%1$sを閉じる</string>
 </resources>

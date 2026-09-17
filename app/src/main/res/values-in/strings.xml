@@ -152,4 +152,12 @@
     <string name="item_details_unavailable">"Detail item tidak tersedia."</string>
     <string name="item_close_details">"Tutup detail item"</string>
     <string name="item_tap_hint">"Ketuk nama item yang bergaris bawah untuk melihat detailnya."</string>
+
+    <string name="item_search_events">Cari event untuk item ini</string>
+    <string name="item_search_title">Event item · %1$s</string>
+    <string name="item_search_description">Event yang menyebut item ini dalam syarat atau hadiah.</string>
+    <string name="event_search_empty">Tidak ada event terkait dalam database saat ini.</string>
+    <string name="event_search_count">%1$d event terkait</string>
+    <string name="event_search_expand">Buka %1$s</string>
+    <string name="event_search_collapse">Tutup %1$s</string>
 </resources>

@@ -152,4 +152,12 @@
     <string name="item_details_unavailable">"暫無道具詳細資訊。"</string>
     <string name="item_close_details">"收起道具詳情"</string>
     <string name="item_tap_hint">"點擊有底線的道具名稱即可查看詳情。"</string>
+
+    <string name="item_search_events">搜尋此道具</string>
+    <string name="item_search_title">道具相關事件 · %1$s</string>
+    <string name="item_search_description">條件或獎勵中出現此道具的事件。</string>
+    <string name="event_search_empty">目前資料庫中沒有相關事件。</string>
+    <string name="event_search_count">%1$d個相關事件</string>
+    <string name="event_search_expand">展開%1$s</string>
+    <string name="event_search_collapse">收合%1$s</string>
 </resources>

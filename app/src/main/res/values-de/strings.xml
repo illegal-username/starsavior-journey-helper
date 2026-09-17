@@ -152,4 +152,12 @@
     <string name="item_details_unavailable">"Keine Details zu diesem Gegenstand verfügbar."</string>
     <string name="item_close_details">"Gegenstandsdetails schließen"</string>
     <string name="item_tap_hint">"Tippe auf einen unterstrichenen Gegenstandsnamen, um Details zu sehen."</string>
+
+    <string name="item_search_events">Ereignisse für diesen Gegenstand suchen</string>
+    <string name="item_search_title">Gegenstandsereignisse · %1$s</string>
+    <string name="item_search_description">Ereignisse, die diesen Gegenstand in Bedingungen oder Belohnungen nennen.</string>
+    <string name="event_search_empty">Keine zugehörigen Ereignisse in der aktuellen Datenbank.</string>
+    <string name="event_search_count">%1$d zugehörige Ereignisse</string>
+    <string name="event_search_expand">%1$s aufklappen</string>
+    <string name="event_search_collapse">%1$s zuklappen</string>
 </resources>
