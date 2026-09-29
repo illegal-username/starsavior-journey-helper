@@ -160,4 +160,9 @@
     <string name="event_search_count">%1$d zugehörige Ereignisse</string>
     <string name="event_search_expand">%1$s aufklappen</string>
     <string name="event_search_collapse">%1$s zuklappen</string>
+    <string name="database_download_help">"Lade die Auswahl- und Raid-Daten für diese Sprache herunter, um Ergebnisse zu sehen. Ausdauer lässt sich auch ohne diese Daten ablesen."</string>
+    <string name="diagnostics_title">"Diagnose"</string>
+    <string name="diagnostics_help">"Die Phasen und Arten der letzten Fehler bleiben nur im Arbeitsspeicher. Bildschirmbilder, erkannter Text und Fehlermeldungen sind nicht enthalten. Kopieren legt die Angaben in der Zwischenablage ab. Es erfolgt kein automatischer Versand."</string>
+    <string name="copy_diagnostics">"Diagnose kopieren"</string>
+    <string name="diagnostics_copied">"Diagnose kopiert."</string>
 </resources>

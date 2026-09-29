@@ -119,21 +119,33 @@ final class OverlayResultView {
     }
 
     static View stamina(Context context, StaminaGaugeDetector.Result stamina, Runnable closeAction) {
+        return stamina(context, stamina, closeAction, null);
+    }
+
+    static View stamina(Context context, StaminaGaugeDetector.Result stamina, Runnable closeAction,
+                        Runnable downloadAction) {
         LinearLayout panel = panel(context);
         addHeader(context, panel, context.getString(R.string.stamina_label), closeAction);
         addJourneyStatus(context, panel, stamina);
         TextView hint = Ui.text(context,
                 context.getString(R.string.stamina_hint), 11, Ui.MUTED);
         panel.addView(hint, margins(context, -1, -2, 0, 3, 0, 0));
+        addDatabaseDownload(context, panel, downloadAction);
         return wrap(context, panel);
     }
 
     static View error(Context context, String title, String message, List<String> recognizedLines, Runnable closeAction) {
+        return error(context, title, message, recognizedLines, closeAction, null);
+    }
+
+    static View error(Context context, String title, String message, List<String> recognizedLines,
+                      Runnable closeAction, Runnable downloadAction) {
         LinearLayout panel = panel(context);
         addHeader(context, panel, title, closeAction);
         TextView body = Ui.text(context, message, 13, Ui.MUTED);
         body.setLineSpacing(0, 1.2f);
         panel.addView(body, margins(context, -1, -2, 0, 4, 0, 10));
+        addDatabaseDownload(context, panel, downloadAction);
 
         if (recognizedLines != null && !recognizedLines.isEmpty()) {
             TextView rawTitle = Ui.text(context, context.getString(R.string.recognized_text), 11, Ui.ORANGE);
@@ -146,6 +158,15 @@ final class OverlayResultView {
             panel.addView(rawText);
         }
         return wrap(context, panel);
+    }
+
+    private static void addDatabaseDownload(Context context, LinearLayout panel, Runnable action) {
+        if (action == null) return;
+        panel.addView(Ui.text(context, context.getString(R.string.database_download_help), 12, Ui.ORANGE),
+                margins(context, -1, -2, 0, 8, 0, 6));
+        TextView download = Ui.button(context, context.getString(R.string.get_new_db), true);
+        download.setOnClickListener(view -> action.run());
+        panel.addView(download, margins(context, -1, -2, 0, 0, 0, 8));
     }
 
     static View controls(Context context, Runnable updateAction, Runnable stopAction, Runnable closeAction) {

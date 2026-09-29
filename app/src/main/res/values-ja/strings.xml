@@ -160,4 +160,9 @@
     <string name="event_search_count">関連イベント：%1$d件</string>
     <string name="event_search_expand">%1$sを開く</string>
     <string name="event_search_collapse">%1$sを閉じる</string>
+    <string name="database_download_help">"選択肢・討伐の結果を見るには、この言語のDBをダウンロードしてください。スタミナはDBがなくても確認できます。"</string>
+    <string name="diagnostics_title">"診断情報"</string>
+    <string name="diagnostics_help">"最近のエラーの段階と種類はメモリ内にのみ保持します。画面画像、認識した文字、エラーメッセージは含みません。コピーするとクリップボードに保存され、自動送信はされません。"</string>
+    <string name="copy_diagnostics">"診断情報をコピー"</string>
+    <string name="diagnostics_copied">"診断情報をコピーしました。"</string>
 </resources>

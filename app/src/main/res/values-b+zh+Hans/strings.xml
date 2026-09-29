@@ -160,4 +160,9 @@
     <string name="event_search_count">%1$d个相关事件</string>
     <string name="event_search_expand">展开%1$s</string>
     <string name="event_search_collapse">收起%1$s</string>
+    <string name="database_download_help">"请下载此语言的DB以查看选项与讨伐结果。没有DB也能查看体力。"</string>
+    <string name="diagnostics_title">"诊断信息"</string>
+    <string name="diagnostics_help">"最近错误的阶段与类型仅保留在内存中，不包含画面图像、识别文字或错误消息。复制后会放入剪贴板，不会自动发送。"</string>
+    <string name="copy_diagnostics">"复制诊断信息"</string>
+    <string name="diagnostics_copied">"已复制诊断信息。"</string>
 </resources>

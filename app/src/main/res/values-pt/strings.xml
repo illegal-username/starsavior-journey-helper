@@ -160,4 +160,9 @@
     <string name="event_search_count">%1$d eventos relacionados</string>
     <string name="event_search_expand">Expandir %1$s</string>
     <string name="event_search_collapse">Recolher %1$s</string>
+    <string name="database_download_help">"Baixe os dados de escolhas e incursões deste idioma para ver os resultados. A leitura de energia funciona sem esses dados."</string>
+    <string name="diagnostics_title">"Diagnóstico"</string>
+    <string name="diagnostics_help">"As etapas e os tipos de erros recentes ficam apenas na memória, sem imagens, texto reconhecido ou mensagens de erro. Ao copiar, os dados vão para a área de transferência. Nada é enviado automaticamente."</string>
+    <string name="copy_diagnostics">"Copiar diagnóstico"</string>
+    <string name="diagnostics_copied">"Diagnóstico copiado."</string>
 </resources>

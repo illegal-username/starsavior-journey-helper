@@ -160,4 +160,9 @@
     <string name="event_search_count">%1$d event terkait</string>
     <string name="event_search_expand">Buka %1$s</string>
     <string name="event_search_collapse">Tutup %1$s</string>
+    <string name="database_download_help">"Unduh data pilihan dan raid bahasa ini untuk melihat hasilnya. Stamina tetap dapat dibaca tanpa data tersebut."</string>
+    <string name="diagnostics_title">"Diagnostik"</string>
+    <string name="diagnostics_help">"Tahap dan jenis kesalahan terbaru hanya disimpan di memori, tanpa gambar layar, teks yang dikenali, atau pesan kesalahan. Menyalin akan memasukkannya ke papan klip. Tidak ada pengiriman otomatis."</string>
+    <string name="copy_diagnostics">"Salin diagnostik"</string>
+    <string name="diagnostics_copied">"Diagnostik disalin."</string>
 </resources>

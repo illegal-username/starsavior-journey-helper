@@ -1,6 +1,6 @@
 # 개인정보 및 권한 안내
 
-최종 갱신: 2026-09-02
+최종 갱신: 2026-09-29
 
 스세 여정 도우미는 계정, 광고 또는 자체 사용자 추적 서버를 운영하지 않습니다.
 
@@ -14,11 +14,11 @@
 
 ## 네트워크
 
-앱은 실행 시 로컬 DB를 바로 사용하면서 작은 릴리스 정보로 최신 여부를 확인합니다. 이전 확인의 성공·실패와 관계없이 앱을 새로 열 때마다 다시 확인합니다. 사용자가 `DB 업데이트` 또는 `새 DB 받기`를 실행한 경우에만 전체 선택지 DB를 내려받습니다. 요청 대상은 다음 공개 데이터 호스트입니다.
+앱은 실행 시 로컬 DB를 바로 사용하면서 작은 릴리스 정보로 최신 여부를 확인합니다. 이전 확인의 성공·실패와 관계없이 앱을 새로 열 때마다 다시 확인합니다. 앱 또는 결과 창에서 사용자가 `DB 업데이트` 또는 `새 DB 받기`를 실행한 경우에만 전체 선택지 DB를 내려받습니다. 요청 대상은 다음 공개 데이터 호스트입니다.
 
 ```text
-https://starsavior-journey-data.pages.dev/journey_choices.meta.json
-https://starsavior-journey-data.pages.dev/journey_choices.json
+https://starsavior-journey-data.pages.dev/v5/<language>/journey_choices.meta.json
+https://starsavior-journey-data.pages.dev/v5/<language>/journey_choices.json
 ```
 
 화면 이미지와 OCR 결과는 이 요청에 포함되지 않습니다. 일반적인 인터넷 통신과 마찬가지로 데이터 사이트 또는 호스팅 사업자는 IP 주소, 접속 시각, User-Agent 같은 연결 메타데이터를 확인할 수 있습니다.
@@ -26,6 +26,12 @@ https://starsavior-journey-data.pages.dev/journey_choices.json
 OCR에 사용하는 Google ML Kit의 약관에 따르면 입력 이미지와 OCR 결과는 기기 안에서 처리되어 Google 서버로 전송되지 않습니다. 다만 ML Kit SDK는 버그 수정, 모델·하드웨어 가속기 호환성 정보 수신이나 성능·사용량 지표 전송을 위해 때때로 Google 서버에 접속할 수 있습니다. 자세한 내용은 [ML Kit Terms & Privacy](https://developers.google.com/ml-kit/terms)를 확인하세요.
 
 광고 SDK, 별도 분석 SDK, 원격 로그 수집기 또는 별도 충돌 보고 서비스는 포함하지 않습니다. 위 ML Kit 자체 통신 가능성은 이에 포함되지 않습니다.
+
+## 선택적 진단 정보 복사
+
+최근 오류의 단계·종류·시각과 가능한 경우 DB 출처·스키마·내용 해시 일부를 최대 32건까지 앱 프로세스의 메모리에 보관합니다. 화면 이미지, 인식한 글자, 원본 오류 메시지, 파일 경로와 DB의 자유 형식 문자열은 포함하지 않습니다. 진단 기록을 파일로 저장하거나 서버로 전송하지 않으며 앱 프로세스가 종료되면 사라집니다.
+
+사용자가 **진단 정보 복사**를 누른 경우에만 앱 버전과 이 기록을 Android 클립보드에 담습니다. 복사본은 시스템의 클립보드 관리 정책을 따르며, 사용자가 다른 앱에 붙여넣거나 직접 공유할 수 있습니다.
 
 ## 권한별 목적
 

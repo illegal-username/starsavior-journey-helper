@@ -160,4 +160,9 @@
     <string name="event_search_count">%1$d個相關事件</string>
     <string name="event_search_expand">展開%1$s</string>
     <string name="event_search_collapse">收合%1$s</string>
+    <string name="database_download_help">"請下載此語言的DB以查看選項與討伐結果。沒有DB也能查看體力。"</string>
+    <string name="diagnostics_title">"診斷資訊"</string>
+    <string name="diagnostics_help">"最近錯誤的階段與類型僅保留在記憶體中，不包含畫面影像、辨識文字或錯誤訊息。複製後會放入剪貼簿，不會自動傳送。"</string>
+    <string name="copy_diagnostics">"複製診斷資訊"</string>
+    <string name="diagnostics_copied">"已複製診斷資訊。"</string>
 </resources>

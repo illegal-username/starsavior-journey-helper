@@ -160,4 +160,9 @@
     <string name="event_search_count">%1$d eventos relacionados</string>
     <string name="event_search_expand">Desplegar %1$s</string>
     <string name="event_search_collapse">Plegar %1$s</string>
+    <string name="database_download_help">"Descarga los datos de opciones e incursiones de este idioma para ver los resultados. La lectura de resistencia funciona sin ellos."</string>
+    <string name="diagnostics_title">"Diagnóstico"</string>
+    <string name="diagnostics_help">"Las etapas y tipos de errores recientes se guardan solo en memoria, sin imágenes, texto reconocido ni mensajes de error. Al copiarlos, se guardan en el portapapeles. No se envían automáticamente."</string>
+    <string name="copy_diagnostics">"Copiar diagnóstico"</string>
+    <string name="diagnostics_copied">"Diagnóstico copiado."</string>
 </resources>

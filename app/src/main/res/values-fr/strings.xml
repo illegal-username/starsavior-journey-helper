@@ -160,4 +160,9 @@
     <string name="event_search_count">%1$d événements associés</string>
     <string name="event_search_expand">Développer %1$s</string>
     <string name="event_search_collapse">Réduire %1$s</string>
+    <string name="database_download_help">"Téléchargez les données de choix et de raids dans cette langue pour voir les résultats. La lecture de l’endurance reste disponible sans ces données."</string>
+    <string name="diagnostics_title">"Diagnostic"</string>
+    <string name="diagnostics_help">"Les étapes et types d’erreurs récents sont conservés uniquement en mémoire, sans images, texte reconnu ni messages d’erreur. La copie les place dans le presse-papiers. Aucun envoi automatique."</string>
+    <string name="copy_diagnostics">"Copier le diagnostic"</string>
+    <string name="diagnostics_copied">"Diagnostic copié."</string>
 </resources>

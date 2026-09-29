@@ -161,4 +161,9 @@
     <string name="event_search_count">%1$d related events</string>
     <string name="event_search_expand">Expand %1$s</string>
     <string name="event_search_collapse">Collapse %1$s</string>
+    <string name="database_download_help">"Download this language’s choice and raid data to see results. Stamina reading is available without it."</string>
+    <string name="diagnostics_title">"Diagnostics"</string>
+    <string name="diagnostics_help">"Recent error stages and types are kept only in memory. No screen images, recognized text, or error messages are included. Copying places these details on your clipboard; nothing is sent automatically."</string>
+    <string name="copy_diagnostics">"Copy diagnostics"</string>
+    <string name="diagnostics_copied">"Diagnostics copied."</string>
 </resources>

@@ -38,7 +38,7 @@ public final class UiLayoutBoundaryTest {
                 config.setLocales(new LocaleList(language.locale()));
                 Context context = RuntimeEnvironment.getApplication().createConfigurationContext(config);
                 for (int[] size : new int[][]{{460, 300}, {380, 240}, {320, 180}}) {
-                    for (String kind : List.of("match-short", "match-long", "stamina", "menu", "error", "info")) {
+                    for (String kind : List.of("match-short", "match-long", "stamina", "stamina-download", "menu", "error", "error-download", "info")) {
                         String title = kind.equals("match-long")
                                 ? language.eventHeader + " Synthetic expedition title with several exceptionally long descriptions"
                                 : "Test";
@@ -49,15 +49,18 @@ public final class UiLayoutBoundaryTest {
                             JourneyModels.Event event = new JourneyModels.Event(title, "", List.of(new JourneyModels.Choice("Test choice", List.of(outcome))));
                             JourneyModels.Match match = new JourneyModels.Match(event, 1, 1, 1, true, false, List.of(), List.of(), List.of(1.0));
                             root = (ViewGroup) OverlayResultView.match(context, match, () -> {});
-                        } else if (kind.equals("stamina")) {
+                        } else if (kind.startsWith("stamina")) {
                             root = (ViewGroup) OverlayResultView.stamina(context,
-                                    new StaminaGaugeDetector.Result(61, 61, StaminaGaugeDetector.Direction.NONE, null, 1), () -> {});
-                            last = context.getString(R.string.stamina_hint);
+                                    new StaminaGaugeDetector.Result(61, 61, StaminaGaugeDetector.Direction.NONE, null, 1), () -> {},
+                                    kind.endsWith("download") ? () -> {} : null);
+                            last = context.getString(kind.endsWith("download") ? R.string.get_new_db : R.string.stamina_hint);
                         } else if (kind.equals("menu")) {
                             root = (ViewGroup) OverlayResultView.controls(context, () -> {}, () -> {}, () -> {});
                             last = context.getString(R.string.cancel);
-                        } else if (kind.equals("error")) {
-                            root = (ViewGroup) OverlayResultView.error(context, context.getString(R.string.recognition_failed), last, List.of(), () -> {});
+                        } else if (kind.startsWith("error")) {
+                            root = (ViewGroup) OverlayResultView.error(context, context.getString(R.string.recognition_failed), last, List.of(), () -> {},
+                                    kind.endsWith("download") ? () -> {} : null);
+                            if (kind.endsWith("download")) last = context.getString(R.string.get_new_db);
                         } else {
                             root = (ViewGroup) OverlayResultView.info(context, context.getString(R.string.update_database), last, () -> {});
                         }

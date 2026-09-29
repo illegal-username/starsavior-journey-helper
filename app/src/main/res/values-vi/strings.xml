@@ -160,4 +160,9 @@
     <string name="event_search_count">%1$d sự kiện liên quan</string>
     <string name="event_search_expand">Mở rộng %1$s</string>
     <string name="event_search_collapse">Thu gọn %1$s</string>
+    <string name="database_download_help">"Tải dữ liệu lựa chọn và đột kích bằng ngôn ngữ này để xem kết quả. Vẫn có thể đọc thể lực khi chưa có dữ liệu."</string>
+    <string name="diagnostics_title">"Chẩn đoán"</string>
+    <string name="diagnostics_help">"Giai đoạn và loại lỗi gần đây chỉ được giữ trong bộ nhớ, không chứa ảnh màn hình, văn bản nhận dạng hay thông báo lỗi. Khi sao chép, thông tin được đưa vào bộ nhớ tạm và không tự động gửi đi."</string>
+    <string name="copy_diagnostics">"Sao chép chẩn đoán"</string>
+    <string name="diagnostics_copied">"Đã sao chép chẩn đoán."</string>
 </resources>

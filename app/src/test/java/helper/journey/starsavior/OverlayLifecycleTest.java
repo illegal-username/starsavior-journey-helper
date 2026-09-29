@@ -224,10 +224,14 @@ public final class OverlayLifecycleTest {
         Bitmap event = Bitmap.createBitmap(20, 20, Bitmap.Config.ARGB_8888);
         Bitmap choices = Bitmap.createBitmap(20, 20, Bitmap.Config.ARGB_8888);
         Bitmap full = Bitmap.createBitmap(40, 40, Bitmap.Config.ARGB_8888);
-        call(service, "recognizeRegions", new Class[]{Bitmap.class, Bitmap.class, Bitmap.class, int.class, StaminaGaugeDetector.Result.class},
-                event, choices, full, session.generation(),
+        CaptureJob job = (CaptureJob) call(service, "newCaptureJob", new Class[]{int.class}, session.generation());
+        job.own(event); job.own(choices); job.own(full);
+        call(service, "recognizeRegions", new Class[]{Bitmap.class, Bitmap.class, Bitmap.class, CaptureJob.class, StaminaGaugeDetector.Result.class},
+                event, choices, full, job,
                 new StaminaGaugeDetector.Result(61, 61, StaminaGaugeDetector.Direction.NONE, null, 1));
+        if (!completion.equals("close-race")) assertFalse("Pending OCR still owns its input", choices.isRecycled());
         if (stop && !completion.equals("close-race")) service.onDestroy();
+        if (!completion.equals("close-race")) assertFalse("Shutdown must wait for OCR completion", choices.isRecycled());
         try {
             // Actual Google Tasks listener dispatch, with only the OCR engine replaced by a deferred task.
             if (completion.equals("success")) pending.setResult(null);
