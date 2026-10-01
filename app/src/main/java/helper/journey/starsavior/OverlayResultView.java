@@ -22,6 +22,7 @@ import java.util.Set;
 
 final class OverlayResultView {
     private static final String INFO_MESSAGE_TAG = "journey_overlay_info_message";
+    private static final String RESULT_BODY_TAG = "journey_result_body";
 
     private OverlayResultView() {}
 
@@ -222,6 +223,7 @@ final class OverlayResultView {
         // Keep a compact heading and close action visible. An ellipsized heading
         // is repeated in full inside the scrollable body so no title or result is lost.
         LinearLayout body = new LinearLayout(context);
+        body.setTag(RESULT_BODY_TAG);
         body.setOrientation(LinearLayout.VERTICAL);
         while (panel.getChildCount() > 1) {
             View child = panel.getChildAt(1);
@@ -239,6 +241,16 @@ final class OverlayResultView {
         wrapper.addView(panel, new FrameLayout.LayoutParams(-1, -2));
         wrapper.setElevation(Ui.dp(context, 12));
         return wrapper;
+    }
+
+    static void addReportAction(View root, Runnable action) {
+        LinearLayout body = root.findViewWithTag(RESULT_BODY_TAG);
+        if (body == null) return;
+        Context context = root.getContext();
+        TextView report = Ui.button(context, context.getString(R.string.report_error), false);
+        report.setTag("report_error");
+        report.setOnClickListener(view -> action.run());
+        body.addView(report, margins(context, -1, -2, 0, 12, 0, 0));
     }
 
     @SuppressWarnings("deprecation")

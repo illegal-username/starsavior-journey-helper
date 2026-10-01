@@ -89,9 +89,15 @@ public final class JourneyMatcher {
         boolean ambiguous = closeChoiceCompetitor && !strongEventEvidence;
         boolean eventNameUsed = !eventCandidates.isEmpty() && best.event >= MIN_EVENT_SIGNAL;
 
+        List<JourneyModels.MatchCandidate> diagnostics = new ArrayList<>();
+        for (int i = 0; i < Math.min(3, ranked.size()); i++) {
+            ScoredEvent candidate = ranked.get(i);
+            diagnostics.add(new JourneyModels.MatchCandidate(events.indexOf(candidate.eventData),
+                    candidate.combined, candidate.confidence, candidate.event, candidate.choice));
+        }
         return new JourneyModels.Match(best.eventData, best.confidence, best.event, best.choice,
                 eventNameUsed, ambiguous, new ArrayList<>(recognizedEventLines),
-                new ArrayList<>(recognizedChoiceLines), best.choiceScores);
+                new ArrayList<>(recognizedChoiceLines), best.choiceScores, diagnostics);
     }
 
     private ChoiceEvaluation scoreChoices(JourneyModels.Event event, List<Candidate> candidates) {

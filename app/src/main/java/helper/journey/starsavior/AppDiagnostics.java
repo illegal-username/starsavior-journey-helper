@@ -13,20 +13,31 @@ final class AppDiagnostics {
     private static final ArrayDeque<String> RECENT = new ArrayDeque<>();
 
     static synchronized void record(Stage stage, Throwable error, JourneyModels.Data data) {
-        String type = error instanceof JSONException ? "JSON"
+        String record = Instant.now() + " " + stage + " " + errorType(error);
+        record += databaseDetails(data);
+        if (RECENT.size() == LIMIT) RECENT.removeFirst();
+        RECENT.addLast(record);
+    }
+
+    static String errorType(Throwable error) {
+        return error instanceof JSONException ? "JSON"
                 : error instanceof IOException ? "IO"
                 : error instanceof SecurityException ? "SECURITY"
                 : error instanceof IllegalStateException ? "STATE" : "OTHER";
-        String record = Instant.now() + " " + stage + " " + type;
+    }
+
+    static synchronized org.json.JSONArray recentErrors() { return new org.json.JSONArray(RECENT); }
+
+    static String databaseDetails(JourneyModels.Data data) {
+        String record = "";
         if (data != null) {
-            record += " origin=" + data.origin + " schema=" + data.schema;
+            record = " origin=" + data.origin + " schema=" + data.schema;
             // A computed content hash is useful for correlation without copying free text.
             if (data.contentSha256.matches("[a-fA-F0-9]{64}")) {
                 record += " db=" + data.contentSha256.substring(0, 12);
             }
         }
-        if (RECENT.size() == LIMIT) RECENT.removeFirst();
-        RECENT.addLast(record);
+        return record;
     }
 
     static synchronized String snapshot() {

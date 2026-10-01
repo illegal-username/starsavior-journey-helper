@@ -1,6 +1,7 @@
 package helper.journey.starsavior;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -32,6 +33,10 @@ import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.Toast;
 
 import com.google.android.gms.tasks.Task;
 import com.google.android.gms.tasks.Tasks;
@@ -69,6 +74,13 @@ public final class OverlayCaptureService extends Service {
     private final AtomicBoolean databaseUpdating = new AtomicBoolean(false);
     private final CaptureSessionStateMachine captureSession = new CaptureSessionStateMachine();
     private final Object pipelineLock = new Object();
+    private final Object reportLock = new Object();
+    private final ExecutorService reportWorker = Executors.newSingleThreadExecutor();
+    private ReportCapture reportCapture;
+    private int reportGeneration = -1;
+    private RecognitionDiagnostics recognitionDiagnostics;
+    private AlertDialog reportDialog;
+    private Object reportRequest;
     private final JourneyMatcherStore matcherStore = new JourneyMatcherStore();
 
     private HandlerThread captureThread;
@@ -491,6 +503,11 @@ public final class OverlayCaptureService extends Service {
             return;
         }
         if (!captureSession.beginCapture()) return;
+        clearReportCapture();
+        synchronized (reportLock) {
+            reportGeneration = captureSession.generation();
+            recognitionDiagnostics = new RecognitionDiagnostics(reportGeneration, matcherStore.currentData());
+        }
         if (bubbleView != null) bubbleView.setVisibility(View.INVISIBLE);
         if (Build.VERSION.SDK_INT >= 34) {
             // Android 14+ reports the exact shared-content size through
@@ -549,6 +566,7 @@ public final class OverlayCaptureService extends Service {
     private void attachCaptureSurface() {
         synchronized (pipelineLock) {
             if (!captureSession.isCapturing() || virtualDisplay == null || imageReader == null) {
+                reportTrace(captureSession.generation(), trace -> trace.failure(RecognitionDiagnostics.Failure.CAPTURE_ENDED));
                 captureSession.finishCapture();
                 captureFailed(getString(R.string.capture_ended), List.of());
                 return;
@@ -559,6 +577,7 @@ public final class OverlayCaptureService extends Service {
             int captureGeneration = captureSession.generation();
             captureTimeout = () -> {
                 if (!captureSession.finishCapture(captureGeneration)) return;
+                reportTrace(captureGeneration, trace -> trace.failure(RecognitionDiagnostics.Failure.NO_FRAME));
                 synchronized (pipelineLock) {
                     if (virtualDisplay != null) virtualDisplay.setSurface(null);
                     if (imageReader != null) imageReader.setOnImageAvailableListener(null, null);
@@ -576,6 +595,7 @@ public final class OverlayCaptureService extends Service {
         try {
             image = reader.acquireLatestImage();
         } catch (IllegalStateException closedReader) {
+            reportTrace(generation, trace -> trace.failure(RecognitionDiagnostics.Failure.RESIZED));
             captureSession.finishCapture(generation);
             captureFailed(generation, getString(R.string.screen_resized), List.of());
             return;
@@ -613,7 +633,9 @@ public final class OverlayCaptureService extends Service {
                     job.finish();
                     return;
                 }
+                retainReportCapture(job, full);
                 StaminaGaugeDetector.Result stamina = detectStamina(full);
+                reportTrace(generation, trace -> trace.stamina(stamina));
                 Bitmap eventCrop = job.own(cropEventArea(full));
                 Bitmap choiceCrop = job.own(cropChoiceArea(full));
                 recognizeRegions(eventCrop, choiceCrop, full, job, stamina);
@@ -625,6 +647,7 @@ public final class OverlayCaptureService extends Service {
 
     private CaptureJob newCaptureJob(int generation) {
         return new CaptureJob(captureSession, generation, captureCallbacks, error -> {
+            reportTrace(generation, trace -> trace.failure(RecognitionDiagnostics.Failure.CAPTURE_EXCEPTION));
             AppDiagnostics.record(AppDiagnostics.Stage.CAPTURE, error, matcherStore.currentData());
             captureFailed(generation, getString(R.string.capture_error_prefix)
                     + error.getClass().getSimpleName(), List.of());
@@ -693,7 +716,7 @@ public final class OverlayCaptureService extends Service {
             job.finish();
             return;
         }
-        Task<Text> choiceTask = processText(job, currentRecognizer, choiceBitmap);
+        Task<Text> choiceTask = processText(job, currentRecognizer, choiceBitmap, RecognitionDiagnostics.Region.CHOICES);
         choiceTask.addOnSuccessListener(job.callbacks, choiceText -> {
             if (!isProjectionSessionActive(generation)) {
                 job.finish();
@@ -721,7 +744,7 @@ public final class OverlayCaptureService extends Service {
                 job.finish();
                 return;
             }
-            Task<Text> eventTask = processText(job, eventRecognizer, eventBitmap);
+            Task<Text> eventTask = processText(job, eventRecognizer, eventBitmap, RecognitionDiagnostics.Region.EVENT);
             eventTask.addOnSuccessListener(job.callbacks, eventText -> {
                 if (!isProjectionSessionActive(generation)) {
                     job.finish();
@@ -768,6 +791,7 @@ public final class OverlayCaptureService extends Service {
         JourneyRecognitionCoordinator.Decision decision =
                 JourneyRecognitionCoordinator.evaluateRegional(
                         currentMatcher, eventLines, choiceLines);
+        reportTrace(generation, trace -> trace.decision(RecognitionDiagnostics.Region.EVENT, decision, matcherStore.currentData()));
         if (decision.action == JourneyRecognitionCoordinator.Action.DATA_UNAVAILABLE) {
             job.finish();
             captureFailed(generation, getString(R.string.data_not_ready), List.of());
@@ -793,7 +817,7 @@ public final class OverlayCaptureService extends Service {
             job.finish();
             return;
         }
-        Task<Text> task = processText(job, currentRecognizer, fullBitmap);
+        Task<Text> task = processText(job, currentRecognizer, fullBitmap, RecognitionDiagnostics.Region.FULL);
         task.addOnSuccessListener(job.callbacks, text -> {
             if (!isProjectionSessionActive(generation)) {
                 job.finish();
@@ -803,6 +827,7 @@ public final class OverlayCaptureService extends Service {
             JourneyModels.Data raidSnapshot = matcherStore.currentData();
             RaidModels.Data raidData = raidSnapshot == null ? RaidModels.Data.EMPTY : raidSnapshot.raids;
             RaidModels.Match raid = raidMatcher(raidSnapshot).match(extractRaidLines(text));
+            reportTrace(generation, trace -> trace.raid(raid, raidData));
             if (raid.raidScreen) {
                 job.finish();
                 if (!raid.events.isEmpty()) mainHandler.post(() -> showRaid(generation, raidData, raid, stamina));
@@ -817,6 +842,7 @@ public final class OverlayCaptureService extends Service {
             JourneyRecognitionCoordinator.Decision decision =
                     JourneyRecognitionCoordinator.evaluateFull(
                             matcherStore.current(), lines, regionalChoiceLines);
+            reportTrace(generation, trace -> trace.decision(RecognitionDiagnostics.Region.FULL, decision, matcherStore.currentData()));
             if (decision.action == JourneyRecognitionCoordinator.Action.DATA_UNAVAILABLE) {
                 job.finish();
                 captureFailed(generation, getString(R.string.data_not_ready), List.of());
@@ -851,7 +877,8 @@ public final class OverlayCaptureService extends Service {
                 () -> recognitionCanceled(job));
     }
 
-    private Task<Text> processText(CaptureJob job, TextRecognizer current, Bitmap bitmap) {
+    private Task<Text> processText(CaptureJob job, TextRecognizer current, Bitmap bitmap, RecognitionDiagnostics.Region region) {
+        reportTrace(job.generation, trace -> trace.ocrStart(region, bitmap.getWidth(), bitmap.getHeight()));
         job.beginUse(bitmap);
         Task<Text> task;
         try {
@@ -861,6 +888,12 @@ public final class OverlayCaptureService extends Service {
         }
         // This cleanup must run even if the job has already finished or the worker stopped.
         task.addOnCompleteListener(captureCallbacks, completed -> {
+            int lineCount = 0;
+            if (completed.isSuccessful() && completed.getResult() != null) {
+                for (Text.TextBlock block : completed.getResult().getTextBlocks()) lineCount += block.getLines().size();
+            }
+            final int count = lineCount;
+            reportTrace(job.generation, trace -> trace.ocrEnd(region, completed.isSuccessful(), completed.isCanceled(), count, completed.getException()));
             job.endUse(bitmap);
             if (!completed.isSuccessful() && !completed.isCanceled()) {
                 AppDiagnostics.record(AppDiagnostics.Stage.CAPTURE, completed.getException(), matcherStore.currentData());
@@ -870,6 +903,7 @@ public final class OverlayCaptureService extends Service {
     }
 
     private void recognitionCanceled(CaptureJob job) {
+        reportTrace(job.generation, trace -> trace.failure(RecognitionDiagnostics.Failure.OCR_CANCELLED));
         job.finish();
         captureFailed(job.generation, getString(R.string.capture_ended), List.of());
     }
@@ -971,38 +1005,44 @@ public final class OverlayCaptureService extends Service {
     private void showRaid(int generation, RaidModels.Data data, RaidModels.Match match,
                           StaminaGaugeDetector.Result stamina) {
         if (!isProjectionSessionActive(generation) || destroying) return;
+        reportTrace(generation, trace -> { trace.raid(match, data); trace.finish(RecognitionDiagnostics.Result.RAID); });
         setBubbleGlyph("✓");
         mainHandler.postDelayed(() -> setBubbleGlyph("✦"), 900);
-        dismissResult();
+        dismissResult(false);
         JourneyModels.Data snapshot = matcherStore.currentData();
         resultView = RaidResultView.render(this, data, match, stamina, this::dismissResult,
                 snapshot == null || snapshot.raids != data ? null
                         : item -> showItemEvents(generation, snapshot, item));
-        addResultView(resultView);
+        addRecognitionResultView(resultView);
     }
 
     private void showMatch(int generation, JourneyModels.Match match, String difficulty,
                            StaminaGaugeDetector.Result stamina,
                            Set<String> recognizedArcanaIds) {
         if (!isProjectionSessionActive(generation) || destroying) return;
+        reportTrace(generation, trace -> {
+            trace.arcana(ArcanaImageRecognizer.candidateIds(match.event, difficulty).size(), recognizedArcanaIds.size());
+            trace.finish(match.event.sameProgress ? RecognitionDiagnostics.Result.SAME_PROGRESS : RecognitionDiagnostics.Result.JOURNEY);
+        });
         setBubbleGlyph("✓");
         mainHandler.postDelayed(() -> setBubbleGlyph("✦"), 900);
-        dismissResult();
+        dismissResult(false);
         JourneyModels.Data snapshot = matcherStore.currentData();
         boolean searchable = snapshot != null && snapshot.events.contains(match.event);
         resultView = OverlayResultView.match(
                 this, match, difficulty, stamina, recognizedArcanaIds, this::dismissResult,
                 searchable ? item -> showItemEvents(generation, snapshot, item) : null);
-        addResultView(resultView);
+        addRecognitionResultView(resultView);
     }
 
     private void showStamina(int generation, StaminaGaugeDetector.Result stamina) {
         if (!isProjectionSessionActive(generation) || destroying || stamina == null) return;
+        reportTrace(generation, trace -> { trace.stamina(stamina); trace.finish(RecognitionDiagnostics.Result.STAMINA); });
         setBubbleGlyph("✓");
         mainHandler.postDelayed(() -> setBubbleGlyph("✦"), 900);
-        dismissResult();
+        dismissResult(false);
         resultView = OverlayResultView.stamina(this, stamina, this::dismissResult, databaseDownloadAction());
-        addResultView(resultView);
+        addRecognitionResultView(resultView);
     }
 
     private void captureFailed(String message, List<String> lines) {
@@ -1012,12 +1052,19 @@ public final class OverlayCaptureService extends Service {
     private void captureFailed(int generation, String message, List<String> lines) {
         mainHandler.post(() -> {
             if (!isProjectionSessionActive(generation) || destroying) return;
+            synchronized (reportLock) {
+                if (recognitionDiagnostics == null || recognitionDiagnostics.generation != generation) {
+                    recognitionDiagnostics = new RecognitionDiagnostics(generation, matcherStore.currentData());
+                }
+            }
+            reportTrace(generation, trace -> trace.finish(RecognitionDiagnostics.Result.ERROR));
             if (bubbleView != null) bubbleView.setVisibility(View.VISIBLE);
             setBubbleGlyph("!");
             mainHandler.postDelayed(() -> setBubbleGlyph("✦"), 1200);
             // Already on the main thread with a validated generation. Posting again
             // would allow a projection-stop callback to invalidate it before rendering.
             renderError(getString(R.string.recognition_failed), message, lines);
+            if (resultView != null) addReportAction(resultView);
         });
     }
 
@@ -1025,12 +1072,13 @@ public final class OverlayCaptureService extends Service {
         Context renderingContext = languageContext;
         mainHandler.post(() -> {
             if (destroying || AppLanguage.of(renderingContext) != language) return;
+            clearReportCapture();
             renderError(title, message, lines);
         });
     }
 
     private void renderError(String title, String message, List<String> lines) {
-        dismissResult();
+        dismissResult(false);
         resultView = OverlayResultView.error(this, title, message, lines, this::dismissResult, databaseDownloadAction());
         addResultView(resultView);
     }
@@ -1165,7 +1213,153 @@ public final class OverlayCaptureService extends Service {
     }
 
     private void addResultView(View view) {
-        if (!addOverlayView(view)) resultView = null;
+        if (!addOverlayView(view)) {
+            resultView = null;
+            clearReportCapture();
+        }
+    }
+
+    private void addRecognitionResultView(View view) {
+        addReportAction(view);
+        addResultView(view);
+    }
+
+    private void addReportAction(View view) {
+        int generation = captureSession.generation();
+        OverlayResultView.addReportAction(view, () -> {
+            if (!destroying && resultView == view && isProjectionSessionActive(generation)) showReportDialog(view);
+        });
+    }
+
+    private void retainReportCapture(CaptureJob job, Bitmap bitmap) {
+        synchronized (reportLock) {
+            if (destroying || reportGeneration != job.generation || !isProjectionSessionActive(job.generation)) return;
+            if (reportCapture != null) reportCapture.release();
+            reportCapture = new ReportCapture(job, bitmap);
+            if (recognitionDiagnostics == null || recognitionDiagnostics.generation != job.generation) {
+                recognitionDiagnostics = new RecognitionDiagnostics(job.generation, matcherStore.currentData());
+            }
+            recognitionDiagnostics.frame(bitmap.getWidth(), bitmap.getHeight(), reportCapture.capturedAt);
+        }
+    }
+
+    private void reportTrace(int generation, java.util.function.Consumer<RecognitionDiagnostics> action) {
+        synchronized (reportLock) {
+            if (recognitionDiagnostics != null && recognitionDiagnostics.generation == generation) action.accept(recognitionDiagnostics);
+        }
+    }
+
+    private void clearReportCapture() {
+        synchronized (reportLock) {
+            if (reportCapture != null) reportCapture.release();
+            reportCapture = null;
+            reportGeneration = -1;
+            recognitionDiagnostics = null;
+        }
+    }
+
+    private void showReportDialog(View source) {
+        if (reportDialog != null || reportRequest != null) return;
+        final ReportCapture capture;
+        synchronized (reportLock) {
+            capture = reportCapture != null && reportCapture.generation == captureSession.generation()
+                    ? reportCapture.acquire() : null;
+        }
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setBackgroundColor(Ui.CARD);
+        int padding = Ui.dp(this, 16);
+        content.setPadding(padding, padding, padding, padding);
+        content.addView(Ui.text(this, getString(capture == null
+                ? R.string.report_no_capture : R.string.report_capture_notice), 14, Ui.TEXT));
+        if (capture != null) {
+            ImageView preview = new ImageView(this);
+            preview.setImageBitmap(capture.bitmap);
+            preview.setContentDescription(getString(R.string.report_preview));
+            preview.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            content.addView(preview, new LinearLayout.LayoutParams(-1, Ui.dp(this, 180)));
+        }
+        scroll.addView(content);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle(R.string.report_error).setView(scroll)
+                .setNegativeButton(R.string.cancel, null)
+                .setPositiveButton(R.string.report_open_email, (which, button) -> prepareReportEmail(source, capture))
+                .create();
+        dialog.setOnDismissListener(which -> {
+            if (reportDialog == dialog) reportDialog = null;
+            if (capture != null) capture.release();
+        });
+        reportDialog = dialog;
+        dialog.getWindow().setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY);
+        try { dialog.show(); }
+        catch (RuntimeException unavailableWindow) {
+            reportDialog = null;
+            if (capture != null) capture.release();
+            Toast.makeText(this, R.string.report_failed, Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void prepareReportEmail(View source, ReportCapture capture) {
+        if (destroying || resultView != source || reportRequest != null) return;
+        if (getString(R.string.report_email_address).trim().isEmpty()) {
+            Toast.makeText(this, R.string.report_unconfigured, Toast.LENGTH_LONG).show();
+            return;
+        }
+        final org.json.JSONObject diagnostics;
+        synchronized (reportLock) {
+            diagnostics = ReportEmail.diagnostics(this, recognitionDiagnostics == null
+                    || recognitionDiagnostics.generation != captureSession.generation() ? null : recognitionDiagnostics.snapshot());
+        }
+        java.io.File placeholder = new java.io.File("00000000-0000-0000-0000-000000000000.json");
+        List<java.io.File> expected = capture == null ? List.of(placeholder)
+                : List.of(new java.io.File("00000000-0000-0000-0000-000000000000.png"), placeholder);
+        if (ReportEmail.targets(this, ReportEmail.message(this, expected)).isEmpty()) {
+            Toast.makeText(this, R.string.report_no_email, Toast.LENGTH_LONG).show();
+            return;
+        }
+        Object request = new Object();
+        reportRequest = request;
+        if (capture != null) capture.acquire();
+        Toast.makeText(this, R.string.report_preparing, Toast.LENGTH_SHORT).show();
+        reportWorker.execute(() -> {
+            List<java.io.File> attachments = List.of();
+            try {
+                if (destroying) return;
+                attachments = ReportEmail.writeAttachments(this, capture, diagnostics);
+                List<java.io.File> ready = attachments;
+                new Handler(Looper.getMainLooper()).post(() -> {
+                    if (destroying || reportRequest != request || resultView != source) {
+                        ReportEmail.deleteAttachments(ready);
+                        return;
+                    }
+                    reportRequest = null;
+                    List<Intent> targets = ReportEmail.targets(this, ReportEmail.message(this, ready));
+                    if (targets.isEmpty()) {
+                        ReportEmail.deleteAttachments(ready);
+                        Toast.makeText(this, R.string.report_no_email, Toast.LENGTH_LONG).show();
+                        return;
+                    }
+                    try {
+                        startActivity(ReportEmail.chooser(this, targets));
+                        dismissResult();
+                    } catch (RuntimeException unavailableEmail) {
+                        ReportEmail.deleteAttachments(ready);
+                        Toast.makeText(this, R.string.report_failed, Toast.LENGTH_LONG).show();
+                    }
+                });
+            } catch (java.io.IOException | RuntimeException error) {
+                ReportEmail.deleteAttachments(attachments);
+                mainHandler.post(() -> {
+                    if (!destroying && reportRequest == request) {
+                        reportRequest = null;
+                        Toast.makeText(this, R.string.report_failed, Toast.LENGTH_LONG).show();
+                    }
+                });
+            } finally {
+                if (capture != null) capture.release();
+            }
+        });
     }
 
     private boolean addOverlayView(View view) {
@@ -1195,10 +1389,18 @@ public final class OverlayCaptureService extends Service {
     }
 
     private void dismissResult() {
+        dismissResult(true);
+    }
+
+    private void dismissResult(boolean discardCapture) {
         if (Looper.myLooper() != Looper.getMainLooper()) {
-            mainHandler.post(this::dismissResult);
+            mainHandler.post(() -> dismissResult(discardCapture));
             return;
         }
+
+        reportRequest = null;
+        if (reportDialog != null) reportDialog.dismiss();
+        if (discardCapture) clearReportCapture();
 
         // Remove the view that is current at this exact moment.  Posting this
         // whole block unconditionally lets showMatch() install a new view first,
@@ -1248,6 +1450,7 @@ public final class OverlayCaptureService extends Service {
         }
         closeRecognizer();
         captureCallbacks.shutdownNow();
+        reportWorker.shutdown();
         if (captureThread != null) captureThread.quitSafely();
         stopForeground(STOP_FOREGROUND_REMOVE);
         super.onDestroy();

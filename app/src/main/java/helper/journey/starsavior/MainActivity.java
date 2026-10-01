@@ -266,6 +266,9 @@ public final class MainActivity extends Activity {
         howTo.addView(body(getString(R.string.how_step_2)));
         howTo.addView(body(getString(R.string.how_step_3)));
         howTo.addView(body(getString(R.string.how_step_4)));
+        TextView help = Ui.button(this, getString(R.string.support_help_title), false);
+        help.setOnClickListener(view -> showSupportHelp());
+        howTo.addView(help, marginParams(-1, -2, 0, 10, 0, 0));
         root.addView(howTo, marginParams(-1, -2, 0, 0, 0, 14));
 
         LinearLayout privacy = card();
@@ -277,20 +280,6 @@ public final class MainActivity extends Activity {
         privacy.addView(privacyBody);
         root.addView(privacy, marginParams(-1, -2, 0, 0, 0, 14));
 
-        LinearLayout diagnostics = card();
-        diagnostics.addView(Ui.text(this, getString(R.string.diagnostics_title), 16, Ui.TEXT));
-        diagnostics.addView(body(getString(R.string.diagnostics_help)));
-        TextView copyDiagnostics = Ui.button(this, getString(R.string.copy_diagnostics), false);
-        copyDiagnostics.setOnClickListener(view -> {
-            ClipboardManager clipboard = getSystemService(ClipboardManager.class);
-            if (clipboard == null) return;
-            clipboard.setPrimaryClip(ClipData.newPlainText(getString(R.string.diagnostics_title),
-                    AppDiagnostics.snapshot()));
-            Toast.makeText(this, R.string.diagnostics_copied, Toast.LENGTH_SHORT).show();
-        });
-        diagnostics.addView(copyDiagnostics, marginParams(-1, -2, 0, 8, 0, 0));
-        root.addView(diagnostics, marginParams(-1, -2, 0, 0, 0, 14));
-
         TextView openSource = Ui.text(this, getString(R.string.source_privacy), 14, Ui.BLUE);
         openSource.setPadding(Ui.dp(this, 4), Ui.dp(this, 8), Ui.dp(this, 4), Ui.dp(this, 8));
         openSource.setOnClickListener(v -> startActivity(new Intent(Intent.ACTION_VIEW,
@@ -301,6 +290,20 @@ public final class MainActivity extends Activity {
         disclaimer.setLineSpacing(0, 1.15f);
         root.addView(disclaimer, marginParams(-1, -2, 4, 4, 4, 0));
         return scroll;
+    }
+
+    private void showSupportHelp() {
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.support_help_title)
+                .setMessage(getString(R.string.support_help_body) + "\n\n" + getString(R.string.diagnostics_help))
+                .setNegativeButton(R.string.close, null)
+                .setPositiveButton(R.string.copy_diagnostics, (dialog, which) -> {
+                    ClipboardManager clipboard = getSystemService(ClipboardManager.class);
+                    if (clipboard == null) return;
+                    clipboard.setPrimaryClip(ClipData.newPlainText(getString(R.string.diagnostics_title),
+                            AppDiagnostics.snapshot()));
+                    Toast.makeText(this, R.string.diagnostics_copied, Toast.LENGTH_SHORT).show();
+                }).show();
     }
 
     private View buildLanguageCard() {

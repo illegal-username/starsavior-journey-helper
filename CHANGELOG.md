@@ -1,20 +1,22 @@
 # 변경 기록
 
-## 미출시 / Unreleased
+## 2.2.11 · 2026-10-01
 
 ### 한국어
 
-- 처음 설치하거나 언어를 바꾼 뒤 필요한 DB를 쉽게 받을 수 있도록 안내합니다. DB가 없어도 스태미나 확인은 계속 사용할 수 있습니다.
+- 인식 결과창에 오류 제보를 추가했습니다. 인식에 사용한 원본 화면과 진단 파일을 첨부한 메일로 문제를 알려 주세요.
+- 오류 제보를 이용하기 어려울 때는 사용법 → 도움말에서 진단 정보를 복사할 수 있습니다.
+- 처음 설치하거나 언어를 바꾼 뒤 필요한 DB를 받을 수 있도록 안내합니다. DB가 없어도 스태미나 확인은 계속 사용할 수 있습니다.
 - 플로팅 아이콘 위치를 가로·세로 화면별로 기억합니다.
-- 화면 인식 중 오류가 났을 때의 복구 처리를 개선하고, DB 상태를 표시할 때의 불필요한 파일 읽기를 줄였습니다.
-- 앱 화면에 **진단 정보 복사**를 추가했습니다. 화면 이미지와 인식한 글자는 포함하지 않습니다.
+- 화면 인식 중 오류나 화면 공유 종료 시의 안정성을 개선했습니다.
 
 ### English
 
+- Report recognition problems from the result window by email, with the original recognition image and a diagnostic file attached.
+- If email reporting is unavailable, copy diagnostics from How to use → Help.
 - Get guidance for downloading the required DB after installation or changing languages. Stamina reading remains available without the DB.
 - Remember the floating icon position separately for portrait and landscape.
-- Improve recovery from screen recognition errors and avoid unnecessary file reads when displaying DB status.
-- Add **Copy diagnostics** on the app screen. Captured images and recognized text are not included.
+- Improve stability when recognition errors occur or screen sharing ends.
 
 ## 2.2.10 · 2026-09-17
 

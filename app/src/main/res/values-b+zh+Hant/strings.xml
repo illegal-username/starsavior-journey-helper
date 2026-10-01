@@ -23,7 +23,7 @@
     <string name="how_step_3">"3. 結果會顯示在左側，避免遮住選項。可拖曳圖示來移動位置。"</string>
     <string name="how_step_4">"4. 長按✦圖示可開啟更新DB與關閉助手的選單。"</string>
     <string name="privacy_title">"畫面內容僅在裝置內處理"</string>
-    <string name="privacy_body">"擷取的影像與辨識出的文字不會儲存或傳送。本應用程式沒有廣告或自行設置的追蹤伺服器。開啟時會檢查DB是否有更新，點選更新DB後會連線至發布伺服器下載資料。ML Kit SDK可能會與Google通訊，以取得相容性資訊及提供效能指標。"</string>
+    <string name="privacy_body">"辨識圖片只在記憶體中保留至結果視窗關閉。僅在確認回報錯誤後，才將原始圖片暫存為郵件附件並加入診斷資訊。不匯出辨識文字，也不自動傳送。沒有廣告或追蹤伺服器。啟動時檢查資料庫更新，依要求下載資料。ML Kit可能與Google通訊以取得相容性資訊及效能指標。"</string>
     <string name="source_privacy">"開放原始碼與隱私說明  ↗"</string>
     <string name="disclaimer">"本助手為非官方粉絲作品，與STUDIOBSIDE無合作或背書關係。"</string>
     <string name="floating_icon">"浮動圖示"</string>
@@ -165,4 +165,17 @@
     <string name="diagnostics_help">"最近錯誤的階段與類型僅保留在記憶體中，不包含畫面影像、辨識文字或錯誤訊息。複製後會放入剪貼簿，不會自動傳送。"</string>
     <string name="copy_diagnostics">"複製診斷資訊"</string>
     <string name="diagnostics_copied">"已複製診斷資訊。"</string>
+    <string name="report_error">"回報錯誤"</string>
+    <string name="report_capture_notice">"將附上辨識時使用的原始畫面與診斷記錄（JSON）。請確認圖片沒有個人資料。在郵件應用程式中描述問題並自行傳送；收件者將看到您的寄件地址。"</string>
+    <string name="report_no_capture">"沒有可附加的畫面，因此僅附上診斷記錄（JSON）。請在郵件應用程式中描述問題並自行傳送；收件者將看到您的寄件地址。"</string>
+    <string name="report_preview">"辨識時使用的原始畫面"</string>
+    <string name="report_open_email">"撰寫郵件"</string>
+    <string name="report_body_prompt">"請在此描述問題。\n\n您預期的結果與實際顯示的結果是什麼？\n"</string>
+    <string name="report_subject">"旅程助手錯誤回報 (%1$s)"</string>
+    <string name="report_no_email">"找不到支援附件的郵件應用程式。請安裝或設定郵件應用程式後再試。"</string>
+    <string name="report_failed">"無法準備郵件，請重試。"</string>
+    <string name="report_preparing">"正在準備附件…"</string>
+    <string name="report_unconfigured">"尚未設定回報用的電子郵件地址。"</string>
+    <string name="support_help_title">"說明"</string>
+    <string name="support_help_body">"辨識問題請使用結果視窗底部的錯誤回報功能。如果結果視窗未顯示或無法透過郵件回報，請在下方複製診斷資訊，並附上問題說明後分享。"</string>
 </resources>

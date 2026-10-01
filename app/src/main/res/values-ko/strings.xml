@@ -23,7 +23,7 @@
     <string name="how_step_3">"3. 결과 카드는 선택지를 가리지 않도록 왼쪽에 표시됩니다. 아이콘은 드래그해 옮길 수 있습니다."</string>
     <string name="how_step_4">"4. ✦ 아이콘을 길게 누르면 DB 업데이트와 도우미 종료 메뉴가 열립니다."</string>
     <string name="privacy_title">"화면 내용은 기기 안에서만 처리"</string>
-    <string name="privacy_body">"캡처 이미지와 인식한 글자는 저장하거나 전송하지 않습니다. 광고·자체 추적 서버는 없습니다. 앱을 열면 최신 DB 여부를 확인하고, 사용자가 DB 업데이트를 누르면 데이터를 받기 위해 배포 서버에 접속합니다. ML Kit SDK는 호환성 정보와 성능 지표를 위해 Google과 통신할 수 있습니다."</string>
+    <string name="privacy_body">"인식 이미지는 결과창을 닫을 때까지 메모리에만 보관합니다. 오류 제보를 확인한 경우에만 원본 이미지를 임시 메일 첨부파일로 저장하고 진단 정보를 포함합니다. 인식한 글자는 내보내지 않으며 자동 전송하지 않습니다. 광고·추적 서버는 없습니다. 앱 실행 시 DB 최신 여부를 확인하고 요청 시 데이터를 받습니다. ML Kit는 호환성 정보·성능 지표를 위해 Google과 통신할 수 있습니다."</string>
     <string name="source_privacy">"오픈소스·개인정보 안내  ↗"</string>
     <string name="disclaimer">"비공식 팬 도우미이며 STUDIOBSIDE와 제휴·보증 관계가 없습니다."</string>
     <string name="floating_icon">"플로팅 아이콘"</string>
@@ -165,4 +165,17 @@
     <string name="diagnostics_help">"최근 오류의 단계와 종류를 메모리에만 보관합니다. 화면 이미지·인식한 글자·오류 메시지는 포함하지 않습니다. 복사하면 클립보드에 담기며 자동으로 전송하지 않습니다."</string>
     <string name="copy_diagnostics">"진단 정보 복사"</string>
     <string name="diagnostics_copied">"진단 정보를 복사했습니다."</string>
+    <string name="report_error">"오류 제보"</string>
+    <string name="report_capture_notice">"인식에 사용한 원본 캡처와 진단 로그(JSON)를 첨부합니다. 이미지에 개인정보가 없는지 확인해 주세요. 메일 앱에서 문제를 설명하고 직접 전송해 주세요. 받는 사람에게 발신 이메일 주소가 표시됩니다."</string>
+    <string name="report_no_capture">"첨부할 캡처가 없어 진단 로그(JSON)만 첨부합니다. 메일 앱에서 문제를 설명하고 직접 전송해 주세요. 받는 사람에게 발신 이메일 주소가 표시됩니다."</string>
+    <string name="report_preview">"인식에 사용한 원본 캡처"</string>
+    <string name="report_open_email">"메일 작성"</string>
+    <string name="report_body_prompt">"어떤 문제가 있었는지 여기에 적어 주세요.\n\n예상한 결과와 실제 표시된 결과를 알려 주세요.\n"</string>
+    <string name="report_subject">"스세 여정 도우미 오류 제보 (%1$s)"</string>
+    <string name="report_no_email">"첨부를 지원하는 메일 앱을 찾지 못했습니다. 메일 앱을 설치하거나 설정한 뒤 다시 시도해 주세요."</string>
+    <string name="report_failed">"메일을 준비하지 못했습니다. 다시 시도해 주세요."</string>
+    <string name="report_preparing">"첨부파일을 준비하고 있습니다…"</string>
+    <string name="report_unconfigured">"제보를 받을 이메일 주소가 설정되지 않았습니다."</string>
+    <string name="support_help_title">"도움말"</string>
+    <string name="support_help_body">"인식 문제는 결과창 아래의 오류 제보를 이용해 주세요. 결과창이 나오지 않거나 이메일 제보를 이용할 수 없다면 아래에서 진단 정보를 복사해 문제 설명과 함께 전달해 주세요."</string>
 </resources>

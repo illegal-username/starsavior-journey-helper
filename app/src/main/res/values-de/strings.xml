@@ -23,7 +23,7 @@
     <string name="how_step_3">"3. Ergebnisse erscheinen links, damit die Optionen sichtbar bleiben. Ziehe das Symbol, um es zu verschieben."</string>
     <string name="how_step_4">"4. Halte das ✦-Symbol gedrückt, um das Menü zum Aktualisieren der Datenbank oder Beenden des Helfers zu öffnen."</string>
     <string name="privacy_title">"Bildschirminhalte bleiben auf deinem Gerät"</string>
-    <string name="privacy_body">"Erfasste Bilder und erkannter Text werden weder gespeichert noch übertragen. Diese App betreibt keine Werbe- oder Trackingserver. Beim Öffnen wird nach einer neuen Datenbank gesucht; die Aktualisierung lädt sie vom Verteilungsserver herunter. Das ML Kit SDK kann für Kompatibilitätsinformationen und Leistungsmetriken mit Google kommunizieren."</string>
+    <string name="privacy_body">"Erkannte Bilder bleiben bis zum Schließen des Ergebnisses im Speicher. Nur nach Bestätigung einer Fehlermeldung wird das Originalbild vorübergehend als E-Mail-Anhang gespeichert und um Diagnosen ergänzt. Erkannter Text wird nicht exportiert. Kein automatischer Versand, keine Werbe- oder Trackingserver. Die App prüft die DB beim Start und lädt sie auf Anfrage. ML Kit kann Google für Kompatibilitätsinformationen und Leistungsmetriken kontaktieren."</string>
     <string name="source_privacy">"Quellcode und Datenschutz ↗"</string>
     <string name="disclaimer">"Inoffizieller Fan-Helfer, ohne Verbindung zu oder Unterstützung durch STUDIOBSIDE."</string>
     <string name="floating_icon">"Schwebendes Symbol"</string>
@@ -165,4 +165,17 @@
     <string name="diagnostics_help">"Die Phasen und Arten der letzten Fehler bleiben nur im Arbeitsspeicher. Bildschirmbilder, erkannter Text und Fehlermeldungen sind nicht enthalten. Kopieren legt die Angaben in der Zwischenablage ab. Es erfolgt kein automatischer Versand."</string>
     <string name="copy_diagnostics">"Diagnose kopieren"</string>
     <string name="diagnostics_copied">"Diagnose kopiert."</string>
+    <string name="report_error">"Fehler melden"</string>
+    <string name="report_capture_notice">"Das Originalbild und ein Diagnoseprotokoll (JSON) werden angehängt. Prüfe das Bild auf persönliche Daten. Beschreibe das Problem in deiner E-Mail-App und sende selbst; der Empfänger sieht deine E-Mail-Adresse."</string>
+    <string name="report_no_capture">"Kein Bild verfügbar. Nur ein Diagnoseprotokoll (JSON) wird angehängt. Beschreibe das Problem in deiner E-Mail-App und sende selbst; der Empfänger sieht deine E-Mail-Adresse."</string>
+    <string name="report_preview">"Originalbild der Erkennung"</string>
+    <string name="report_open_email">"E-Mail verfassen"</string>
+    <string name="report_body_prompt">"Beschreibe hier das Problem.\n\nWas hast du erwartet und was wurde stattdessen angezeigt?\n"</string>
+    <string name="report_subject">"Journey Helper Fehlermeldung (%1$s)"</string>
+    <string name="report_no_email">"Keine passende E-Mail-App gefunden. Installiere oder konfiguriere eine E-Mail-App und versuche es erneut."</string>
+    <string name="report_failed">"Die E-Mail konnte nicht vorbereitet werden. Versuche es erneut."</string>
+    <string name="report_preparing">"Anhang wird vorbereitet…"</string>
+    <string name="report_unconfigured">"Die E-Mail-Adresse für Meldungen ist nicht eingerichtet."</string>
+    <string name="support_help_title">"Hilfe"</string>
+    <string name="support_help_body">"Bei Erkennungsproblemen nutze die Fehlermeldung unten im Ergebnisfenster. Wenn das Ergebnisfenster nicht erscheint oder eine Meldung per E-Mail nicht möglich ist, kopiere unten die Diagnosedaten und teile sie zusammen mit einer Problembeschreibung."</string>
 </resources>

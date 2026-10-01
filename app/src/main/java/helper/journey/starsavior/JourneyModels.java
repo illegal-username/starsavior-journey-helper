@@ -227,6 +227,14 @@ public final class JourneyModels {
         }
     }
 
+    static final class MatchCandidate {
+        final int eventIndex;
+        final double rankScore, confidence, eventScore, choiceScore;
+        MatchCandidate(int index, double rank, double confidence, double event, double choice) {
+            eventIndex = index; rankScore = rank; this.confidence = confidence; eventScore = event; choiceScore = choice;
+        }
+    }
+
     public static final class Match {
         public final Event event;
         public final double confidence;
@@ -237,10 +245,19 @@ public final class JourneyModels {
         public final List<String> recognizedEventLines;
         public final List<String> recognizedLines;
         public final List<Double> choiceScores;
+        final List<MatchCandidate> candidates;
 
         public Match(Event event, double confidence, double eventConfidence, double choiceConfidence,
                      boolean eventNameUsed, boolean ambiguous, List<String> recognizedEventLines,
                      List<String> recognizedLines, List<Double> choiceScores) {
+            this(event, confidence, eventConfidence, choiceConfidence, eventNameUsed, ambiguous,
+                    recognizedEventLines, recognizedLines, choiceScores, List.of());
+        }
+
+        Match(Event event, double confidence, double eventConfidence, double choiceConfidence,
+              boolean eventNameUsed, boolean ambiguous, List<String> recognizedEventLines,
+              List<String> recognizedLines, List<Double> choiceScores, List<MatchCandidate> candidates) {
+            this.candidates = Collections.unmodifiableList(new ArrayList<>(candidates));
             this.event = event;
             this.confidence = confidence;
             this.eventConfidence = eventConfidence;

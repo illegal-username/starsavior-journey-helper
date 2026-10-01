@@ -23,7 +23,7 @@
     <string name="how_step_3">"3. Kết quả hiện ở bên trái để không che các lựa chọn. Kéo biểu tượng để di chuyển."</string>
     <string name="how_step_4">"4. Nhấn giữ biểu tượng ✦ để mở trình đơn cập nhật CSDL hoặc dừng trợ lý."</string>
     <string name="privacy_title">"Nội dung màn hình luôn ở trên thiết bị"</string>
-    <string name="privacy_body">"Ảnh chụp và văn bản nhận dạng không được lưu hay gửi đi. Ứng dụng không vận hành máy chủ quảng cáo hoặc theo dõi. Khi mở, ứng dụng kiểm tra CSDL mới; nhấn Cập nhật CSDL sẽ tải dữ liệu từ máy chủ phân phối. SDK ML Kit có thể liên lạc với Google để lấy thông tin tương thích và số liệu hiệu suất."</string>
+    <string name="privacy_body">"Ảnh nhận dạng chỉ ở trong bộ nhớ cho đến khi đóng kết quả. Chỉ sau khi xác nhận báo lỗi, ảnh gốc mới được lưu tạm làm tệp đính kèm email kèm chẩn đoán. Không xuất văn bản nhận dạng hay tự động gửi. Không có máy chủ quảng cáo hoặc theo dõi. CSDL được kiểm tra khi mở ứng dụng và tải theo yêu cầu. ML Kit có thể liên lạc với Google về tương thích và chỉ số hiệu suất."</string>
     <string name="source_privacy">"Mã nguồn và quyền riêng tư ↗"</string>
     <string name="disclaimer">"Trợ lý không chính thức do người hâm mộ tạo, không liên kết hay được STUDIOBSIDE bảo trợ."</string>
     <string name="floating_icon">"Biểu tượng nổi"</string>
@@ -165,4 +165,17 @@
     <string name="diagnostics_help">"Giai đoạn và loại lỗi gần đây chỉ được giữ trong bộ nhớ, không chứa ảnh màn hình, văn bản nhận dạng hay thông báo lỗi. Khi sao chép, thông tin được đưa vào bộ nhớ tạm và không tự động gửi đi."</string>
     <string name="copy_diagnostics">"Sao chép chẩn đoán"</string>
     <string name="diagnostics_copied">"Đã sao chép chẩn đoán."</string>
+    <string name="report_error">"Báo lỗi"</string>
+    <string name="report_capture_notice">"Ảnh gốc và nhật ký chẩn đoán (JSON) sẽ được đính kèm. Hãy kiểm tra ảnh để tránh lộ thông tin cá nhân. Mô tả vấn đề trong ứng dụng email rồi tự gửi; người nhận sẽ thấy địa chỉ email của bạn."</string>
+    <string name="report_no_capture">"Không có ảnh. Chỉ nhật ký chẩn đoán (JSON) được đính kèm. Hãy mô tả vấn đề trong ứng dụng email rồi tự gửi; người nhận sẽ thấy địa chỉ email của bạn."</string>
+    <string name="report_preview">"Ảnh gốc dùng để nhận dạng"</string>
+    <string name="report_open_email">"Soạn email"</string>
+    <string name="report_body_prompt">"Hãy mô tả vấn đề tại đây.\n\nBạn mong đợi kết quả gì và thực tế đã hiển thị gì?\n"</string>
+    <string name="report_subject">"Báo lỗi Journey Helper (%1$s)"</string>
+    <string name="report_no_email">"Không tìm thấy ứng dụng email phù hợp. Hãy cài đặt hoặc thiết lập ứng dụng email rồi thử lại."</string>
+    <string name="report_failed">"Không thể chuẩn bị email. Vui lòng thử lại."</string>
+    <string name="report_preparing">"Đang chuẩn bị tệp đính kèm…"</string>
+    <string name="report_unconfigured">"Chưa thiết lập địa chỉ email nhận báo lỗi."</string>
+    <string name="support_help_title">"Trợ giúp"</string>
+    <string name="support_help_body">"Với lỗi nhận dạng, hãy dùng chức năng báo lỗi ở cuối cửa sổ kết quả. Nếu cửa sổ kết quả không xuất hiện hoặc không thể báo lỗi qua email, hãy sao chép thông tin chẩn đoán bên dưới và chia sẻ kèm mô tả vấn đề."</string>
 </resources>
