@@ -57,9 +57,12 @@ public final class MainActivity extends Activity {
     private BubbleIconView bubblePreview;
     private boolean continueAfterOverlaySettings;
     private boolean requestCaptureOnResume;
+    private boolean startFlowRequested;
     private boolean databaseUpdateAvailable;
     private boolean databaseAppUpdateRequired;
     private volatile boolean destroyed;
+    private JourneyModels.Data displayedData;
+    private AlertDialog databasePrompt;
     private final Runnable appearanceUpdate = this::notifyBubbleAppearanceChanged;
     private final Runnable captureRequest = this::consumeCaptureRequest;
 
@@ -108,6 +111,7 @@ public final class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         destroyed = true;
+        dismissDatabasePrompt();
         mainHandler.removeCallbacksAndMessages(null);
         requestCaptureOnResume = false;
         continueAfterOverlaySettings = false;
@@ -116,7 +120,8 @@ public final class MainActivity extends Activity {
     }
 
     private boolean uiUnavailable() {
-        return destroyed || isFinishing() || isDestroyed();
+        return destroyed || isFinishing() || isDestroyed()
+                || AppLanguage.selected(this) != AppLanguage.of(this);
     }
 
     private void configureSystemBars() {
@@ -261,6 +266,9 @@ public final class MainActivity extends Activity {
         howTo.addView(body(getString(R.string.how_step_2)));
         howTo.addView(body(getString(R.string.how_step_3)));
         howTo.addView(body(getString(R.string.how_step_4)));
+        TextView help = Ui.button(this, getString(R.string.support_help_title), false);
+        help.setOnClickListener(view -> showSupportHelp());
+        howTo.addView(help, marginParams(-1, -2, 0, 10, 0, 0));
         root.addView(howTo, marginParams(-1, -2, 0, 0, 0, 14));
 
         LinearLayout privacy = card();
@@ -284,6 +292,20 @@ public final class MainActivity extends Activity {
         return scroll;
     }
 
+    private void showSupportHelp() {
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.support_help_title)
+                .setMessage(getString(R.string.support_help_body) + "\n\n" + getString(R.string.diagnostics_help))
+                .setNegativeButton(R.string.close, null)
+                .setPositiveButton(R.string.copy_diagnostics, (dialog, which) -> {
+                    ClipboardManager clipboard = getSystemService(ClipboardManager.class);
+                    if (clipboard == null) return;
+                    clipboard.setPrimaryClip(ClipData.newPlainText(getString(R.string.diagnostics_title),
+                            AppDiagnostics.snapshot()));
+                    Toast.makeText(this, R.string.diagnostics_copied, Toast.LENGTH_SHORT).show();
+                }).show();
+    }
+
     private View buildLanguageCard() {
         LinearLayout languageCard = card();
         TextView select = Ui.button(this, getString(R.string.language_title) + ": " + (AppLanguage.preference(this).isEmpty()
@@ -304,6 +326,7 @@ public final class MainActivity extends Activity {
                         String next = which == 0 ? "" : languages[which - 1].tag;
                         dialog.dismiss();
                         if (next.equals(saved)) return;
+                        dismissDatabasePrompt();
                         AppLanguage.setLanguage(this, next);
                         requestCaptureOnResume = false;
                         continueAfterOverlaySettings = false;
@@ -404,6 +427,8 @@ public final class MainActivity extends Activity {
 
     private void handleLaunchIntent(Intent intent) {
         if (intent == null || !ACTION_REQUEST_CAPTURE.equals(intent.getAction())) return;
+        startFlowRequested = true;
+        dismissDatabasePrompt();
         intent.setAction(null);
         requestCaptureOnResume = true;
     }
@@ -461,6 +486,7 @@ public final class MainActivity extends Activity {
                 JourneyModels.Data data = JourneyRepository.load(this);
                 mainHandler.post(() -> showDataSummary(data));
             } catch (Exception error) {
+                AppDiagnostics.record(AppDiagnostics.Stage.DATABASE_LOAD, error, null);
                 mainHandler.post(() -> {
                     if (!destroyed) setStatus(dataState, getString(R.string.data_error), false);
                 });
@@ -475,14 +501,15 @@ public final class MainActivity extends Activity {
                 JourneyDatabaseUpdater.CheckResult result =
                         JourneyDatabaseUpdater.checkForUpdate(this, false);
                 mainHandler.post(() -> showUpdateCheckResult(result));
-            } catch (Exception ignored) {
+            } catch (Exception error) {
+                AppDiagnostics.record(AppDiagnostics.Stage.DATABASE_CHECK, error, null);
                 // Automatic checks never interrupt startup or replace the usable local DB state.
             }
         });
     }
 
     private void showUpdateCheckResult(JourneyDatabaseUpdater.CheckResult result) {
-        if (destroyed || result == null || result.busy || dataState == null) return;
+        if (uiUnavailable() || result == null || result.busy || dataState == null) return;
         databaseUpdateAvailable = result.available;
         databaseAppUpdateRequired = result.incompatible;
         if (result.incompatible) {
@@ -500,19 +527,46 @@ public final class MainActivity extends Activity {
             showDataSummary(result.current);
         }
         setUpdateBusy(false);
+        if (result.available && !result.incompatible && result.manifest != null
+                && JourneyRepository.isExampleDatabase(result.current)
+                && !JourneyDatabaseUpdater.isUpdating()
+                && !startFlowRequested && !requestCaptureOnResume && !continueAfterOverlaySettings
+                && !ACTION_REQUEST_CAPTURE.equals(getIntent().getAction())
+                && DatabaseDownloadPrompt.shouldShow(this, displayedData)) {
+            JourneyModels.Data snapshot = displayedData;
+            databasePrompt = new AlertDialog.Builder(this)
+                    .setTitle(R.string.get_new_db)
+                    .setMessage(R.string.database_download_help)
+                    .setNegativeButton(R.string.close, null)
+                    .setPositiveButton(R.string.get_new_db, (dialog, which) -> {
+                        if (!uiUnavailable() && displayedData == snapshot
+                                && JourneyRepository.isExampleDatabase(displayedData)) updateDatabase();
+                    }).create();
+            DatabaseDownloadPrompt.shown(this, snapshot);
+            databasePrompt.show();
+        }
+    }
+
+    private void dismissDatabasePrompt() {
+        if (databasePrompt != null) databasePrompt.dismiss();
+        databasePrompt = null;
     }
 
     private void showDataSummary(JourneyModels.Data data) {
-        if (destroyed || dataState == null) return;
+        if (uiUnavailable() || dataState == null || !AppLanguage.of(this).tag.equals(data.language)) return;
+        displayedData = data;
+        DatabaseDownloadPrompt.installed(this, data);
+        if (!JourneyRepository.isExampleDatabase(data)) dismissDatabasePrompt();
         if (JourneyRepository.isExampleDatabase(data)) {
             setStatus(dataState, getString(R.string.example_warning), false);
             dataState.setTextColor(Ui.ORANGE);
             return;
         }
         String date = formatDatabaseDate(data.generatedAt);
-        String kind = BuildConfig.BUNDLED_TEST_DATABASE
+        String kind = data.origin == JourneyModels.DatabaseOrigin.BUNDLED_TEST
                 ? getString(R.string.db_test_kind)
-                : JourneyRepository.hasDownloadedDatabase(this) ? getString(R.string.db_updated_kind) : getString(R.string.db_bundled_kind);
+                : data.origin == JourneyModels.DatabaseOrigin.DOWNLOADED
+                        ? getString(R.string.db_updated_kind) : getString(R.string.db_bundled_kind);
         String summary = String.format(AppLanguage.of(this).locale(), getString(R.string.db_summary), kind, data.choiceCount, date);
         setStatus(dataState, summary, true);
     }
@@ -530,6 +584,7 @@ public final class MainActivity extends Activity {
     }
 
     private void updateDatabase() {
+        dismissDatabasePrompt();
         if (BuildConfig.BUNDLED_TEST_DATABASE) {
             Toast.makeText(this, getString(R.string.test_uses_bundled), Toast.LENGTH_SHORT).show();
             return;
@@ -577,6 +632,7 @@ public final class MainActivity extends Activity {
                             .show();
                 });
             } catch (Exception error) {
+                AppDiagnostics.record(AppDiagnostics.Stage.DATABASE_UPDATE, error, null);
                 mainHandler.post(() -> {
                     if (destroyed) return;
                     setUpdateBusy(false);
@@ -642,6 +698,8 @@ public final class MainActivity extends Activity {
 
     private void startFlow() {
         if (uiUnavailable()) return;
+        startFlowRequested = true;
+        dismissDatabasePrompt();
         if (OverlayCaptureService.isRunning() && OverlayCaptureService.isCaptureActive()) {
             launchGame();
             return;
@@ -685,6 +743,7 @@ public final class MainActivity extends Activity {
 
     private void continueStartFlow() {
         if (uiUnavailable()) return;
+        dismissDatabasePrompt();
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQUEST_NOTIFICATIONS);
             return;

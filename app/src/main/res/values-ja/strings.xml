@@ -23,7 +23,7 @@
     <string name="how_step_3">"3. 選択肢を隠さないよう、結果は左側に表示されます。アイコンはドラッグして移動できます。"</string>
     <string name="how_step_4">"4. ✦アイコンを長押しすると、DB更新とヘルパー終了のメニューが開きます。"</string>
     <string name="privacy_title">"画面の内容は端末内でのみ処理"</string>
-    <string name="privacy_body">"キャプチャ画像と認識した文字は保存・送信しません。広告や独自の追跡サーバーはありません。起動時にDBの更新を確認し、DB更新を押すと配信サーバーからデータを取得します。ML Kit SDKは互換性情報や性能指標のためにGoogleと通信する場合があります。"</string>
+    <string name="privacy_body">"認識画像は結果を閉じるまでメモリ内に保持します。不具合報告を確認した場合のみ、元の画像をメール添付用に一時保存し、診断情報を含めます。認識した文字は書き出さず、自動送信もしません。広告・追跡サーバーはありません。起動時にDBの更新を確認し、要求時にデータを取得します。ML Kitは互換性情報や性能指標のためGoogleと通信する場合があります。"</string>
     <string name="source_privacy">"ソースコード・プライバシー  ↗"</string>
     <string name="disclaimer">"非公式のファン制作ヘルパーです。STUDIOBSIDEとの提携・保証関係はありません。"</string>
     <string name="floating_icon">"フローティングアイコン"</string>
@@ -160,4 +160,22 @@
     <string name="event_search_count">関連イベント：%1$d件</string>
     <string name="event_search_expand">%1$sを開く</string>
     <string name="event_search_collapse">%1$sを閉じる</string>
+    <string name="database_download_help">"選択肢・討伐の結果を見るには、この言語のDBをダウンロードしてください。スタミナはDBがなくても確認できます。"</string>
+    <string name="diagnostics_title">"診断情報"</string>
+    <string name="diagnostics_help">"最近のエラーの段階と種類はメモリ内にのみ保持します。画面画像、認識した文字、エラーメッセージは含みません。コピーするとクリップボードに保存され、自動送信はされません。"</string>
+    <string name="copy_diagnostics">"診断情報をコピー"</string>
+    <string name="diagnostics_copied">"診断情報をコピーしました。"</string>
+    <string name="report_error">"不具合を報告"</string>
+    <string name="report_capture_notice">"認識に使った元の画像と診断ログ（JSON）を添付します。画像に個人情報がないか確認してください。メールアプリで問題を説明し、ご自身で送信してください。受信者には送信元メールアドレスが表示されます。"</string>
+    <string name="report_no_capture">"添付できる画像がないため、診断ログ（JSON）のみ添付します。メールアプリで問題を説明し、ご自身で送信してください。受信者には送信元メールアドレスが表示されます。"</string>
+    <string name="report_preview">"認識に使用した元の画像"</string>
+    <string name="report_open_email">"メールを作成"</string>
+    <string name="report_body_prompt">"問題の内容をここに記入してください。\n\n期待した結果と実際に表示された結果を教えてください。\n"</string>
+    <string name="report_subject">"旅のヘルパー 不具合報告 (%1$s)"</string>
+    <string name="report_no_email">"対応するメールアプリが見つかりません。メールアプリをインストールまたは設定して再試行してください。"</string>
+    <string name="report_failed">"メールを準備できませんでした。もう一度お試しください。"</string>
+    <string name="report_preparing">"添付ファイルを準備中…"</string>
+    <string name="report_unconfigured">"報告先のメールアドレスが設定されていません。"</string>
+    <string name="support_help_title">"ヘルプ"</string>
+    <string name="support_help_body">"認識の問題は結果画面の下にあるエラー報告をご利用ください。結果画面が表示されない場合やメールで報告できない場合は、下の診断情報をコピーし、問題の説明と一緒に共有してください。"</string>
 </resources>

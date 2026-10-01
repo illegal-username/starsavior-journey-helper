@@ -156,8 +156,10 @@ public final class OverlayRaidStaminaTest {
         try {
             StaminaGaugeDetector.Result stamina = (StaminaGaugeDetector.Result) call(service, "detectStamina",
                     new Class[]{Bitmap.class}, full);
+            CaptureJob job = (CaptureJob) call(service, "newCaptureJob", new Class[]{int.class}, session.generation());
+            job.own(event); job.own(choices); job.own(full);
             call(service, "recognizeRegions", new Class[]{Bitmap.class, Bitmap.class, Bitmap.class,
-                    int.class, StaminaGaugeDetector.Result.class}, event, choices, full, session.generation(), stamina);
+                    CaptureJob.class, StaminaGaugeDetector.Result.class}, event, choices, full, job, stamina);
             assertEquals(1, pending.size());
             pending.get(0).setResult(recognized);
             drainWorker(service);

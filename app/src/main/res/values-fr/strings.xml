@@ -23,7 +23,7 @@
     <string name="how_step_3">"3. Les résultats apparaissent à gauche pour laisser les choix visibles. Faites glisser l’icône pour la déplacer."</string>
     <string name="how_step_4">"4. Maintenez l’icône ✦ pour ouvrir le menu de mise à jour de la base ou d’arrêt de l’assistant."</string>
     <string name="privacy_title">"Le contenu de l’écran reste sur votre appareil"</string>
-    <string name="privacy_body">"Les images capturées et le texte reconnu ne sont ni enregistrés ni transmis. Cette application n’exploite aucun serveur publicitaire ou de suivi. À l’ouverture, elle vérifie si une nouvelle base est disponible. Le bouton de mise à jour télécharge la base depuis le serveur de distribution. Le SDK ML Kit peut communiquer avec Google pour des informations de compatibilité et des mesures de performances."</string>
+    <string name="privacy_body">"Les images restent en mémoire jusqu’à la fermeture du résultat. Après confirmation d’un signalement uniquement, l’image originale est enregistrée temporairement comme pièce jointe avec les diagnostics. Le texte reconnu n’est pas exporté. Aucun envoi automatique. Aucun serveur publicitaire ou de suivi. La BD est vérifiée au démarrage et téléchargée sur demande. ML Kit peut contacter Google pour la compatibilité et les mesures de performances."</string>
     <string name="source_privacy">"Code source et confidentialité ↗"</string>
     <string name="disclaimer">"Assistant de fans non officiel, sans affiliation ni approbation de STUDIOBSIDE."</string>
     <string name="floating_icon">"Icône flottante"</string>
@@ -160,4 +160,22 @@
     <string name="event_search_count">%1$d événements associés</string>
     <string name="event_search_expand">Développer %1$s</string>
     <string name="event_search_collapse">Réduire %1$s</string>
+    <string name="database_download_help">"Téléchargez les données de choix et de raids dans cette langue pour voir les résultats. La lecture de l’endurance reste disponible sans ces données."</string>
+    <string name="diagnostics_title">"Diagnostic"</string>
+    <string name="diagnostics_help">"Les étapes et types d’erreurs récents sont conservés uniquement en mémoire, sans images, texte reconnu ni messages d’erreur. La copie les place dans le presse-papiers. Aucun envoi automatique."</string>
+    <string name="copy_diagnostics">"Copier le diagnostic"</string>
+    <string name="diagnostics_copied">"Diagnostic copié."</string>
+    <string name="report_error">"Signaler une erreur"</string>
+    <string name="report_capture_notice">"L’image originale et un journal de diagnostic (JSON) seront joints. Vérifiez que l’image ne contient pas de données personnelles. Décrivez le problème dans votre messagerie et envoyez le message vous-même ; le destinataire verra votre adresse."</string>
+    <string name="report_no_capture">"Aucune image n’est disponible. Seul un journal de diagnostic (JSON) sera joint. Décrivez le problème dans votre messagerie et envoyez le message vous-même ; le destinataire verra votre adresse."</string>
+    <string name="report_preview">"Image originale de reconnaissance"</string>
+    <string name="report_open_email">"Rédiger un e-mail"</string>
+    <string name="report_body_prompt">"Décrivez le problème ici.\n\nQuel résultat attendiez-vous et qu’avez-vous vu à la place ?\n"</string>
+    <string name="report_subject">"Signalement Journey Helper (%1$s)"</string>
+    <string name="report_no_email">"Aucune messagerie compatible trouvée. Installez ou configurez une application de messagerie, puis réessayez."</string>
+    <string name="report_failed">"Impossible de préparer le message. Réessayez."</string>
+    <string name="report_preparing">"Préparation de la pièce jointe…"</string>
+    <string name="report_unconfigured">"L’adresse de signalement n’est pas configurée."</string>
+    <string name="support_help_title">"Aide"</string>
+    <string name="support_help_body">"Pour un problème de reconnaissance, utilisez le signalement en bas de la fenêtre de résultats. Si cette fenêtre ne s’affiche pas ou si le signalement par e-mail est indisponible, copiez le diagnostic ci-dessous et partagez-le avec une description du problème."</string>
 </resources>

@@ -24,7 +24,6 @@ import java.util.Set;
 public final class JourneyRepository {
     private static final String ASSET_NAME = "journey_choices.json";
     private static final String EXAMPLE_ASSET_NAME = "journey_choices.example.json";
-    private static final String EXAMPLE_SOURCE = "public-example";
     private static final Object FILE_LOCK = new Object();
 
     private JourneyRepository() {}
@@ -37,7 +36,7 @@ public final class JourneyRepository {
         synchronized (FILE_LOCK) {
             if (BuildConfig.BUNDLED_TEST_DATABASE) {
                 JourneyModels.Data bundledTest = tryLoadAsset(context, language.tag + "/" + ASSET_NAME, language);
-                if (bundledTest != null) return bundledTest;
+                if (bundledTest != null) return bundledTest.withOrigin(JourneyModels.DatabaseOrigin.BUNDLED_TEST);
                 throw new IOException("Cannot load the bundled database for this language.");
             }
 
@@ -45,16 +44,16 @@ public final class JourneyRepository {
             if (downloaded != null) return downloaded;
 
             JourneyModels.Data bundled = tryLoadAsset(context, language.tag + "/" + ASSET_NAME, language);
-            if (bundled != null) return bundled;
+            if (bundled != null) return bundled.withOrigin(JourneyModels.DatabaseOrigin.BUNDLED);
 
             JourneyModels.Data example = tryLoadAsset(context, language.tag + "/" + EXAMPLE_ASSET_NAME, language);
-            if (example != null) return example;
+            if (example != null) return example.withOrigin(JourneyModels.DatabaseOrigin.EXAMPLE);
             throw new IOException("Cannot load the bundled or example database.");
         }
     }
 
     public static boolean isExampleDatabase(JourneyModels.Data data) {
-        return data != null && EXAMPLE_SOURCE.equals(data.source);
+        return data != null && data.origin == JourneyModels.DatabaseOrigin.EXAMPLE;
     }
 
     public static JourneyModels.Data installUpdated(Context context, String json) throws IOException, JSONException {
@@ -68,11 +67,7 @@ public final class JourneyRepository {
             JourneyDatabaseFileStore.install(JourneyDatabaseFileStore.directory(context.getFilesDir(), language),
                     json, language);
         }
-        return parsed;
-    }
-
-    public static boolean hasDownloadedDatabase(Context context) {
-        return loadDownloaded(context.getFilesDir(), AppLanguage.of(context)) != null;
+        return parsed.withOrigin(JourneyModels.DatabaseOrigin.DOWNLOADED);
     }
 
     static JourneyModels.Data loadDownloaded(File files, GameLanguage language) {
@@ -84,7 +79,7 @@ public final class JourneyRepository {
                 data = tryLoadFile(JourneyDatabaseFileStore.updated(files), language);
                 if (data == null) data = tryLoadFile(JourneyDatabaseFileStore.previous(files), language);
             }
-            return data;
+            return data == null ? null : data.withOrigin(JourneyModels.DatabaseOrigin.DOWNLOADED);
         }
     }
 
@@ -337,7 +332,8 @@ public final class JourneyRepository {
         if (!file.isFile()) return null;
         try (InputStream input = new FileInputStream(file)) {
             return parseValidated(readUtf8(input), language);
-        } catch (IOException | JSONException ignored) {
+        } catch (IOException | JSONException error) {
+            AppDiagnostics.record(AppDiagnostics.Stage.DATABASE_READ, error, null);
             return null;
         }
     }

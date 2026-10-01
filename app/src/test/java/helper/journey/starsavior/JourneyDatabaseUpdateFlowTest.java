@@ -53,7 +53,7 @@ public class JourneyDatabaseUpdateFlowTest {
             if (downloaded != null) return downloaded;
             String example = new JSONObject(DatabaseTestData.json(language, "example", 3))
                     .put("source", "public-example").toString();
-            return JourneyRepository.parseValidated(example, language);
+            return JourneyRepository.parseValidated(example, language).withOrigin(JourneyModels.DatabaseOrigin.EXAMPLE);
         }
         public JourneyModels.Data install(GameLanguage language, String json) throws Exception {
             failAt("install");

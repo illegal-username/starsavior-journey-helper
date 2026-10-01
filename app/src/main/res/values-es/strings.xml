@@ -23,7 +23,7 @@
     <string name="how_step_3">"3. Los resultados aparecen a la izquierda para dejar visibles las opciones. Arrastra el icono para moverlo."</string>
     <string name="how_step_4">"4. Mantén pulsado el icono ✦ para abrir el menú y actualizar la BD o detener el ayudante."</string>
     <string name="privacy_title">"El contenido de la pantalla permanece en tu dispositivo"</string>
-    <string name="privacy_body">"Las imágenes capturadas y el texto reconocido no se guardan ni se transmiten. Esta aplicación no opera servidores de publicidad ni de seguimiento. Al abrirla se comprueba si hay una nueva BD; al pulsar Actualizar BD se descarga desde el servidor de distribución. El SDK de ML Kit puede comunicarse con Google para obtener información de compatibilidad y métricas de rendimiento."</string>
+    <string name="privacy_body">"Las imágenes permanecen en memoria hasta cerrar el resultado. Solo al confirmar un informe se guarda temporalmente la imagen original como adjunto, con los diagnósticos. No se exporta el texto reconocido ni se envía nada automáticamente. No hay servidores publicitarios ni de seguimiento. La BD se comprueba al abrir la aplicación y se descarga a petición. ML Kit puede contactar con Google para información de compatibilidad y métricas de rendimiento."</string>
     <string name="source_privacy">"Código fuente y privacidad ↗"</string>
     <string name="disclaimer">"Ayudante de fans no oficial, sin afiliación ni respaldo de STUDIOBSIDE."</string>
     <string name="floating_icon">"Icono flotante"</string>
@@ -160,4 +160,22 @@
     <string name="event_search_count">%1$d eventos relacionados</string>
     <string name="event_search_expand">Desplegar %1$s</string>
     <string name="event_search_collapse">Plegar %1$s</string>
+    <string name="database_download_help">"Descarga los datos de opciones e incursiones de este idioma para ver los resultados. La lectura de resistencia funciona sin ellos."</string>
+    <string name="diagnostics_title">"Diagnóstico"</string>
+    <string name="diagnostics_help">"Las etapas y tipos de errores recientes se guardan solo en memoria, sin imágenes, texto reconocido ni mensajes de error. Al copiarlos, se guardan en el portapapeles. No se envían automáticamente."</string>
+    <string name="copy_diagnostics">"Copiar diagnóstico"</string>
+    <string name="diagnostics_copied">"Diagnóstico copiado."</string>
+    <string name="report_error">"Informar de un error"</string>
+    <string name="report_capture_notice">"Se adjuntarán la imagen original y un registro de diagnóstico (JSON). Comprueba que la imagen no contenga datos personales. Describe el problema en tu aplicación de correo y envíalo tú mismo; el destinatario verá tu dirección."</string>
+    <string name="report_no_capture">"No hay imagen disponible. Solo se adjuntará un registro de diagnóstico (JSON). Describe el problema en tu aplicación de correo y envíalo tú mismo; el destinatario verá tu dirección."</string>
+    <string name="report_preview">"Imagen original del reconocimiento"</string>
+    <string name="report_open_email">"Redactar correo"</string>
+    <string name="report_body_prompt">"Describe el problema aquí.\n\n¿Qué resultado esperabas y qué apareció en su lugar?\n"</string>
+    <string name="report_subject">"Informe de error de Journey Helper (%1$s)"</string>
+    <string name="report_no_email">"No se encontró una aplicación de correo compatible. Instala o configura una y vuelve a intentarlo."</string>
+    <string name="report_failed">"No se pudo preparar el correo. Inténtalo de nuevo."</string>
+    <string name="report_preparing">"Preparando el archivo adjunto…"</string>
+    <string name="report_unconfigured">"La dirección de correo para informes no está configurada."</string>
+    <string name="support_help_title">"Ayuda"</string>
+    <string name="support_help_body">"Para problemas de reconocimiento, usa la opción de informar de un error al final de la ventana de resultados. Si no aparece esa ventana o no puedes enviar el informe por correo, copia el diagnóstico a continuación y compártelo con una descripción del problema."</string>
 </resources>

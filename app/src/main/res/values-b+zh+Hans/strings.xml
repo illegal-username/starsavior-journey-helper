@@ -23,7 +23,7 @@
     <string name="how_step_3">"3. 结果会显示在左侧，避免遮住选项。可拖动图标来移动位置。"</string>
     <string name="how_step_4">"4. 长按✦图标可打开更新DB与关闭助手的菜单。"</string>
     <string name="privacy_title">"画面内容仅在设备内处理"</string>
-    <string name="privacy_body">"截取的图像与识别出的文字不会保存或发送。本应用没有广告或自行设置的跟踪服务器。打开时会检查DB是否有更新，点击更新DB后会连接至发布服务器下载数据。ML Kit SDK可能会与Google通信，以获取兼容性信息及提供性能指标。"</string>
+    <string name="privacy_body">"识别图片只在内存中保留至结果窗口关闭。仅在确认报告错误后，才将原始图片暂存为邮件附件并加入诊断信息。不导出识别文字，也不自动发送。没有广告或跟踪服务器。启动时检查数据库更新，按需下载数据。ML Kit可能与Google通信以获取兼容性信息及性能指标。"</string>
     <string name="source_privacy">"开源代码与隐私说明  ↗"</string>
     <string name="disclaimer">"本助手为非官方粉丝作品，与STUDIOBSIDE无合作或背书关系。"</string>
     <string name="floating_icon">"悬浮图标"</string>
@@ -160,4 +160,22 @@
     <string name="event_search_count">%1$d个相关事件</string>
     <string name="event_search_expand">展开%1$s</string>
     <string name="event_search_collapse">收起%1$s</string>
+    <string name="database_download_help">"请下载此语言的DB以查看选项与讨伐结果。没有DB也能查看体力。"</string>
+    <string name="diagnostics_title">"诊断信息"</string>
+    <string name="diagnostics_help">"最近错误的阶段与类型仅保留在内存中，不包含画面图像、识别文字或错误消息。复制后会放入剪贴板，不会自动发送。"</string>
+    <string name="copy_diagnostics">"复制诊断信息"</string>
+    <string name="diagnostics_copied">"已复制诊断信息。"</string>
+    <string name="report_error">"报告错误"</string>
+    <string name="report_capture_notice">"将附上识别时使用的原始截图与诊断日志（JSON）。请确认图片中没有个人信息。在邮件应用中描述问题并自行发送；收件人将看到您的发件地址。"</string>
+    <string name="report_no_capture">"没有可附加的截图，因此仅附上诊断日志（JSON）。请在邮件应用中描述问题并自行发送；收件人将看到您的发件地址。"</string>
+    <string name="report_preview">"识别时使用的原始截图"</string>
+    <string name="report_open_email">"撰写邮件"</string>
+    <string name="report_body_prompt">"请在此描述问题。\n\n您预期的结果与实际显示的结果是什么？\n"</string>
+    <string name="report_subject">"旅程助手错误报告 (%1$s)"</string>
+    <string name="report_no_email">"找不到支持附件的邮件应用。请安装或设置邮件应用后重试。"</string>
+    <string name="report_failed">"无法准备邮件，请重试。"</string>
+    <string name="report_preparing">"正在准备附件…"</string>
+    <string name="report_unconfigured">"尚未设置接收报告的电子邮件地址。"</string>
+    <string name="support_help_title">"帮助"</string>
+    <string name="support_help_body">"识别问题请使用结果窗口底部的错误反馈功能。如果结果窗口未显示或无法通过邮件反馈，请在下方复制诊断信息，并附上问题说明后分享。"</string>
 </resources>

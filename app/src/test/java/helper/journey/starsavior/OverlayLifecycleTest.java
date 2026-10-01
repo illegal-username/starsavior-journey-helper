@@ -198,6 +198,172 @@ public final class OverlayLifecycleTest {
         } finally { activity.onDestroy(); }
     }
 
+    @Test public void recognitionFooterKeepsItsOriginalUntilResultCloses() throws Exception {
+        OverlayCaptureService service = service();
+        CaptureSessionStateMachine session = (CaptureSessionStateMachine)get(service, "captureSession");
+        set(service, "mediaProjection", Shadow.newInstanceOf(MediaProjection.class));
+        set(service, "captureActive", true);
+        session.activate(); session.beginCapture();
+        set(service, "reportGeneration", session.generation());
+        CaptureJob job = (CaptureJob)call(service, "newCaptureJob", new Class[]{int.class}, session.generation());
+        Bitmap full = job.own(Bitmap.createBitmap(40, 40, Bitmap.Config.ARGB_8888));
+        call(service, "retainReportCapture", new Class[]{CaptureJob.class, Bitmap.class}, job, full);
+        job.finish();
+        try {
+            call(service, "showStamina", new Class[]{int.class, StaminaGaugeDetector.Result.class},
+                    session.generation(), new StaminaGaugeDetector.Result(61, 61, StaminaGaugeDetector.Direction.NONE, null, 1));
+            View result = (View)get(service, "resultView");
+            assertNotNull(result);
+            View report = result.findViewWithTag("report_error");
+            assertNotNull(report);
+            android.view.ViewGroup body = (android.view.ViewGroup)report.getParent();
+            assertSame(report, body.getChildAt(body.getChildCount() - 1));
+            assertFalse(full.isRecycled());
+            java.io.File directory = ReportAttachmentProvider.directory(service);
+            int before = directory.list() == null ? 0 : directory.list().length;
+            report.performClick();
+            android.app.AlertDialog dialog = (android.app.AlertDialog)get(service, "reportDialog");
+            assertNotNull(dialog);
+            assertTrue(dialog.isShowing());
+            dialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE).performClick();
+            Shadows.shadowOf(Looper.getMainLooper()).idle();
+            assertNull(get(service, "reportDialog"));
+            assertFalse(full.isRecycled());
+            assertEquals(before, directory.list() == null ? 0 : directory.list().length);
+            call(service, "dismissResult", new Class[]{});
+            assertTrue(full.isRecycled());
+            report.performClick();
+            assertNull("Stale report action must not open a dialog", get(service, "reportDialog"));
+        } finally { service.onDestroy(); }
+    }
+
+    @Test public void lateFrameCannotBeRetainedAfterItsResultIsDiscarded() throws Exception {
+        OverlayCaptureService service = service();
+        CaptureSessionStateMachine session = (CaptureSessionStateMachine)get(service, "captureSession");
+        set(service, "mediaProjection", Shadow.newInstanceOf(MediaProjection.class));
+        set(service, "captureActive", true);
+        session.activate(); session.beginCapture();
+        set(service, "reportGeneration", session.generation());
+        CaptureJob job = (CaptureJob)call(service, "newCaptureJob", new Class[]{int.class}, session.generation());
+        Bitmap full = job.own(Bitmap.createBitmap(40, 40, Bitmap.Config.ARGB_8888));
+        try {
+            call(service, "dismissResult", new Class[]{});
+            call(service, "retainReportCapture", new Class[]{CaptureJob.class, Bitmap.class}, job, full);
+            job.finish();
+            assertTrue(full.isRecycled());
+            assertNull(get(service, "reportCapture"));
+        } finally { service.onDestroy(); }
+    }
+
+    @Test public void ocrErrorHasReportFooterAndOriginalButCaptureFailureHasNoStaleImage() throws Exception {
+        OverlayCaptureService service = service();
+        CaptureSessionStateMachine session = (CaptureSessionStateMachine)get(service, "captureSession");
+        set(service, "mediaProjection", Shadow.newInstanceOf(MediaProjection.class));
+        set(service, "captureActive", true);
+        session.activate(); session.beginCapture();
+        set(service, "reportGeneration", session.generation());
+        CaptureJob job = (CaptureJob)call(service, "newCaptureJob", new Class[]{int.class}, session.generation());
+        Bitmap full = job.own(Bitmap.createBitmap(40, 40, Bitmap.Config.ARGB_8888));
+        call(service, "retainReportCapture", new Class[]{CaptureJob.class, Bitmap.class}, job, full);
+        job.finish();
+        try {
+            call(service, "captureFailed", new Class[]{int.class, String.class, List.class}, session.generation(), "OCR failed", List.of());
+            Shadows.shadowOf(Looper.getMainLooper()).idle();
+            assertNotNull(((View)get(service, "resultView")).findViewWithTag("report_error"));
+            assertFalse(full.isRecycled());
+            RecognitionDiagnostics previous = (RecognitionDiagnostics)get(service, "recognitionDiagnostics");
+            assertEquals(40, previous.snapshot().getInt("width"));
+            call(service, "dismissResult", new Class[]{});
+            assertTrue(session.beginCapture()); session.finishCapture();
+            call(service, "captureFailed", new Class[]{int.class, String.class, List.class}, session.generation(), "No frame", List.of());
+            Shadows.shadowOf(Looper.getMainLooper()).idle();
+            assertNotNull(((View)get(service, "resultView")).findViewWithTag("report_error"));
+            assertNull(get(service, "reportCapture"));
+            RecognitionDiagnostics current = (RecognitionDiagnostics)get(service, "recognitionDiagnostics");
+            assertNotSame(previous, current);
+            assertFalse(current.snapshot().getBoolean("captureAvailable"));
+            assertFalse(current.snapshot().has("width"));
+        } finally { service.onDestroy(); }
+    }
+
+    @Test public void confirmedReportOpensEmailWithOriginalAttachmentAndEditableBody() throws Exception {
+        completeReport(false);
+    }
+
+    @Test public void stopDuringEmailPreparationReleasesImageAndDoesNotLaunchOrLeaveAttachment() throws Exception {
+        completeReport(true);
+    }
+
+    private void completeReport(boolean stop) throws Exception {
+        OverlayCaptureService service = service();
+        CaptureSessionStateMachine session = (CaptureSessionStateMachine)get(service, "captureSession");
+        set(service, "mediaProjection", Shadow.newInstanceOf(MediaProjection.class));
+        set(service, "captureActive", true);
+        session.activate(); session.beginCapture();
+        set(service, "reportGeneration", session.generation());
+        CaptureJob job = (CaptureJob)call(service, "newCaptureJob", new Class[]{int.class}, session.generation());
+        Bitmap full = job.own(Bitmap.createBitmap(40, 40, Bitmap.Config.ARGB_8888));
+        full.eraseColor(android.graphics.Color.GREEN);
+        call(service, "retainReportCapture", new Class[]{CaptureJob.class, Bitmap.class}, job, full);
+        job.finish();
+        org.robolectric.shadows.ShadowPackageManager manager = Shadows.shadowOf(service.getPackageManager());
+        android.content.pm.ResolveInfo mail = new android.content.pm.ResolveInfo();
+        mail.activityInfo = new android.content.pm.ActivityInfo();
+        mail.activityInfo.packageName = "test.email"; mail.activityInfo.name = "Compose";
+        mail.activityInfo.exported = true; mail.activityInfo.enabled = true;
+        manager.addResolveInfoForIntent(new Intent(Intent.ACTION_SENDTO, android.net.Uri.parse("mailto:")), mail);
+        manager.addResolveInfoForIntent(new Intent(Intent.ACTION_SEND_MULTIPLE).setType("*/*").setPackage("test.email"), mail);
+        manager.addResolveInfoForIntent(new Intent(Intent.ACTION_SEND).setType("application/json").setPackage("test.email"), mail);
+        ExecutorService emailWorker = (ExecutorService)get(service, "reportWorker");
+        java.util.concurrent.CountDownLatch unblock = new java.util.concurrent.CountDownLatch(1);
+        emailWorker.submit(() -> { try { unblock.await(5, TimeUnit.SECONDS); } catch (InterruptedException error) { Thread.currentThread().interrupt(); } });
+        java.io.File directory = ReportAttachmentProvider.directory(service);
+        int before = directory.list() == null ? 0 : directory.list().length;
+        try {
+            call(service, "showStamina", new Class[]{int.class, StaminaGaugeDetector.Result.class},
+                    session.generation(), new StaminaGaugeDetector.Result(61, 61, StaminaGaugeDetector.Direction.NONE, null, 1));
+            View result = (View)get(service, "resultView");
+            result.findViewWithTag("report_error").performClick();
+            android.app.AlertDialog dialog = (android.app.AlertDialog)get(service, "reportDialog");
+            dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick();
+            Shadows.shadowOf(Looper.getMainLooper()).idle();
+            if (stop) service.onDestroy();
+            unblock.countDown();
+            if (stop) assertTrue(emailWorker.awaitTermination(5, TimeUnit.SECONDS));
+            else emailWorker.submit(() -> {}).get(5, TimeUnit.SECONDS);
+            Shadows.shadowOf(Looper.getMainLooper()).idle();
+            Intent launched = Shadows.shadowOf(RuntimeEnvironment.getApplication()).getNextStartedActivity();
+            assertTrue(full.isRecycled());
+            assertNull(get(service, "resultView"));
+            if (stop) {
+                assertNull(launched);
+                assertEquals(before, directory.list() == null ? 0 : directory.list().length);
+            } else {
+                assertNotNull(launched);
+                assertEquals(Intent.ACTION_CHOOSER, launched.getAction());
+                Intent message = launched.getParcelableExtra(Intent.EXTRA_INTENT);
+                assertArrayEquals(new String[]{service.getString(R.string.report_email_address)}, message.getStringArrayExtra(Intent.EXTRA_EMAIL));
+                assertTrue(message.getStringExtra(Intent.EXTRA_TEXT).contains(service.getString(R.string.report_body_prompt)));
+                java.util.ArrayList<android.net.Uri> uris = message.getParcelableArrayListExtra(Intent.EXTRA_STREAM);
+                assertEquals(2, uris.size());
+                android.net.Uri uri = uris.get(0);
+                java.io.File attachment = new java.io.File(directory, uri.getLastPathSegment());
+                assertTrue("File must survive the result closing for the email app", attachment.isFile());
+                Bitmap decoded = android.graphics.BitmapFactory.decodeFile(attachment.getPath());
+                assertEquals(android.graphics.Color.GREEN, decoded.getPixel(1, 1));
+                java.io.File jsonFile = new java.io.File(directory, uris.get(1).getLastPathSegment());
+                org.json.JSONObject json = new org.json.JSONObject(new String(java.nio.file.Files.readAllBytes(jsonFile.toPath()), java.nio.charset.StandardCharsets.UTF_8));
+                assertEquals("STAMINA", json.getJSONObject("recognition").getString("result"));
+                assertEquals(40, json.getJSONObject("recognition").getInt("width"));
+                assertFalse(message.getStringExtra(Intent.EXTRA_TEXT).contains("androidApi"));
+                decoded.recycle(); attachment.delete(); jsonFile.delete();
+            }
+        } finally {
+            unblock.countDown();
+            if (!stop) service.onDestroy();
+        }
+    }
+
     private void completeRecognition(String completion, boolean stop) throws Exception {
         com.google.mlkit.common.sdkinternal.MlKitContext.initializeIfNeeded(RuntimeEnvironment.getApplication());
         OverlayCaptureService service = service();
@@ -224,10 +390,14 @@ public final class OverlayLifecycleTest {
         Bitmap event = Bitmap.createBitmap(20, 20, Bitmap.Config.ARGB_8888);
         Bitmap choices = Bitmap.createBitmap(20, 20, Bitmap.Config.ARGB_8888);
         Bitmap full = Bitmap.createBitmap(40, 40, Bitmap.Config.ARGB_8888);
-        call(service, "recognizeRegions", new Class[]{Bitmap.class, Bitmap.class, Bitmap.class, int.class, StaminaGaugeDetector.Result.class},
-                event, choices, full, session.generation(),
+        CaptureJob job = (CaptureJob) call(service, "newCaptureJob", new Class[]{int.class}, session.generation());
+        job.own(event); job.own(choices); job.own(full);
+        call(service, "recognizeRegions", new Class[]{Bitmap.class, Bitmap.class, Bitmap.class, CaptureJob.class, StaminaGaugeDetector.Result.class},
+                event, choices, full, job,
                 new StaminaGaugeDetector.Result(61, 61, StaminaGaugeDetector.Direction.NONE, null, 1));
+        if (!completion.equals("close-race")) assertFalse("Pending OCR still owns its input", choices.isRecycled());
         if (stop && !completion.equals("close-race")) service.onDestroy();
+        if (!completion.equals("close-race")) assertFalse("Shutdown must wait for OCR completion", choices.isRecycled());
         try {
             // Actual Google Tasks listener dispatch, with only the OCR engine replaced by a deferred task.
             if (completion.equals("success")) pending.setResult(null);

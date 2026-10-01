@@ -11,7 +11,10 @@ import java.util.Set;
 public final class JourneyModels {
     private JourneyModels() {}
 
+    enum DatabaseOrigin { UNLOADED, DOWNLOADED, BUNDLED, BUNDLED_TEST, EXAMPLE }
+
     public static final class Data {
+        final DatabaseOrigin origin;
         final RaidModels.Data raids;
         public final int schema;
         public final String language;
@@ -57,6 +60,7 @@ public final class JourneyModels {
              int recordCount, int choiceCount, String contentSha256, int contentLength,
              List<Event> events, Map<String, ArcanaImageFeature> arcanaImageFeatures,
              String language, RaidModels.Data raids) {
+            this.origin = DatabaseOrigin.UNLOADED;
             this.raids = raids;
             this.language = language;
             this.schema = schema;
@@ -70,6 +74,26 @@ public final class JourneyModels {
             this.events = Collections.unmodifiableList(events);
             this.arcanaImageFeatures = Collections.unmodifiableMap(
                     new LinkedHashMap<>(arcanaImageFeatures));
+        }
+
+        private Data(Data data, DatabaseOrigin origin) {
+            this.origin = origin;
+            raids = data.raids;
+            language = data.language;
+            schema = data.schema;
+            generatedAt = data.generatedAt;
+            source = data.source;
+            upstreamRevision = data.upstreamRevision;
+            recordCount = data.recordCount;
+            choiceCount = data.choiceCount;
+            contentSha256 = data.contentSha256;
+            contentLength = data.contentLength;
+            events = data.events;
+            arcanaImageFeatures = data.arcanaImageFeatures;
+        }
+
+        Data withOrigin(DatabaseOrigin origin) {
+            return this.origin == origin ? this : new Data(this, origin);
         }
     }
 
@@ -203,6 +227,14 @@ public final class JourneyModels {
         }
     }
 
+    static final class MatchCandidate {
+        final int eventIndex;
+        final double rankScore, confidence, eventScore, choiceScore;
+        MatchCandidate(int index, double rank, double confidence, double event, double choice) {
+            eventIndex = index; rankScore = rank; this.confidence = confidence; eventScore = event; choiceScore = choice;
+        }
+    }
+
     public static final class Match {
         public final Event event;
         public final double confidence;
@@ -213,10 +245,19 @@ public final class JourneyModels {
         public final List<String> recognizedEventLines;
         public final List<String> recognizedLines;
         public final List<Double> choiceScores;
+        final List<MatchCandidate> candidates;
 
         public Match(Event event, double confidence, double eventConfidence, double choiceConfidence,
                      boolean eventNameUsed, boolean ambiguous, List<String> recognizedEventLines,
                      List<String> recognizedLines, List<Double> choiceScores) {
+            this(event, confidence, eventConfidence, choiceConfidence, eventNameUsed, ambiguous,
+                    recognizedEventLines, recognizedLines, choiceScores, List.of());
+        }
+
+        Match(Event event, double confidence, double eventConfidence, double choiceConfidence,
+              boolean eventNameUsed, boolean ambiguous, List<String> recognizedEventLines,
+              List<String> recognizedLines, List<Double> choiceScores, List<MatchCandidate> candidates) {
+            this.candidates = Collections.unmodifiableList(new ArrayList<>(candidates));
             this.event = event;
             this.confidence = confidence;
             this.eventConfidence = eventConfidence;
@@ -229,7 +270,8 @@ public final class JourneyModels {
         }
 
         public boolean isConfident() {
-            return event != null && choiceConfidence >= 0.58 && confidence >= 0.58 && !ambiguous;
+            return event != null && choiceConfidence >= JourneyMatcher.MIN_CHOICE_CONFIDENCE
+                    && confidence >= JourneyMatcher.MIN_MATCH_CONFIDENCE && !ambiguous;
         }
     }
 }

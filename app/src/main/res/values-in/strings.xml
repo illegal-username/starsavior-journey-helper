@@ -23,7 +23,7 @@
     <string name="how_step_3">"3. Hasil muncul di kiri agar pilihan tetap terlihat. Seret ikon untuk memindahkannya."</string>
     <string name="how_step_4">"4. Tekan lama ikon ✦ untuk membuka menu pembaruan DB atau menghentikan asisten."</string>
     <string name="privacy_title">"Isi layar tetap di perangkat Anda"</string>
-    <string name="privacy_body">"Gambar tangkapan dan teks yang dikenali tidak disimpan atau dikirim. Aplikasi ini tidak mengoperasikan server iklan atau pelacakan. Saat dibuka, aplikasi memeriksa DB baru; tombol Perbarui DB mengunduhnya dari server distribusi. SDK ML Kit dapat berkomunikasi dengan Google untuk informasi kompatibilitas dan metrik kinerja."</string>
+    <string name="privacy_body">"Gambar pengenalan disimpan di memori sampai hasil ditutup. Hanya setelah laporan dikonfirmasi, gambar asli disimpan sementara sebagai lampiran email bersama diagnostik. Teks hasil pengenalan tidak diekspor. Tidak ada pengiriman otomatis atau server iklan/pelacakan. DB diperiksa saat aplikasi dibuka dan diunduh atas permintaan. ML Kit dapat menghubungi Google untuk informasi kompatibilitas dan metrik kinerja."</string>
     <string name="source_privacy">"Kode sumber dan privasi ↗"</string>
     <string name="disclaimer">"Asisten penggemar tidak resmi, tidak berafiliasi dengan atau didukung oleh STUDIOBSIDE."</string>
     <string name="floating_icon">"Ikon mengambang"</string>
@@ -160,4 +160,22 @@
     <string name="event_search_count">%1$d event terkait</string>
     <string name="event_search_expand">Buka %1$s</string>
     <string name="event_search_collapse">Tutup %1$s</string>
+    <string name="database_download_help">"Unduh data pilihan dan raid bahasa ini untuk melihat hasilnya. Stamina tetap dapat dibaca tanpa data tersebut."</string>
+    <string name="diagnostics_title">"Diagnostik"</string>
+    <string name="diagnostics_help">"Tahap dan jenis kesalahan terbaru hanya disimpan di memori, tanpa gambar layar, teks yang dikenali, atau pesan kesalahan. Menyalin akan memasukkannya ke papan klip. Tidak ada pengiriman otomatis."</string>
+    <string name="copy_diagnostics">"Salin diagnostik"</string>
+    <string name="diagnostics_copied">"Diagnostik disalin."</string>
+    <string name="report_error">"Laporkan kesalahan"</string>
+    <string name="report_capture_notice">"Gambar asli dan log diagnostik (JSON) akan dilampirkan. Pastikan gambar tidak memuat informasi pribadi. Jelaskan masalah di aplikasi email dan kirim sendiri; penerima akan melihat alamat email Anda."</string>
+    <string name="report_no_capture">"Tidak ada gambar. Hanya log diagnostik (JSON) yang dilampirkan. Jelaskan masalah di aplikasi email dan kirim sendiri; penerima akan melihat alamat email Anda."</string>
+    <string name="report_preview">"Gambar asli untuk pengenalan"</string>
+    <string name="report_open_email">"Tulis email"</string>
+    <string name="report_body_prompt">"Jelaskan masalah di sini.\n\nHasil apa yang Anda harapkan dan apa yang ditampilkan?\n"</string>
+    <string name="report_subject">"Laporan kesalahan Journey Helper (%1$s)"</string>
+    <string name="report_no_email">"Aplikasi email yang kompatibel tidak ditemukan. Instal atau siapkan aplikasi email lalu coba lagi."</string>
+    <string name="report_failed">"Tidak dapat menyiapkan email. Coba lagi."</string>
+    <string name="report_preparing">"Menyiapkan lampiran…"</string>
+    <string name="report_unconfigured">"Alamat email untuk laporan belum diatur."</string>
+    <string name="support_help_title">"Bantuan"</string>
+    <string name="support_help_body">"Untuk masalah pengenalan, gunakan laporan kesalahan di bagian bawah jendela hasil. Jika jendela hasil tidak muncul atau pelaporan melalui email tidak tersedia, salin diagnostik di bawah dan bagikan beserta penjelasan masalahnya."</string>
 </resources>

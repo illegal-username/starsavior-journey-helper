@@ -23,7 +23,7 @@
     <string name="how_step_3">"3. Results appear on the left to keep choices visible. Drag the icon to move it."</string>
     <string name="how_step_4">"4. Hold the ✦ icon to open the menu for updating the DB or stopping the helper."</string>
     <string name="privacy_title">"Screen content stays on your device"</string>
-    <string name="privacy_body">"Captured images and recognized text are neither saved nor transmitted. There are no ads or tracking servers operated by this app. Opening the app checks for a new DB; tapping Update DB connects to the distribution server to download it. The ML Kit SDK may communicate with Google for compatibility information and performance metrics."</string>
+    <string name="privacy_body">"Recognition images stay in memory until the result closes. Only if you confirm an error report is its original image saved temporarily as an email attachment with diagnostics. Recognized text is not exported. Nothing is sent automatically. There are no advertising or tracking servers. The app checks DB freshness on launch and downloads data on request. ML Kit may contact Google for compatibility information and performance metrics."</string>
     <string name="source_privacy">"Source code and privacy  ↗"</string>
     <string name="disclaimer">"An unofficial fan helper, unaffiliated with and not endorsed by STUDIOBSIDE."</string>
     <string name="floating_icon">"Floating icon"</string>
@@ -161,4 +161,23 @@
     <string name="event_search_count">%1$d related events</string>
     <string name="event_search_expand">Expand %1$s</string>
     <string name="event_search_collapse">Collapse %1$s</string>
+    <string name="database_download_help">"Download this language’s choice and raid data to see results. Stamina reading is available without it."</string>
+    <string name="diagnostics_title">"Diagnostics"</string>
+    <string name="diagnostics_help">"Recent error stages and types are kept only in memory. No screen images, recognized text, or error messages are included. Copying places these details on your clipboard; nothing is sent automatically."</string>
+    <string name="copy_diagnostics">"Copy diagnostics"</string>
+    <string name="diagnostics_copied">"Diagnostics copied."</string>
+    <string name="report_error">"Report an error"</string>
+    <string name="report_capture_notice">"Attach the original recognition image and a diagnostic log (JSON). Check the image for personal information. Describe the problem in your email app and send it yourself; the recipient will see your email address."</string>
+    <string name="report_no_capture">"No capture is available. A diagnostic log (JSON) will be attached. Describe the problem in your email app and send it yourself; the recipient will see your email address."</string>
+    <string name="report_preview">"Original recognition image"</string>
+    <string name="report_open_email">"Open email"</string>
+    <string name="report_body_prompt">"Please describe the problem here.\n\nWhat did you expect, and what appeared instead?\n"</string>
+    <string name="report_subject">"Journey Helper error report (%1$s)"</string>
+    <string name="report_no_email">"No compatible email app was found. Install or set up an email app and try again."</string>
+    <string name="report_failed">"Could not prepare the email. Please try again."</string>
+    <string name="report_preparing">"Preparing attachment…"</string>
+    <string name="report_unconfigured">"The report email address has not been configured."</string>
+    <string name="report_email_address" translatable="false">esnahgno@gmail.com</string>
+    <string name="support_help_title">"Help"</string>
+    <string name="support_help_body">"For recognition problems, use Report an error at the bottom of the result window. If the result window does not appear or you cannot use email reporting, copy diagnostics below and share them with a description of the problem."</string>
 </resources>

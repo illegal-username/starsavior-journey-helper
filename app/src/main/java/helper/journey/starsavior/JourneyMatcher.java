@@ -14,7 +14,10 @@ import java.util.regex.Pattern;
 public final class JourneyMatcher {
     private static final Pattern NOISE = Pattern.compile("[^\\p{L}\\p{M}\\p{Nd}]");
     private final String eventHeader;
-    private static final double MIN_CHOICE_CONFIDENCE = 0.58;
+    static final double MIN_CHOICE_CONFIDENCE = 0.58;
+    static final double MIN_MATCH_CONFIDENCE = 0.58;
+    private static final double MIN_PLAUSIBLE_CHOICE_SIGNAL = 0.40;
+    private static final double MIN_COVERED_CHOICE_SIMILARITY = 0.55;
     private static final double MIN_EVENT_SIGNAL = 0.50;
     private static final double STRONG_EVENT_SIGNAL = 0.58;
     private static final double CLOSE_CHOICE_MARGIN = 0.04;
@@ -39,7 +42,7 @@ public final class JourneyMatcher {
     public boolean hasPlausibleChoiceSignal(List<String> recognizedLines) {
         List<Candidate> candidates = makeCandidates(recognizedLines);
         for (JourneyModels.Event event : events) {
-            if (scoreChoices(event, candidates).score >= 0.40) return true;
+            if (scoreChoices(event, candidates).score >= MIN_PLAUSIBLE_CHOICE_SIGNAL) return true;
         }
         return false;
     }
@@ -86,9 +89,15 @@ public final class JourneyMatcher {
         boolean ambiguous = closeChoiceCompetitor && !strongEventEvidence;
         boolean eventNameUsed = !eventCandidates.isEmpty() && best.event >= MIN_EVENT_SIGNAL;
 
+        List<JourneyModels.MatchCandidate> diagnostics = new ArrayList<>();
+        for (int i = 0; i < Math.min(3, ranked.size()); i++) {
+            ScoredEvent candidate = ranked.get(i);
+            diagnostics.add(new JourneyModels.MatchCandidate(events.indexOf(candidate.eventData),
+                    candidate.combined, candidate.confidence, candidate.event, candidate.choice));
+        }
         return new JourneyModels.Match(best.eventData, best.confidence, best.event, best.choice,
                 eventNameUsed, ambiguous, new ArrayList<>(recognizedEventLines),
-                new ArrayList<>(recognizedChoiceLines), best.choiceScores);
+                new ArrayList<>(recognizedChoiceLines), best.choiceScores, diagnostics);
     }
 
     private ChoiceEvaluation scoreChoices(JourneyModels.Event event, List<Candidate> candidates) {
@@ -115,7 +124,7 @@ public final class JourneyMatcher {
                 scores.add(choiceBest);
                 bestIndices.add(choiceIndex);
                 total += choiceBest;
-                if (choiceBest >= 0.55) covered++;
+                if (choiceBest >= MIN_COVERED_CHOICE_SIMILARITY) covered++;
             }
 
             if (event.choices.isEmpty()) return new ChoiceEvaluation(0.0, scores);

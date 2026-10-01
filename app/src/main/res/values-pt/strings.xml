@@ -23,7 +23,7 @@
     <string name="how_step_3">"3. Os resultados aparecem à esquerda para manter as escolhas visíveis. Arraste o ícone para movê-lo."</string>
     <string name="how_step_4">"4. Mantenha o ícone ✦ pressionado para abrir o menu de atualização do BD ou parar o assistente."</string>
     <string name="privacy_title">"O conteúdo da tela permanece no seu dispositivo"</string>
-    <string name="privacy_body">"As imagens capturadas e o texto reconhecido não são salvos nem transmitidos. Este aplicativo não opera servidores de anúncios ou rastreamento. Ao abrir, ele verifica se há um novo BD; ao tocar em Atualizar BD, ele é baixado do servidor de distribuição. O SDK do ML Kit pode se comunicar com o Google para obter informações de compatibilidade e métricas de desempenho."</string>
+    <string name="privacy_body">"As imagens ficam na memória até fechar o resultado. Só ao confirmar um relato a imagem original é salva temporariamente como anexo, com diagnósticos. O texto reconhecido não é exportado. Nada é enviado automaticamente. Não há servidores de anúncios ou rastreamento. O BD é verificado ao abrir e baixado sob solicitação. O ML Kit pode contatar o Google para compatibilidade e métricas de desempenho."</string>
     <string name="source_privacy">"Código-fonte e privacidade ↗"</string>
     <string name="disclaimer">"Assistente não oficial de fãs, sem afiliação ou endosso da STUDIOBSIDE."</string>
     <string name="floating_icon">"Ícone flutuante"</string>
@@ -160,4 +160,22 @@
     <string name="event_search_count">%1$d eventos relacionados</string>
     <string name="event_search_expand">Expandir %1$s</string>
     <string name="event_search_collapse">Recolher %1$s</string>
+    <string name="database_download_help">"Baixe os dados de escolhas e incursões deste idioma para ver os resultados. A leitura de energia funciona sem esses dados."</string>
+    <string name="diagnostics_title">"Diagnóstico"</string>
+    <string name="diagnostics_help">"As etapas e os tipos de erros recentes ficam apenas na memória, sem imagens, texto reconhecido ou mensagens de erro. Ao copiar, os dados vão para a área de transferência. Nada é enviado automaticamente."</string>
+    <string name="copy_diagnostics">"Copiar diagnóstico"</string>
+    <string name="diagnostics_copied">"Diagnóstico copiado."</string>
+    <string name="report_error">"Relatar um erro"</string>
+    <string name="report_capture_notice">"A imagem original e um registro de diagnóstico (JSON) serão anexados. Confira se a imagem contém dados pessoais. Descreva o problema no aplicativo de e-mail e envie você mesmo; o destinatário verá seu endereço."</string>
+    <string name="report_no_capture">"Não há imagem disponível. Apenas um registro de diagnóstico (JSON) será anexado. Descreva o problema no aplicativo de e-mail e envie você mesmo; o destinatário verá seu endereço."</string>
+    <string name="report_preview">"Imagem original do reconhecimento"</string>
+    <string name="report_open_email">"Escrever e-mail"</string>
+    <string name="report_body_prompt">"Descreva o problema aqui.\n\nQual resultado você esperava e o que apareceu?\n"</string>
+    <string name="report_subject">"Relato de erro do Journey Helper (%1$s)"</string>
+    <string name="report_no_email">"Nenhum aplicativo de e-mail compatível encontrado. Instale ou configure um e tente novamente."</string>
+    <string name="report_failed">"Não foi possível preparar o e-mail. Tente novamente."</string>
+    <string name="report_preparing">"Preparando anexo…"</string>
+    <string name="report_unconfigured">"O endereço de e-mail para relatos não está configurado."</string>
+    <string name="support_help_title">"Ajuda"</string>
+    <string name="support_help_body">"Para problemas de reconhecimento, use a opção de relatar um erro no final da janela de resultados. Se essa janela não aparecer ou não for possível enviar o relato por e-mail, copie o diagnóstico abaixo e compartilhe com uma descrição do problema."</string>
 </resources>
