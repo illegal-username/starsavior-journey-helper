@@ -248,9 +248,16 @@ final class OverlayResultView {
         if (body == null) return;
         Context context = root.getContext();
         TextView report = Ui.button(context, context.getString(R.string.report_error), false);
+        report.setTextSize(12);
+        report.setTypeface(Typeface.DEFAULT, Typeface.NORMAL);
+        report.setTextColor(Ui.MUTED);
+        report.setMinHeight(Ui.dp(context, 36));
+        report.setPadding(Ui.dp(context, 12), Ui.dp(context, 6), Ui.dp(context, 12), Ui.dp(context, 6));
         report.setTag("report_error");
         report.setOnClickListener(view -> action.run());
-        body.addView(report, margins(context, -1, -2, 0, 12, 0, 0));
+        LinearLayout.LayoutParams params = margins(context, -2, -2, 0, 8, 0, 0);
+        params.gravity = Gravity.END;
+        body.addView(report, params);
     }
 
     @SuppressWarnings("deprecation")

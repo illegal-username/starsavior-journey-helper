@@ -1,5 +1,15 @@
 # 변경 기록
 
+## 2.2.12 · 2026-10-06
+
+### 한국어
+
+- 결과창의 오류 제보 버튼을 작게 줄이고 오른쪽 아래에 배치했습니다.
+
+### English
+
+- Made the error report button smaller and placed it at the bottom right of the results window.
+
 ## 2.2.11 · 2026-10-01
 
 ### 한국어
