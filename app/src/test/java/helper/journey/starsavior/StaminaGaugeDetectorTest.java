@@ -113,7 +113,7 @@ public class StaminaGaugeDetectorTest {
         for (int[] screen : screens) {
             Fixture fixture = Fixture.create(screen[0], screen[1], 0.385f, 100, 85,
                     StaminaGaugeDetector.Direction.LOSS);
-            fixture.paintTrailingNeutralHudPatch(0.385f);
+            fixture.paintMiddleRowNeutralHudPatch(0.385f);
 
             StaminaGaugeDetector.Result result = fixture.detect(null);
 
@@ -178,10 +178,10 @@ public class StaminaGaugeDetectorTest {
     }
 
     @Test
-    public void keepsFullGaugeWhenShortNeutralHudPatchFollowsTrack() {
+    public void keepsFullGaugeWhenBorderRowsExposeEndBesideNeutralPatch() {
         Fixture fixture = Fixture.create(3120, 1440, 0.375f, 100, 100,
                 StaminaGaugeDetector.Direction.NONE);
-        fixture.paintTrailingNeutralHudPatch(0.375f);
+        fixture.paintMiddleRowNeutralHudPatch(0.375f);
 
         StaminaGaugeDetector.Result result = fixture.detect(null);
 
@@ -249,7 +249,7 @@ public class StaminaGaugeDetectorTest {
     }
 
     @Test
-    public void rejectsLowSaturationSceneryWithGaugeGeometry() {
+    public void rejectsLowSaturationSceneryWithUnevenEdges() {
         Fixture fixture = Fixture.blank(2340, 1080);
         fixture.paintLowSaturationBand(0.385f);
 
@@ -447,7 +447,7 @@ public class StaminaGaugeDetectorTest {
             Fixture fixture = Fixture.create(screen[0], screen[1], 0.375f,
                     70, 55, StaminaGaugeDetector.Direction.LOSS);
             fixture.paintNeutralOverlappingLossStart(0.375f, 55, 70);
-            fixture.paintTrailingNeutralHudPatch(0.375f);
+            fixture.paintMiddleRowNeutralHudPatch(0.375f);
 
             StaminaGaugeDetector.Result result = fixture.detect(null);
 
@@ -475,6 +475,19 @@ public class StaminaGaugeDetectorTest {
     }
 
     @Test
+    public void refusesAnOpaquePanelThatMakesTheEndpointAmbiguous() {
+        for (int current : new int[]{0, 63, 100}) {
+            Fixture fixture = Fixture.create(2340, 1080, 0.375f,
+                    current, current, StaminaGaugeDetector.Direction.NONE);
+            fixture.paintTrailingNeutralHudPatch(0.375f);
+            // A longer track completely hidden behind this panel produces the
+            // same pixels. The renderer's hidden endpoint is not an oracle for
+            // a detector that is restricted to current-frame visible evidence.
+            assertNull("opaque adjacent panel, current=" + current, fixture.detect(null));
+        }
+    }
+
+    @Test
     public void stabilizesCurrentWithoutMergingDifferentPreviewAmounts() {
         StaminaGaugeDetector.Result first = new StaminaGaugeDetector.Result(85, 68,
                 StaminaGaugeDetector.Direction.LOSS, new StaminaGaugeDetector.Anchor(0.35f, 0.032f), 0.8f);
@@ -483,6 +496,117 @@ public class StaminaGaugeDetectorTest {
                 .stabilize(first);
         assertEquals(85, second.current);
         assertEquals(69, second.after);
+    }
+
+    @Test
+    public void preservesChangedPreviewAmountsWhenCurrentAlsoDrifts() {
+        int[][] observations = {
+                {70, 55, 71, 54},
+                {40, 50, 39, 52}
+        };
+        for (int[] values : observations) {
+            StaminaGaugeDetector.Direction direction = values[1] < values[0]
+                    ? StaminaGaugeDetector.Direction.LOSS : StaminaGaugeDetector.Direction.GAIN;
+            StaminaGaugeDetector.Result previous = new StaminaGaugeDetector.Result(
+                    values[0], values[1], direction, null, 0.9f);
+            StaminaGaugeDetector.Result observed = new StaminaGaugeDetector.Result(
+                    values[2], values[3], direction, null, 0.7f);
+
+            StaminaGaugeDetector.Result stable = observed.stabilize(previous);
+
+            assertEquals(values[2], stable.current);
+            assertEquals(values[3], stable.after);
+            assertEquals(values[3] - values[2], stable.after - stable.current);
+        }
+    }
+
+    @Test
+    public void stabilizesSmallCommonDriftWithoutChangingDeltaOrCurrentEvidence() {
+        int[][] observations = {
+                {70, 55, 72, 57},
+                {40, 50, 38, 48},
+                {63, 63, 65, 65}
+        };
+        for (int[] values : observations) {
+            StaminaGaugeDetector.Direction direction = values[1] < values[0]
+                    ? StaminaGaugeDetector.Direction.LOSS : values[1] > values[0]
+                    ? StaminaGaugeDetector.Direction.GAIN : StaminaGaugeDetector.Direction.NONE;
+            StaminaGaugeDetector.Result previous = new StaminaGaugeDetector.Result(
+                    values[0], values[1], direction,
+                    new StaminaGaugeDetector.Anchor(0.35f, 0.032f), 0.9f);
+            StaminaGaugeDetector.Anchor currentAnchor =
+                    new StaminaGaugeDetector.Anchor(0.38f, 0.041f);
+            StaminaGaugeDetector.Result observed = new StaminaGaugeDetector.Result(
+                    values[2], values[3], direction, currentAnchor, 0.7f);
+
+            StaminaGaugeDetector.Result stable = observed.stabilize(previous);
+
+            assertEquals(values[0], stable.current);
+            assertEquals(values[1], stable.after);
+            assertEquals(values[3] - values[2], stable.after - stable.current);
+            assertTrue(currentAnchor == stable.anchor);
+            assertEquals(0.7f, stable.confidence, 0f);
+        }
+    }
+
+    @Test
+    public void preservesLargeChangesAndChangedDirection() {
+        int[][] observations = {
+                {70, 55, 73, 58},
+                {40, 50, 37, 47},
+                {63, 63, 66, 66}
+        };
+        for (int[] values : observations) {
+            StaminaGaugeDetector.Direction direction = values[1] < values[0]
+                    ? StaminaGaugeDetector.Direction.LOSS : values[1] > values[0]
+                    ? StaminaGaugeDetector.Direction.GAIN : StaminaGaugeDetector.Direction.NONE;
+            StaminaGaugeDetector.Result previous = new StaminaGaugeDetector.Result(
+                    values[0], values[1], direction, null, 0.8f);
+            StaminaGaugeDetector.Result observed = new StaminaGaugeDetector.Result(
+                    values[2], values[3], direction, null, 0.8f);
+
+            StaminaGaugeDetector.Result stable = observed.stabilize(previous);
+
+            assertEquals(values[2], stable.current);
+            assertEquals(values[3], stable.after);
+        }
+        StaminaGaugeDetector.Result loss = new StaminaGaugeDetector.Result(
+                50, 35, StaminaGaugeDetector.Direction.LOSS, null, 0.8f);
+        StaminaGaugeDetector.Result gain = new StaminaGaugeDetector.Result(
+                49, 64, StaminaGaugeDetector.Direction.GAIN, null, 0.8f);
+        StaminaGaugeDetector.Result stable = gain.stabilize(loss);
+        assertEquals(49, stable.current);
+        assertEquals(64, stable.after);
+        assertEquals(StaminaGaugeDetector.Direction.GAIN, stable.direction);
+    }
+
+    @Test
+    public void preservesObservedEndpointTransitionsInBothDirections() {
+        int[][] endpointPairs = {
+                {0, 0, 1, 1},
+                {100, 100, 99, 99},
+                {0, 18, 1, 19},
+                {90, 100, 89, 99},
+                {20, 0, 21, 1},
+                {100, 80, 99, 79}
+        };
+        for (int[] values : endpointPairs) {
+            StaminaGaugeDetector.Direction direction = values[1] < values[0]
+                    ? StaminaGaugeDetector.Direction.LOSS : values[1] > values[0]
+                    ? StaminaGaugeDetector.Direction.GAIN : StaminaGaugeDetector.Direction.NONE;
+            StaminaGaugeDetector.Result endpoint = new StaminaGaugeDetector.Result(
+                    values[0], values[1], direction, null, 0.8f);
+            StaminaGaugeDetector.Result interior = new StaminaGaugeDetector.Result(
+                    values[2], values[3], direction, null, 0.8f);
+
+            StaminaGaugeDetector.Result leaving = interior.stabilize(endpoint);
+            StaminaGaugeDetector.Result reaching = endpoint.stabilize(interior);
+
+            assertEquals(values[2], leaving.current);
+            assertEquals(values[3], leaving.after);
+            assertEquals(values[0], reaching.current);
+            assertEquals(values[1], reaching.after);
+        }
     }
 
     @Test
@@ -674,6 +798,14 @@ public class StaminaGaugeDetectorTest {
         }
 
         void paintTrailingNeutralHudPatch(float leftRatio) {
+            paintNeutralHudPatch(leftRatio, false);
+        }
+
+        void paintMiddleRowNeutralHudPatch(float leftRatio) {
+            paintNeutralHudPatch(leftRatio, true);
+        }
+
+        private void paintNeutralHudPatch(float leftRatio, boolean exposeBorderRows) {
             double scale = width / 3120.0;
             int trackWidth = Math.max(72, (int) Math.round(428 * scale));
             int trackHeight = Math.max(8, (int) Math.round(33 * scale));
@@ -682,9 +814,12 @@ public class StaminaGaugeDetectorTest {
             int centerY = (int) Math.round(100 * scale);
             int top = centerY - trackHeight / 2;
             int patchWidth = Math.max(3, Math.round(trackHeight * 0.60f));
-            int patchTop = Math.max(region.top, top - trackHeight);
-            int patchBottom = Math.min(region.top + region.height,
-                    top + trackHeight * 2);
+            // A positive endpoint test must leave the actual end visible. A
+            // panel covering both exterior borders is tested as ambiguous.
+            int patchTop = exposeBorderRows ? top + Math.max(1, trackHeight / 4)
+                    : Math.max(region.top, top - trackHeight);
+            int patchBottom = exposeBorderRows ? top + trackHeight - Math.max(1, trackHeight / 4)
+                    : Math.min(region.top + region.height, top + trackHeight * 2);
             for (int y = patchTop; y < patchBottom; y++) {
                 for (int x = trackRight; x < trackRight + patchWidth; x++) {
                     set(pixels, region, x, y, rgb(78, 78, 78));
@@ -788,9 +923,12 @@ public class StaminaGaugeDetectorTest {
             int left = Math.round(width * leftRatio);
             int centerY = (int) Math.round(width * 0.032);
             int top = centerY - trackHeight / 2;
-            for (int y = top; y < top + trackHeight; y++) {
-                for (int x = left; x < left + trackWidth; x++) {
-                    set(pixels, region, x, y, rgb(108, 124, 133));
+            for (int x = left; x < left + trackWidth; x++) {
+                int phase = ((x - left) / Math.max(1, trackHeight / 3)) % 5;
+                int shift = (phase - 2) * Math.max(1, trackHeight / 5);
+                for (int y = top + shift; y < top + trackHeight + shift; y++) {
+                    int shade = (y - top - shift) * 30 / trackHeight;
+                    set(pixels, region, x, y, rgb(108 + shade, 124 + shade, 133 + shade));
                 }
             }
         }
@@ -834,15 +972,19 @@ public class StaminaGaugeDetectorTest {
             int trackHeight = Math.max(6, (int) Math.round(width * 0.0034));
             int trackWidth = (int) Math.round(trackHeight * 11.8);
             int left = Math.round(width * 0.575f);
-            int colorEnd = left + Math.max(8, (int) Math.round(trackHeight * 1.5));
             int centerY = (int) Math.round(width * 0.032);
             int top = centerY - trackHeight / 2;
+            // Actual letter strokes and gaps are negative evidence. A solid
+            // small green+olive rectangle is also a valid small loss gauge and
+            // cannot be rejected merely by naming it "text" in a fixture.
+            String[] glyph = {"01110", "10001", "10000", "10111", "10001", "10001", "01110"};
+            int cell = Math.max(1, trackHeight / 7);
             for (int y = top; y < top + trackHeight; y++) {
                 for (int x = left; x < left + trackWidth; x++) {
-                    int color = x < colorEnd
-                            ? rgb(35, 202, 148)
-                            : rgb(61, 75, 50);
-                    set(pixels, region, x, y, color);
+                    int gy = (y - top) / cell, gx = ((x - left) / cell) % 7;
+                    if (gy < glyph.length && gx < 5 && glyph[gy].charAt(gx) == '1') {
+                        set(pixels, region, x, y, rgb(35, 202, 148));
+                    }
                 }
             }
         }
