@@ -2,1614 +2,1010 @@ package helper.journey.starsavior;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
+import java.util.Comparator;
 import java.util.List;
-import java.util.Set;
 
 /**
- * Finds and reads the journey stamina gauge without fixed device-pixel coordinates.
- *
- * <p>The detector deliberately does not infer the bar width from the capture width.
- * Gallery zoom, display compatibility scaling, letterboxing and foldable layouts can
- * all render the same HUD at a different pixel size.  Instead it searches a small top
- * strip for the rectangular green fill, measures that rectangle's own height, follows
- * the neutral tail to the physical right edge, and only then divides the measured span
- * into 100 units.  All expensive pixel access is confined to the copied top strip.</p>
+ * Reads the current frame's exposed gauge edges and material transitions.
+ * Search windows and candidate priors never supply a missing endpoint length.
  */
 final class StaminaGaugeDetector {
-    // Scale-independent rendered shape used only to rank gauge-shaped components.
-    // Endpoint coordinates always come from visible boundaries in the current image.
-    private static final double TRACK_ASPECT = 12.8;
-    private static final double PREFERRED_CENTER_MIN = 0.022;
-    private static final double PREFERRED_CENTER_MAX = 0.050;
+    private static final double SEARCH_LEFT = .14;
+    private static final double SEARCH_RIGHT = .62;
+    private static final double SEARCH_BOTTOM = .064;
 
     enum Direction { NONE, GAIN, LOSS }
 
     static final class Region {
-        final int left;
-        final int top;
-        final int width;
-        final int height;
-
+        final int left, top, width, height;
         Region(int left, int top, int width, int height) {
-            this.left = left;
-            this.top = top;
-            this.width = width;
-            this.height = height;
+            this.left = left; this.top = top; this.width = width; this.height = height;
         }
     }
 
     static final class Anchor {
-        final float leftRatio;
-        final float centerYRatio;
-
+        final float leftRatio, centerYRatio;
         Anchor(float leftRatio, float centerYRatio) {
-            this.leftRatio = leftRatio;
-            this.centerYRatio = centerYRatio;
+            this.leftRatio = leftRatio; this.centerYRatio = centerYRatio;
         }
     }
 
     static final class Result {
-        final int current;
-        final int after;
+        final int current, after;
         final Direction direction;
         final Anchor anchor;
         final float confidence;
-
         Result(int current, int after, Direction direction, Anchor anchor, float confidence) {
-            this.current = clampValue(current);
-            this.after = clampValue(after);
-            this.direction = direction;
-            this.anchor = anchor;
-            this.confidence = confidence;
+            this.current = clampValue(current); this.after = clampValue(after);
+            this.direction = direction; this.anchor = anchor; this.confidence = confidence;
         }
-
-        boolean hasPreview() {
-            return direction != Direction.NONE && current != after;
-        }
-
+        boolean hasPreview() { return direction != Direction.NONE && current != after; }
         Result stabilize(Result previous) {
             if (previous == null || previous.direction != direction) return this;
             if (Math.abs(previous.current - current) > 2) return this;
-            int stableAfter = direction == Direction.NONE ? previous.current : after;
-            return new Result(previous.current, stableAfter, direction, anchor,
-                    Math.max(confidence, previous.confidence));
+            if (previous.after - previous.current != after - current) return this;
+            if (previous.current == current) return this;
+            // Move the observed pair together so stabilization cannot change an
+            // action's delta. Exact endpoints belong to the current observation;
+            // retaining an old 0/100 or hiding a new one would be endpoint snapping.
+            if (current == 0 || current == 100 || after == 0 || after == 100
+                    || previous.current == 0 || previous.current == 100
+                    || previous.after == 0 || previous.after == 100) return this;
+            return new Result(previous.current, previous.after, direction, anchor, confidence);
         }
-
-        private static int clampValue(int value) {
-            return Math.max(0, Math.min(100, value));
-        }
+        private static int clampValue(int value) { return Math.max(0, Math.min(100, value)); }
     }
 
     private StaminaGaugeDetector() {}
 
-    static Region scanRegion(int screenWidth, int screenHeight) {
-        int left = clamp((int) Math.floor(screenWidth * 0.14), 0, screenWidth - 1);
-        int right = clamp((int) Math.ceil(screenWidth * 0.62), left + 1, screenWidth);
-        int bottom = clamp(Math.max(64, (int) Math.ceil(screenWidth * 0.060)),
-                1, screenHeight);
-        return new Region(left, 0, right - left, bottom);
+    static Region scanRegion(int width, int height) {
+        int left = (int) (width * SEARCH_LEFT), right = (int) Math.ceil(width * SEARCH_RIGHT);
+        return new Region(left, 0, Math.max(0, right - left),
+                Math.max(0, Math.min(height, Math.max(64, (int) Math.ceil(width * SEARCH_BOTTOM)))));
     }
 
     static Result detect(int screenWidth, int screenHeight, Region region, int[] pixels,
                          Anchor previousAnchor) {
-        if (screenWidth < 320 || screenHeight < 200 || region == null || pixels == null
-                || region.width <= 0 || region.height <= 0
-                || pixels.length < region.width * region.height) return null;
+        if (screenWidth <= 0 || screenHeight <= 0 || region == null || pixels == null
+                || region.width <= 0 || region.height <= 0 || region.left < 0 || region.top != 0
+                || region.width * (long) region.height > pixels.length
+                || region.left + (long) region.width > screenWidth || region.height > screenHeight) return null;
+        Crop crop = new Crop(screenWidth, region, pixels);
+        Geometry best = null;
+        double bestPriority = Double.NEGATIVE_INFINITY;
+        List<Proposal> measuredBands = new ArrayList<>();
+        for (Proposal proposal : proposals(crop)) {
+            // Proposals are ordered by paired-outline evidence. Keep nearby
+            // alternatives until a band is successfully measured, then avoid
+            // replacing its outer borders with a stronger-colored inner stripe.
+            boolean alreadyMeasured = false;
+            for (Proposal measured : measuredBands) {
+                double tolerance = Math.max(1, .18 * Math.min(
+                        measured.bottom - measured.top + 1, proposal.bottom - proposal.top + 1));
+                if (Math.abs(proposal.top - measured.top) <= tolerance
+                        && Math.abs(proposal.bottom - measured.bottom) <= tolerance) {
+                    alreadyMeasured = true;
+                    break;
+                }
+            }
+            if (alreadyMeasured) continue;
+            Geometry geometry = measure(crop, proposal);
+            if (geometry == null) continue;
+            measuredBands.add(proposal);
+            double priority = candidatePriority(geometry, screenWidth, previousAnchor);
+            if (best == null || priority > bestPriority) {
+                best = geometry;
+                bestPriority = priority;
+            }
+        }
+        // Do not turn an ambiguous HUD into a number by choosing a weaker candidate.
+        if (best == null || hasAmbiguousEndpoint(crop, best)) return null;
+        return interpret(best, screenWidth);
+    }
 
-        PixelSource source = new PixelSource(region, pixels);
-        Candidate gauge = findBestCandidate(source, screenWidth, previousAnchor, MaskKind.GAUGE);
-        Candidate best = gauge;
-        if (gauge == null || !isInPreferredHudBand(gauge, screenWidth)
-                || hudCenterDistance(gauge, screenWidth) > 0.010) {
-            Candidate loss = findBestCandidate(source, screenWidth, previousAnchor,
-                    MaskKind.LOSS_PREVIEW);
-            if (loss != null) {
-                loss = attachObservedGaugeHead(source, loss);
+    private static double candidatePriority(Geometry geometry, int width, Anchor previous) {
+        double center = (geometry.top + geometry.bottom) * .5 / width;
+        // The proposal stage already favors the top HUD. Preserve that broad
+        // positional evidence after endpoint measurement, so a saturated lower
+        // decoration cannot win solely because an empty HUD has no green fill.
+        double height = (geometry.bottom - geometry.top + 1.0) / width;
+        double outside = Math.max(0, Math.max(.022 - center, center - .050));
+        double priority = geometry.score / (1 + Math.pow(outside / (height * .18), 2));
+        if (previous != null) {
+            double dx = (geometry.left + geometry.x0) / width - previous.leftRatio;
+            double dy = center - previous.centerYRatio;
+            // History is a bounded tie preference between already measured
+            // candidates. It supplies neither endpoints nor a stamina value.
+            priority *= 1 + .05 / (1 + (dx * dx + dy * dy) / (height * height));
+        }
+        return priority;
+    }
+
+    private static List<Proposal> proposals(Crop a) {
+        int width = a.width, height = a.height;
+        List<Proposal> candidates = new ArrayList<>();
+        if (height < 2 || width < 2) return candidates;
+        float[][] dy = new float[height - 1][width];
+        float[] pos = new float[height - 1], neg = new float[height - 1];
+        for (int y = 0; y < height - 1; y++) {
+            for (int x = 0; x < width; x++) {
+                float delta = luma(a.color(y + 1, x)) - luma(a.color(y, x));
+                dy[y][x] = delta;
+                pos[y] += Math.min(Math.max(delta, 0), 45);
+                neg[y] += Math.min(Math.max(-delta, 0), 45);
             }
-            Candidate neutral = findBestCandidate(source, screenWidth, previousAnchor,
-                    MaskKind.NEUTRAL);
-            Candidate alternative = null;
-            if (loss != null && isInPreferredHudBand(loss, screenWidth)) {
-                alternative = loss;
+            pos[y] /= width; neg[y] /= width;
+        }
+        int[] tops = peaks(pos, 16, 2), bottoms = peaks(neg, 16, 2);
+        float[][] sum = new float[height + 1][width * 3];
+        float[][] square = new float[height + 1][width * 3];
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) for (int c = 0; c < 3; c++) {
+                int i = x * 3 + c;
+                float v = a.get(y, x, c);
+                sum[y + 1][i] = sum[y][i] + v;
+                square[y + 1][i] = square[y][i] + v * v;
             }
-            if (neutral != null && isInPreferredHudBand(neutral, screenWidth)
-                    && (alternative == null || hudCenterDistance(neutral, screenWidth) + 0.004
-                    < hudCenterDistance(alternative, screenWidth))) {
-                alternative = neutral;
+        }
+        for (int top : tops) for (int bot : bottoms) {
+            int t = top + 1, b = bot, h = b - t + 1;
+            if (h < 4 || h > a.screenWidth * .026) continue;
+            float[] contrast = new float[width], valid = new float[width];
+            for (int x = 0; x < width; x++) {
+                float variance = 0, topDistance = 0, bottomDistance = 0;
+                for (int c = 0; c < 3; c++) {
+                    int i = x * 3 + c;
+                    float mean = (sum[b + 1][i] - sum[t][i]) / h;
+                    float var = (square[b + 1][i] - square[t][i]) / h - mean * mean;
+                    variance += Math.max(0, var);
+                    float td = mean - a.get(top, x, c), bd = mean - a.get(bot + 1, x, c);
+                    topDistance += td * td; bottomDistance += bd * bd;
+                }
+                contrast[x] = (float) Math.min(Math.sqrt(topDistance), Math.sqrt(bottomDistance));
+                double flat = Math.sqrt(variance / 3f);
+                valid[x] = dy[top][x] > 3 && dy[bot][x] < -3
+                        && flat < Math.max(9, contrast[x] * .3f) ? 1 : 0;
             }
-            if (alternative != null && (gauge == null
-                    || !isInPreferredHudBand(gauge, screenWidth)
-                    || hudCenterDistance(alternative, screenWidth) + 0.008
-                    < hudCenterDistance(gauge, screenWidth))) {
-                best = alternative.kind == MaskKind.NEUTRAL
-                        ? attachObservedGaugeHead(source, alternative) : alternative;
-            } else if (best == null) {
-                best = loss != null ? loss : neutral;
-                if (best != null && best.kind == MaskKind.NEUTRAL) {
-                    best = attachObservedGaugeHead(source, best);
+            float[] smooth = blur(valid, Math.max(1, (int) (h * .3)));
+            boolean[] support = new boolean[width];
+            for (int x = 0; x < width; x++) support[x] = smooth[x] > .55;
+            for (int[] run : runs(support)) {
+                int l = run[0], r = run[1];
+                if (r - l < 3 * h || r - l > 19 * h) continue;
+                float total = 0;
+                for (int x = l; x < r; x++) total += Math.min(contrast[x], 50);
+                double value = (r - l) * (double) (total / (r - l))
+                        * (1 - Math.min(Math.abs((t + b) * .5 / a.screenWidth - .034), .04) * 5);
+                candidates.add(new Proposal(value, t, b, l, r));
+            }
+        }
+        candidates.sort((a1, b1) -> {
+            int cmp = Double.compare(b1.score, a1.score);
+            if (cmp == 0) cmp = Integer.compare(b1.top, a1.top);
+            if (cmp == 0) cmp = Integer.compare(b1.bottom, a1.bottom);
+            if (cmp == 0) cmp = Integer.compare(b1.left, a1.left);
+            if (cmp == 0) cmp = Integer.compare(b1.right, a1.right);
+            return cmp;
+        });
+        List<Proposal> selected = new ArrayList<>();
+        for (Proposal candidate : candidates) {
+            boolean duplicate = false;
+            for (Proposal prior : selected) {
+                if (candidate.top == prior.top && candidate.bottom == prior.bottom) { duplicate = true; break; }
+            }
+            if (!duplicate) selected.add(candidate);
+            if (selected.size() >= 24) break;
+        }
+        return selected;
+    }
+
+    private static List<Double> steps(float[][] profile, double height, double threshold) {
+        int k = Math.max(1, (int) Math.rint(height * .12)), length = profile.length;
+        List<Double> boundaries = new ArrayList<>();
+        if (length <= 2 * k) return boundaries;
+        float[][] sums = new float[length + 1][3];
+        for (int i = 0; i < length; i++) for (int c = 0; c < 3; c++) sums[i + 1][c] = sums[i][c] + profile[i][c];
+        int count = length - 2 * k;
+        float[][] left = new float[count][3], delta = new float[count][3];
+        float[] sizes = new float[count];
+        for (int i = 0; i < count; i++) {
+            int x = k + i;
+            float norm = 0;
+            for (int c = 0; c < 3; c++) {
+                left[i][c] = (sums[x][c] - sums[x - k][c]) / k;
+                float right = (sums[x + k][c] - sums[x][c]) / k;
+                delta[i][c] = right - left[i][c];
+                norm += delta[i][c] * delta[i][c];
+            }
+            sizes[i] = (float) Math.sqrt(norm);
+        }
+        int[] order = descending(sizes);
+        List<Integer> accepted = new ArrayList<>();
+        for (int i : order) {
+            int x = i + k;
+            if (sizes[i] < threshold) break;
+            boolean nearby = false;
+            for (int previous : accepted) if (Math.abs(x - previous) < k * 2) { nearby = true; break; }
+            if (nearby) continue;
+            float norm = dot(delta[i], delta[i]);
+            float[] values = new float[k * 2];
+            for (int j = 0; j < values.length; j++) values[j] = projection(profile[x - k + j], left[i], delta[i], norm);
+            double best = x - .5, distance = Double.POSITIVE_INFINITY;
+            for (int j = 0; j < values.length - 1; j++) {
+                if (values[j] <= .5 && .5 <= values[j + 1] && values[j] != values[j + 1]) {
+                    double crossing = x - k + j + (.5 - values[j]) / (values[j + 1] - values[j]);
+                    double d = Math.abs(crossing - (x - .5));
+                    if (d < distance) { best = crossing; distance = d; }
+                }
+            }
+            accepted.add(x); boundaries.add(best);
+        }
+        boundaries.sort(Comparator.naturalOrder());
+        return boundaries;
+    }
+
+    private static Geometry measure(Crop a, Proposal p) {
+        int t = p.top, b = p.bottom, h = b - t + 1, width = a.width;
+        int q = Math.max(1, (int) Math.rint(h * .16)), outer = Math.max(1, (int) Math.rint(h * .12));
+        if (t < 2 * outer || b + 2 * outer >= a.height) return null;
+        int middle = (t + b) / 2 + 1;
+        if (middle - (t + q) < 2) return null;
+        float[][] profile = medianRows(a, t + q, middle);
+        float[][] bgTop = medianRows(a, t - 2 * outer, t - outer + 1);
+        float[][] bgBottom = medianRows(a, b + outer, b + 2 * outer + 1);
+        float[][] nearTopInner = medianRows(a, t + q, t + 2 * q + 1);
+        float[][] nearTopOuter = medianRows(a, t - outer, t);
+        float[][] nearBottomInner = medianRows(a, b - 2 * q, b - q + 1);
+        float[][] nearBottomOuter = medianRows(a, b + 1, b + outer + 1);
+        float[][] fullProfile = medianRows(a, t + q, b - q + 1);
+        float[] eTop = new float[width], edge = new float[width], flat = new float[width];
+        float[] flatVote = new float[width], fullFlat = new float[width], fullVote = new float[width];
+        float[] deviations = new float[h];
+        for (int x = 0; x < width; x++) {
+            eTop[x] = distance(profile[x], bgTop[x]);
+            edge[x] = Math.min(distance(nearTopInner[x], nearTopOuter[x]),
+                    distance(nearBottomInner[x], nearBottomOuter[x]));
+            for (int y = t + q; y < middle; y++) deviations[y - t - q] = distance(a.color(y, x), profile[x]);
+            flat[x] = median(deviations, middle - t - q);
+            int agrees = 0;
+            for (int y = t + q; y < middle - 1; y++) if (maxDifference(a.color(y + 1, x), a.color(y, x)) <= 8) agrees++;
+            flatVote[x] = agrees / (float) (middle - t - q - 1);
+            for (int y = t + q; y < b - q + 1; y++) deviations[y - t - q] = distance(a.color(y, x), fullProfile[x]);
+            fullFlat[x] = median(deviations, b - 2 * q - t + 1);
+            agrees = 0;
+            for (int y = t + q; y < b - q; y++) if (maxDifference(a.color(y + 1, x), a.color(y, x)) <= 8) agrees++;
+            fullVote[x] = agrees / (float) (b - 2 * q - t);
+        }
+        List<Double> cuts = new ArrayList<>(); cuts.add(-.5); cuts.addAll(steps(profile, h, 16)); cuts.add(width - .5);
+        List<Segment> segments = new ArrayList<>();
+        boolean[] planar = new boolean[cuts.size() - 1];
+        for (int i = 0; i + 1 < cuts.size(); i++) {
+            double l = cuts.get(i), r = cuts.get(i + 1);
+            int lo = Math.max(0, (int) Math.ceil(l)) + q / 2;
+            int hi = Math.min(width, (int) Math.ceil(r) - q / 2);
+            if (hi <= lo) { lo = Math.max(0, (int) Math.ceil(l)); hi = Math.min(width, Math.max(lo + 1, (int) Math.ceil(r))); }
+            if (lo >= hi) return null;
+            float[] c = medianColumns(profile, lo, hi);
+            float e = medianRange(edge, lo, hi), f = medianRange(flat, lo, hi);
+            int pairs = 0;
+            for (int x = lo; x < hi; x++) if (edge[x] > 8) pairs++;
+            char kind = classify(c);
+            boolean topFill = kind == 'A' && medianRange(eTop, lo, hi) >= 20;
+            boolean valid = medianRange(flatVote, lo, hi) >= .85 && f <= 10
+                    && (pairs / (double) (hi - lo) >= .5 || topFill)
+                    && (kind != 'N' || e >= 15 || r - l >= h * 1.5);
+            if (kind != 'A') valid = valid && medianRange(fullFlat, lo, hi) <= 10 && medianRange(fullVote, lo, hi) >= .8;
+            segments.add(new Segment(l, r, c, kind, e, valid));
+            planar[i] = kind == 'D' && !valid && f <= 10 && medianRange(flatVote, lo, hi) >= .85
+                    && medianRange(fullFlat, lo, hi) <= 10 && medianRange(fullVote, lo, hi) >= .8;
+        }
+        for (int i = 1; i + 1 < segments.size(); i++) {
+            Segment before = segments.get(i - 1), segment = segments.get(i), after = segments.get(i + 1);
+            // A loss plateau can match the background just outside the outline.
+            // Its measured RGB boundaries and flat rows still connect an exposed
+            // fill to an exposed neutral tail; it cannot establish an endpoint.
+            if (!segment.valid && planar[i] && segment.kind == 'D'
+                    && before.valid && before.kind == 'A' && after.valid && after.kind == 'N') {
+                segments.set(i, new Segment(segment.left, segment.right, segment.color,
+                        segment.kind, segment.edge, true));
+            }
+        }
+        int seed = -1;
+        double seedScore = -Double.MAX_VALUE;
+        for (int i = 0; i < segments.size(); i++) {
+            Segment s = segments.get(i);
+            if (!s.valid || s.right - s.left < h * .8 || s.right <= p.left || s.left >= p.right) continue;
+            double score = (s.right - s.left) * Math.min(s.edge, 60);
+            if (score > seedScore) { seed = i; seedScore = score; }
+        }
+        if (seed < 0) return null;
+        int first = seed, last = seed;
+        while (last + 1 < segments.size()) {
+            Segment s = segments.get(last), n = segments.get(last + 1);
+            if (n.valid && allowed(s.kind, n.kind)) { last++; continue; }
+            if (last + 2 < segments.size() && n.right - n.left < h && mean(n.color) > 180
+                    && segments.get(last + 2).valid && s.kind == segments.get(last + 2).kind && s.kind == 'A') { last += 2; continue; }
+            break;
+        }
+        while (first > 0) {
+            Segment s = segments.get(first), n = segments.get(first - 1);
+            boolean headOrder = !(n.kind == 'N' && s.kind == 'D' && n.right - n.left < h * 1.5);
+            if (n.valid && allowed(n.kind, s.kind) && headOrder) { first--; continue; }
+            if (first > 1 && n.right - n.left < h && mean(n.color) > 180
+                    && segments.get(first - 2).valid && s.kind == segments.get(first - 2).kind && s.kind == 'A') { first -= 2; continue; }
+            break;
+        }
+        double xs = segments.get(first).left, right = segments.get(last).right;
+        // A visible outside color sample establishes the end. Reserving a whole
+        // gauge height after it would discard measurable large HUDs near the ROI.
+        if (right - xs < 7 * h || xs < h || right > width - Math.max(2, outer)) return null;
+        List<Double> upperEndEdges = steps(nearTopInner, h, 10);
+        List<Double> lowerEndEdges = steps(nearBottomInner, h, 10);
+        List<Double> endEdges = new ArrayList<>(upperEndEdges);
+        endEdges.addAll(lowerEndEdges);
+        int ew = Math.max(2, (int) Math.rint(h * .22));
+        double endScore = -Double.MAX_VALUE, refinedRight = right;
+        for (double x : endEdges) {
+            if (!(x > Math.max(xs + h, right - h * 1.5) && x < right + h * .5)) continue;
+            // Extending the observed chain needs the same crossing in both
+            // exposed row groups. A scene edge behind a translucent HUD can
+            // outlast the track in one group without extending the track itself.
+            if (x > right) {
+                double tolerance = Math.max(.8, h * .1);
+                boolean upperMatch = false, lowerMatch = false;
+                for (double edgeX : upperEndEdges) if (Math.abs(edgeX - x) < tolerance) upperMatch = true;
+                for (double edgeX : lowerEndEdges) if (Math.abs(edgeX - x) < tolerance) lowerMatch = true;
+                if (!upperMatch || !lowerMatch) continue;
+            }
+            int xi = (int) Math.rint(x);
+            float el = medianRange(edge, xi - ew, xi), er = medianRange(edge, xi, xi + ew);
+            boolean neutralEnd = false;
+            for (int i = first; i <= last; i++) {
+                Segment segment = segments.get(i);
+                if (segment.kind == 'N' && segment.valid
+                        && segment.left <= x - ew && x - ew < segment.right) neutralEnd = true;
+            }
+            // Separate row medians can localize an antialiased crossing a little
+            // differently. This is an agreement tolerance, never an added length.
+            boolean pairedCrossing = hasNearby(upperEndEdges, x, Math.max(.8, h * .18))
+                    && hasNearby(lowerEndEdges, x, Math.max(.8, h * .18));
+            // A textured scene may retain weak vertical contrast beyond the
+            // neutral tail. Its absolute contrast need not be almost zero, but
+            // both exposed row groups must end together and the outline must
+            // fall by more than half. Do not apply this to a fill/loss transition.
+            if (el >= 10 && (er < 8 || neutralEnd && pairedCrossing) && er < el * .5
+                    && (el - er > endScore || el - er == endScore && x > refinedRight)) {
+                endScore = el - er; refinedRight = x;
+            }
+        }
+        // Equal interior colors can conceal the boundary to an adjacent panel.
+        // A terminating outline may shorten that chain only when no combined
+        // RGB/outline endpoint exists. Outward ends need exposed-row evidence.
+        if (endScore == -Double.MAX_VALUE) {
+            float[][] outline = new float[width][3];
+            for (int x = 0; x < width; x++) Arrays.fill(outline[x], edge[x]);
+            for (double x : steps(outline, h, 10)) {
+                if (!(x > Math.max(xs + h, right - h * 1.5) && x < right - h * .1)) continue;
+                int xi = (int) Math.rint(x);
+                float el = medianRange(edge, xi - ew, xi), er = medianRange(edge, xi, xi + ew);
+                if (el >= 10 && er < 8 && er < el * .5 && (el - er > endScore || el - er == endScore && x > refinedRight)) {
+                    endScore = el - er; refinedRight = x;
                 }
             }
         }
-        if (best == null) return null;
-
-        int trackHeight = best.bottom - best.top;
-        // The value ruler is the observed track itself. The left endpoint comes
-        // from the outermost corroborated row of the same 2-D gauge component and
-        // the right endpoint comes from its observed colored/neutral end. No cap
-        // length, expected value, device resolution, or previous frame is added.
-        int left = findObservedTrackLeft(source, screenWidth, best);
-        int right = best.right;
-        int centerY = (best.top + best.bottom - 1) / 2;
-        left = Math.max(left, region.left);
-        right = Math.min(right, region.left + region.width - 1);
-        int trackWidth = right - left;
-        if (trackWidth < trackHeight * 6
-                || !source.contains(left, centerY)
-                || !source.contains(right - 1, centerY)) return null;
-        int reliableLeft = best.kind == MaskKind.GAUGE
-                ? findReliableGaugeColumn(source, best, centerY, trackHeight)
-                : best.kind == MaskKind.LOSS_PREVIEW ? Math.max(left, best.left) : left;
-        return analyzeProfile(source, screenWidth, left, centerY, trackWidth, trackHeight,
-                reliableLeft, best.colorEnd - left,
-                best.kind == MaskKind.LOSS_PREVIEW ? 0 : best.lossStart < 0
-                        ? -1 : best.lossStart - left, best.hasNeutralTail,
-                best.kind);
-    }
-
-    /**
-     * Locates the visible zero endpoint from the complete two-dimensional track.
-     *
-     * <p>The sandwich icon can cover the middle rows at the track head, while the
-     * upper and lower rows still expose the same continuous fill/preview/neutral
-     * component.  Starting at the already-qualified candidate, this method follows
-     * that union across nearby rows and uses a supported lower edge of the observed
-     * starts.  It does not extend an endpoint by a cap size or by an expected value.</p>
-     */
-    private static int findObservedTrackLeft(PixelSource source, int screenWidth,
-                                             Candidate candidate) {
-        int height = Math.max(1, candidate.bottom - candidate.top);
-        int centerY = (candidate.top + candidate.bottom - 1) / 2;
-        int maximumGap = Math.max(
-                Math.max(1, (int) Math.round(height * 0.12)),
-                (int) Math.round(screenWidth * 0.0012));
-        Run reference = findTrackRun(source, centerY, candidate.left,
-                candidate.colorEnd, maximumGap);
-        if (reference == null) return candidate.observedLeft;
-
-        int referenceWidth = reference.end - reference.start;
-        int coreWidth = Math.max(1, candidate.colorEnd - candidate.left);
-        int minimumCoreOverlap = Math.max(2, (int) Math.round(coreWidth * 0.35));
-        int rightTolerance = Math.max(2, (int) Math.round(height * 0.80));
-        int minimumWidth = Math.max(coreWidth,
-                (int) Math.round(referenceWidth * 0.70));
-        int maximumWidth = Math.max(minimumWidth + 1,
-                (int) Math.round(referenceWidth * 1.30));
-        int firstY = Math.max(source.region.top, candidate.top - height);
-        int lastY = Math.min(source.region.top + source.region.height,
-                candidate.bottom + height);
-        List<Integer> starts = new ArrayList<>();
-        for (int y = firstY; y < lastY; y++) {
-            Run run = findTrackRun(source, y, candidate.left,
-                    candidate.colorEnd, maximumGap);
-            if (run == null) continue;
-            int width = run.end - run.start;
-            if (overlap(run.start, run.end, candidate.left, candidate.colorEnd)
-                    < minimumCoreOverlap
-                    || Math.abs(run.end - reference.end) > rightTolerance
-                    || width < minimumWidth || width > maximumWidth) {
-                continue;
+        right = refinedRight;
+        List<Start> starts = new ArrayList<>(), coloredStarts = new ArrayList<>();
+        int xsi = (int) Math.ceil(xs) + 1;
+        for (int y = (t + b) / 2; y <= b; y++) {
+            int lo = Math.max(0, xsi - h);
+            float[] ref = medianRow(a, y, xsi, Math.min(width, xsi + Math.max(2, h / 4)));
+            boolean[] mask = new boolean[xsi + 1 - lo];
+            for (int x = lo; x <= xsi; x++) {
+                float[] c = a.color(y, x);
+                mask[x - lo] = c[1] - Math.min(c[0], c[2]) > 55 && c[1] > c[0] + 25 && c[1] >= c[2] - 6;
             }
-            starts.add(run.start);
-        }
-        int minimumRows = Math.max(3, (int) Math.ceil(height * 0.25));
-        if (starts.size() < minimumRows) return candidate.observedLeft;
-        return percentile(toArray(starts), 0.20);
-    }
-
-    /** Finds the track-colored run with the greatest overlap with a known core. */
-    private static Run findTrackRun(PixelSource source, int y, int coreLeft,
-                                    int coreRight, int maximumGap) {
-        if (y < source.region.top
-                || y >= source.region.top + source.region.height) return null;
-        Run best = null;
-        int bestOverlap = 0;
-        int start = -1;
-        int previous = -1;
-        int regionRight = source.region.left + source.region.width;
-        for (int x = source.region.left; x <= regionRight + maximumGap; x++) {
-            boolean matches = x < regionRight && isTrackInteriorColor(source.get(x, y));
-            if (matches) {
-                if (start < 0) start = x;
-                previous = x;
+            int darkEnd = xsi;
+            boolean colored = false;
+            int[] head = null;
+            for (int[] run : runs(mask)) if (run[1] - run[0] >= h * .18 && run[1] + lo >= xsi - h * .25) head = run;
+            if (head != null) {
+                ref = medianRow(a, y, lo + head[0], lo + head[1]);
+                darkEnd = Math.max(lo + 1, head[0] + lo); colored = true;
             }
-            if (start >= 0 && (!matches && x - previous > maximumGap)) {
-                Run run = new Run(start, previous + 1);
-                int overlap = overlap(run.start, run.end, coreLeft, coreRight);
-                if (overlap > bestOverlap
-                        || (overlap == bestOverlap && best != null
-                        && run.end - run.start > best.end - best.start)) {
-                    best = run;
-                    bestOverlap = overlap;
-                }
-                start = -1;
-                previous = -1;
+            if (darkEnd <= lo || xsi >= width) continue;
+            int darkIndex = lo;
+            for (int x = lo + 1; x < darkEnd; x++) if (luma(a.color(y, x)) < luma(a.color(y, darkIndex))) darkIndex = x;
+            float[] dark = a.color(y, darkIndex), axis = subtract(ref, dark);
+            float norm = dot(axis, axis);
+            if (norm < 400) continue;
+            double crossing = Double.NaN;
+            float previous = projection(a.color(y, darkIndex), dark, axis, norm);
+            for (int x = darkIndex + 1; x <= xsi; x++) {
+                float next = projection(a.color(y, x), dark, axis, norm);
+                if (previous <= .5 && .5 < next) crossing = x - 1 + (.5 - previous) / (next - previous);
+                previous = next;
+            }
+            if (!Double.isNaN(crossing)) {
+                Start start = new Start(y, crossing); starts.add(start);
+                if (colored) coloredStarts.add(start);
             }
         }
-        return bestOverlap > 0 ? best : null;
-    }
-
-    private static boolean isTrackInteriorColor(int color) {
-        return isGaugeColor(color) || isLossPreviewColor(color)
-                || isDimLossPreviewColor(color) || isNeutralColor(color);
-    }
-
-    private static int overlap(int firstStart, int firstEnd,
-                               int secondStart, int secondEnd) {
-        return Math.max(0, Math.min(firstEnd, secondEnd)
-                - Math.max(firstStart, secondStart));
-    }
-
-    /** Finds a visibly gauge-colored profile column rather than shifting by a cap estimate. */
-    private static int findReliableGaugeColumn(PixelSource source, Candidate candidate,
-                                               int centerY, int trackHeight) {
-        int radius = Math.max(1, (int) Math.round(trackHeight * 0.24));
-        int firstY = Math.max(source.region.top, centerY - radius);
-        int lastY = Math.min(source.region.top + source.region.height, centerY + radius + 1);
-        int[] reds = new int[Math.max(1, lastY - firstY)];
-        int[] greens = new int[reds.length];
-        int[] blues = new int[reds.length];
-        int previous = -2;
-        for (int x = candidate.left; x < candidate.colorEnd; x++) {
-            int color = medianColor(source, x, firstY, lastY, reds, greens, blues);
-            if (isGaugeColor(color)) {
-                if (x == previous + 1) return previous;
-                previous = x;
-            } else {
-                previous = -2;
+        if (hasSupported(coloredStarts, h)) starts = coloredStarts;
+        Start endpoint = null;
+        for (Start start : starts) if (supported(start, starts, h) && (endpoint == null || start.x < endpoint.x)) endpoint = start;
+        if (endpoint == null) return null;
+        double left = endpoint.x;
+        List<Segment> chain = new ArrayList<>();
+        for (int i = first; i <= last; i++) if (segments.get(i).left < right) chain.add(segments.get(i).copy());
+        if (chain.isEmpty()) return null;
+        chain.get(chain.size() - 1).right = right;
+        double originalRight = right;
+        TailExtension extension = exposedTail(a, t, b, right);
+        if (extension != null) {
+            right = extension.right;
+            double split = Math.max(left, Math.min(originalRight, right) - h * .5);
+            List<Segment> prefix = new ArrayList<>();
+            for (Segment segment : chain) if (segment.left < split) {
+                Segment copy = segment.copy(); copy.right = Math.min(copy.right, split); prefix.add(copy);
+            }
+            prefix.addAll(profileSections(extension.profile, split, right, h, chain.get(chain.size() - 1).edge));
+            chain = prefix;
+            for (int x = Math.max(0, (int) Math.floor(split)); x < width; x++) profile[x] = extension.profile[x].clone();
+        }
+        MaterialProjection observedMaterial = exposedTailMaterial(a, t, b, left, right, chain, profile);
+        if (observedMaterial != null) {
+            chain = observedMaterial.chain; profile = observedMaterial.profile;
+        }
+        boolean empty = false;
+        for (Segment segment : chain) {
+            if (segment.kind == 'N' && segment.valid) empty = true;
+            if (empty && segment.kind == 'D') segment.kind = 'N';
+        }
+        List<Integer> exposedRows = new ArrayList<>();
+        for (Start start : starts) if (supported(start, starts, h) && Math.abs(start.x - left) < h * .13) exposedRows.add(start.y);
+        float[][] headProfile = medianSelectedRows(a, exposedRows);
+        if (xs - left > h * .15) {
+            List<Segment> observedHead = profileSections(headProfile, left, xs, h, chain.get(0).edge);
+            char hk = observedHead.isEmpty() ? '?' : observedHead.get(0).kind, firstKind = chain.get(0).kind;
+            if (hk == 'A' && (firstKind == 'D' || firstKind == 'N') || hk == 'D' && firstKind == 'N') {
+                observedHead.addAll(chain); chain = observedHead;
+                for (int x = 0; x < Math.min(width, (int) Math.ceil(xs) + q); x++) profile[x] = headProfile[x].clone();
             }
         }
-        return Math.min(candidate.colorEnd - 1, candidate.left);
-    }
-
-    private static boolean isInPreferredHudBand(Candidate candidate, int screenWidth) {
-        double center = (candidate.top + candidate.bottom) * 0.5 / screenWidth;
-        return center >= PREFERRED_CENTER_MIN && center <= PREFERRED_CENTER_MAX;
-    }
-
-    private static double hudCenterDistance(Candidate candidate, int screenWidth) {
-        return Math.abs((candidate.top + candidate.bottom) * 0.5 / screenWidth - 0.032);
-    }
-
-    /**
-     * Joins a very short colored head to the adjacent loss or neutral body using
-     * only pixels that are actually present in the image.
-     *
-     * <p>At low stamina the sandwich sprite covers the middle rows of the head,
-     * but the upper and lower gauge rows still expose the full short segment. The
-     * previous implementation sampled only the middle rows and then subtracted an
-     * estimated cap length. Here every row is inspected independently, and the
-     * left endpoint is the corroborated minimum of the observed runs that touch
-     * the neutral body. If no such run exists, the gauge remains genuinely empty.</p>
-     */
-    private static Candidate attachObservedGaugeHead(PixelSource source, Candidate body) {
-        int height = body.bottom - body.top;
-        int allowedGap = Math.max(1, (int) Math.round(height * 0.08));
-        int minimumX = Math.max(source.region.left,
-                body.left - (int) Math.ceil(height * 2.0));
-        List<Integer> starts = new ArrayList<>();
-        for (int y = body.top; y < body.bottom; y++) {
-            int firstMatch = -1;
-            int lastMatch = -1;
-            int matchCount = 0;
-            int gap = 0;
-            for (int x = body.left - 1; x >= minimumX; x--) {
-                if (isGaugeColor(source.get(x, y))) {
-                    if (lastMatch < 0) lastMatch = x;
-                    firstMatch = x;
-                    matchCount++;
-                    gap = 0;
-                } else {
-                    gap++;
-                    if (gap > allowedGap) break;
-                }
-            }
-            if (firstMatch >= 0 && body.left - lastMatch - 1 <= allowedGap
-                    && matchCount >= 2) {
-                starts.add(firstMatch);
-            }
+        Segment firstActive = null;
+        for (Segment segment : chain) if (segment.kind == 'A') { firstActive = segment; break; }
+        float[] headColor;
+        if (firstActive != null) {
+            int start = Math.max(0, (int) Math.ceil(Math.max(left, firstActive.left)));
+            int stop = Math.min(width, Math.max(start + 1, (int) Math.ceil(firstActive.right)));
+            int probeStart = start + Math.min(q, Math.max(0, (stop - start - 1) / 3));
+            headColor = medianColumns(profile, probeStart, Math.min(stop, probeStart + 2 * q));
+        } else {
+            headColor = medianColumns(profile, (int) Math.ceil(xs) + q, Math.min(width, (int) Math.ceil(xs) + 3 * q));
         }
-        // A real head is a vertically supported piece of the same rectangular
-        // track. Two or three green antialiasing pixels from the sandwich icon
-        // must not turn a loss-to-zero gauge into a non-zero remainder.
-        int minimumSupportedRows = Math.max(2, (int) Math.ceil(height * 0.40));
-        if (starts.size() < minimumSupportedRows) {
-            return body;
-        }
-        int[] observedStarts = toArray(starts);
-        int profileLeft = percentile(observedStarts, 0.75);
-        int observedLeft = supportedMinimum(observedStarts);
-        int colorEnd = body.kind == MaskKind.NEUTRAL ? body.left : body.colorEnd;
-        boolean hasNeutralTail = body.kind == MaskKind.NEUTRAL || body.hasNeutralTail;
-        int lossStart = body.kind == MaskKind.LOSS_PREVIEW ? body.left : body.lossStart;
-        return new Candidate(body.score, profileLeft, colorEnd, body.right,
-                body.top, body.bottom, false, hasNeutralTail, observedLeft, MaskKind.GAUGE,
-                lossStart);
+        double aspect = (right - left) / h, evidence = 0;
+        for (Segment segment : chain) evidence += (segment.right - segment.left) * Math.min(50, segment.edge) * (segment.kind == 'A' ? 2 : 1);
+        double rank = (evidence / h) / (1 + Math.pow((aspect - 12.8) / 4, 2));
+        return new Geometry(rank, t, b, left, right, a.x0, chain, headColor, profile);
     }
 
-    private static Candidate findBestCandidate(PixelSource source, int screenWidth,
-                                               Anchor previousAnchor, MaskKind kind) {
-        int maxGap = Math.max(1, (int) Math.round(screenWidth * 0.0012));
-        int minRun = Math.max(6, (int) Math.round(screenWidth * 0.004));
-        // The physical gauge interior stays near one percent of the capture width
-        // across the supplied phone, foldable and gallery-scaled captures. Thin
-        // strokes from the GOOD/NORMAL status text can have a gauge-like aspect
-        // ratio on the same row, but are less than half the track's height.
-        int minHeight = Math.max(4, (int) Math.round(screenWidth * 0.0055));
-        int maxHeight = Math.max(minHeight + 1, (int) Math.round(screenWidth * 0.020));
-        int yStep = Math.max(1, (int) Math.round(screenWidth / 1800.0));
-
-        @SuppressWarnings("unchecked")
-        List<Run>[] rows = new List[source.region.height];
-        for (int localY = 0; localY < source.region.height; localY++) {
-            rows[localY] = findRuns(source, source.region.top + localY,
-                    source.region.left, source.region.left + source.region.width,
-                    maxGap, minRun, kind);
-        }
-
-        Candidate best = null;
-        Candidate bestInHudBand = null;
-        Set<Long> seen = new HashSet<>();
-        for (int localY = 0; localY < rows.length; localY += yStep) {
-            for (Run seed : rows[localY]) {
-                StableBand band = stableBand(rows, localY, seed);
-                int height = band.bottom - band.top;
-                int observedHeight = band.observedBottom - band.observedTop;
-                int supportedHeight = Math.max(height, observedHeight);
-                if (supportedHeight < minHeight || supportedHeight > maxHeight
-                        || band.starts.length < supportedHeight * 0.55) continue;
-                int left = median(band.starts);
-                int observedLeft = supportedMinimum(band.starts);
-                int colorEnd = median(band.ends);
-                int measuredEnd = colorEnd;
-                int colorWidth = colorEnd - left;
-                // Recovery/loss overlays may have different horizontal endpoints
-                // in their upper and lower rows. That can make the rectangular
-                // stable core thinner than the rendered track. Measure vertical
-                // mask runs well inside the same colored segment and combine that
-                // observation with the multi-row band. Both are local geometry;
-                // capture resolution never selects a separate correction path.
-                double geometryHeight = (height + observedHeight) * 0.5;
-                int tailTop = band.observedTop;
-                int tailBottom = band.observedBottom;
-                if (kind != MaskKind.NEUTRAL) {
-                    int[] interiorBand = interiorBandBounds(source, left, colorEnd,
-                            band.top, band.bottom, kind);
-                    double interiorHeight = interiorBand == null ? 0.0 : interiorBand[2];
-                    if (interiorBand != null) {
-                        // Use the complete vertical run that is actually visible at
-                        // interior gauge columns. The stable core can be shorter when
-                        // preview colors taper near their horizontal boundary.
-                        // The per-column color run can be shortened by a
-                        // translucent gradient. It may expand the observed band,
-                        // but must not shrink the multi-row component and truncate
-                        // the still-visible right end of the track search.
-                        geometryHeight = Math.max(geometryHeight, interiorHeight);
-                        tailTop = Math.min(tailTop, interiorBand[0]);
-                        tailBottom = Math.max(tailBottom, interiorBand[1]);
+    private static Result interpret(Geometry geometry, int width) {
+        int height = geometry.bottom - geometry.top + 1;
+        int q = Math.max(1, (int) Math.rint(height * .12));
+        float[][] profile = geometry.profile;
+        List<Segment> chain = new ArrayList<>();
+        for (Segment segment : geometry.chain) chain.add(segment.copy());
+        if (chain.size() > 1 && chain.get(chain.size() - 2).kind == 'A'
+                && chain.get(chain.size() - 1).kind == 'D') {
+            Segment tail = chain.get(chain.size() - 1), before = chain.get(chain.size() - 2);
+            if (tail.right - tail.left < height * .4) {
+                int boundary = (int) Math.ceil(tail.left), end = Math.min(profile.length, (int) Math.ceil(tail.right));
+                List<float[]> neutral = new ArrayList<>();
+                for (int x = boundary; x < end; x++) if (classify(profile[x]) == 'N') neutral.add(profile[x]);
+                if (!neutral.isEmpty()) {
+                    float[][] neutralPixels = neutral.toArray(new float[neutral.size()][]);
+                    float[] n = medianColumns(neutralPixels, 0, neutralPixels.length);
+                    float[] active = medianColumns(profile, Math.max((int) Math.ceil(before.left), boundary - 2 * q), Math.max(1, boundary - q));
+                    float[] axis = subtract(active, n);
+                    float norm = Math.max(1, dot(axis, axis));
+                    boolean mixtures = true;
+                    for (int x = boundary; x < end; x++) {
+                        float weight = projection(profile[x], n, axis, norm);
+                        if (!(weight >= -.1 && weight <= 1.1)
+                                || !(distance(profile[x], blend(n, axis, weight)) < 10)) { mixtures = false; break; }
                     }
-                }
-                double colorAspect = colorWidth / (double) geometryHeight;
-                // A real track has a visible left cap inside the deliberately broad scan
-                // region.  Runs touching that region's artificial boundary are clipped UI
-                // decorations or scenery, so their apparent width/profile is unknowable.
-                if (left - source.region.left < height) continue;
-                if (colorAspect < 0.9 || colorAspect > 17.0) continue;
-                long key = (((long) (left / 2)) << 42)
-                        ^ (((long) (colorEnd / 2)) << 20)
-                        ^ ((long) band.top << 10) ^ band.bottom;
-                if (!seen.add(key)) continue;
-
-                double density = maskDensity(source, left, colorEnd, band.top, band.bottom, kind);
-                double minimumDensity = kind == MaskKind.GAUGE ? 0.48
-                        : kind == MaskKind.LOSS_PREVIEW ? 0.62 : 0.72;
-                if (density < minimumDensity) continue;
-
-                Tail tail = kind != MaskKind.NEUTRAL
-                        ? findTrackTail(source, left, colorEnd, tailTop, tailBottom,
-                        geometryHeight)
-                        : null;
-                if (tail != null && tail.hasNeutral && tail.start > colorEnd
-                        && tail.end - tail.start < geometryHeight * 1.5
-                        && (tailTop != band.top || tailBottom != band.bottom)) {
-                    // A translucent preview can make the broad observed band the
-                    // best way to follow a long empty track.  For a very short
-                    // continuation, however, the broad band can also include the
-                    // adjacent condition panel.  Confirm such a continuation in
-                    // the stable colored core.  This compares two directly
-                    // observed vertical cross-sections; it does not infer a track
-                    // endpoint from its expected width or stamina value.
-                    Tail coreTail = findTrackTail(source, left, colorEnd,
-                            band.top, band.bottom, geometryHeight);
-                    if (coreTail == null || !coreTail.hasNeutral) tail = coreTail;
-                }
-                int right;
-                int tailStart;
-                double aspect;
-                double tailBonus;
-                boolean empty = kind == MaskKind.NEUTRAL;
-                if (tail != null) {
-                    right = tail.end;
-                    tailStart = tail.start;
-                    aspect = (right - left) / (double) geometryHeight;
-                    tailBonus = 36.0;
-                } else if (kind != MaskKind.NEUTRAL
-                        && colorAspect >= (kind == MaskKind.LOSS_PREVIEW ? 10.0 : 8.0)) {
-                    right = colorEnd;
-                    tailStart = -1;
-                    aspect = colorAspect;
-                    // A completely filled normal/recovery track has no gray tail.
-                    // Give its full-width rectangular core enough margin for small
-                    // JPEG-decoder color differences at the rounded end cap.
-                    tailBonus = kind == MaskKind.LOSS_PREVIEW ? 24.0 : 16.0;
-                } else if (kind == MaskKind.NEUTRAL && colorAspect >= 7.5) {
-                    right = colorEnd;
-                    colorEnd = left;
-                    tailStart = left;
-                    aspect = colorAspect;
-                    tailBonus = 20.0;
-                } else {
-                    continue;
-                }
-                if (aspect < 7.5 || aspect > 17.0) continue;
-
-                double flatness = endpointFlatness(band.starts, band.ends, left, measuredEnd,
-                        height, empty);
-                double edge = edgeContrast(source, left, right, band.top, band.bottom);
-                double location = (band.top + band.bottom) * 0.5 / screenWidth;
-                double anchorPenalty = Math.min(Math.abs(location - 0.032) * 80.0, 4.0);
-                if (previousAnchor != null) {
-                    int remembered = Math.round(previousAnchor.leftRatio * screenWidth);
-                    anchorPenalty += Math.min(Math.abs(left - remembered) * 2.0
-                            / Math.max(1, right - left), 2.0);
-                }
-                double score = density * 55.0 + flatness * 22.0 + tailBonus
-                        + Math.min(edge, 45.0) * 0.45
-                        - Math.abs(aspect - TRACK_ASPECT) * 4.0 - anchorPenalty;
-                int profileLeft = percentile(band.starts, 0.75);
-                int lossStart = kind == MaskKind.LOSS_PREVIEW ? left : -1;
-                int observedColorEnd = colorEnd;
-                if (tail != null && tail.start > colorEnd
-                        && (kind == MaskKind.GAUGE || kind == MaskKind.LOSS_PREVIEW)) {
-                    if (kind == MaskKind.GAUGE) lossStart = colorEnd;
-                    observedColorEnd = tail.start;
-                }
-                int endpointLeft = kind == MaskKind.LOSS_PREVIEW ? profileLeft : observedLeft;
-                Candidate candidate = new Candidate(score, profileLeft, observedColorEnd, right,
-                        band.top + source.region.top, band.bottom + source.region.top, empty,
-                        tail != null && tail.hasNeutral,
-                        endpointLeft, kind, lossStart);
-                if (best == null || candidate.score > best.score) best = candidate;
-                if (location >= PREFERRED_CENTER_MIN && location <= PREFERRED_CENTER_MAX
-                        && (bestInHudBand == null || candidate.score > bestInHudBand.score)) {
-                    bestInHudBand = candidate;
+                    if (mixtures) tail.kind = 'N';
                 }
             }
         }
-        double minimumScore = kind == MaskKind.GAUGE ? 92.0
-                : kind == MaskKind.LOSS_PREVIEW ? 98.0 : 105.0;
-        // Date banners and goal badges can contain long saturated strips above the HUD.
-        // Prefer a qualified candidate in the broad gauge band, but retain the full
-        // scan as a fallback for letterboxed or vertically translated layouts.
-        if (bestInHudBand != null && bestInHudBand.score >= minimumScore) {
-            return bestInHudBand;
+        if (chain.size() > 1 && (chain.get(0).kind == 'D' || chain.get(0).kind == 'A') && chain.get(1).kind == 'A'
+                && chain.get(0).right - chain.get(0).left < height * .2) {
+            int edge = (int) Math.ceil(geometry.left);
+            float[] background = medianColumns(profile, Math.max(0, edge - q), edge);
+            float[] color = chain.get(1).color, c = chain.get(0).color, axis = subtract(color, background);
+            float mixture = dot(subtract(c, background), axis) / Math.max(1, dot(axis, axis));
+            if (mixture >= 0 && mixture <= 1 && distance(c, blend(background, axis, mixture)) < 10) {
+                chain.get(0).kind = 'A'; chain.get(0).edgeBlend = true;
+            }
         }
-        if (best == null) return null;
-        return best.score >= minimumScore ? best : null;
+        for (int i = 1; i < chain.size() - 1; i++) {
+            Segment before = chain.get(i - 1), segment = chain.get(i), after = chain.get(i + 1);
+            if (before.kind == 'A' && segment.kind == 'D' && after.kind == 'N'
+                    && segment.right - segment.left < height * .4) {
+                int boundary = (int) Math.ceil(segment.left);
+                int start = Math.max((int) Math.ceil(before.left), boundary - 2 * q);
+                int stop = Math.max(start + 1, boundary - q);
+                float[] n = after.color, active = medianColumns(profile, start, stop), c = segment.color;
+                float[] axis = subtract(active, n);
+                float ratio = dot(subtract(c, n), axis) / Math.max(1, dot(axis, axis));
+                if (ratio >= 0 && ratio <= 1 && distance(c, blend(n, axis, ratio)) < 10) segment.kind = 'N';
+            }
+        }
+        classifyRelativeLoss(chain, profile, height);
+        List<Segment> merged = new ArrayList<>();
+        for (Segment segment : chain) {
+            if (!segment.valid && !merged.isEmpty()) continue;
+            Segment previous = merged.isEmpty() ? null : merged.get(merged.size() - 1);
+            int boundary = (int) Math.ceil(segment.left);
+            float localJump = luma(subtract(medianColumns(profile, boundary, boundary + q),
+                    medianColumns(profile, Math.max(0, boundary - q), boundary)));
+            boolean edgeBlend = previous != null && segment.kind == previous.kind && previous.edgeBlend;
+            if (previous != null && segment.kind == previous.kind) previous.edgeBlend = false;
+            if (previous != null && segment.kind == previous.kind
+                    && (edgeBlend || !(segment.kind == 'A' && localJump > 20))) previous.right = segment.right;
+            else merged.add(segment.copy());
+        }
+        List<Segment> active = new ArrayList<>(), dim = new ArrayList<>();
+        for (Segment segment : merged) {
+            if (segment.kind == 'A') active.add(segment);
+            if (segment.kind == 'D') dim.add(segment);
+        }
+        double current, after;
+        Direction direction;
+        if (active.size() > 1) {
+            current = value(active.get(0).right, geometry);
+            after = value(active.get(active.size() - 1).right, geometry); direction = Direction.GAIN;
+        } else if (!active.isEmpty() && !dim.isEmpty()) {
+            current = value(dim.get(dim.size() - 1).right, geometry);
+            after = value(active.get(0).right, geometry); direction = Direction.LOSS;
+        } else if (!active.isEmpty()) {
+            float[] c = geometry.headColor;
+            after = value(active.get(0).right, geometry);
+            if (isRecoveryMaterial(c)) { current = 0; direction = Direction.GAIN; }
+            else { current = after; direction = Direction.NONE; }
+        } else if (!dim.isEmpty()) {
+            current = value(dim.get(dim.size() - 1).right, geometry); after = 0; direction = Direction.LOSS;
+        } else { current = after = 0; direction = Direction.NONE; }
+        return new Result((int) Math.floor(current + .5), (int) Math.floor(after + .5), direction,
+                new Anchor((float) ((geometry.left + geometry.x0) / width),
+                        (float) ((geometry.top + geometry.bottom) * .5 / width)),
+                (float) Math.max(0, Math.min(.99, geometry.score / 1000)));
     }
 
-    /** Measures the visible vertical mask band inside a candidate. */
-    private static int[] interiorBandBounds(PixelSource source, int left, int colorEnd,
-                                            int localTop, int localBottom, MaskKind kind) {
-        int colorWidth = colorEnd - left;
-        if (colorWidth <= 0 || localBottom <= localTop) return null;
-        int centerY = source.region.top + (localTop + localBottom - 1) / 2;
-        int[] tops = new int[3];
-        int[] bottoms = new int[3];
-        int[] heights = new int[3];
-        int count = 0;
-        double[] fractions = {0.25, 0.50, 0.75};
-        for (double fraction : fractions) {
-            int x = clamp(left + (int) Math.round(colorWidth * fraction),
-                    left, colorEnd - 1);
-            if (!source.contains(x, centerY) || !matches(source.get(x, centerY), kind)) {
-                continue;
+    private static MaterialProjection exposedTailMaterial(Crop a, int top, int bottom,
+                                                          double left, double right,
+                                                          List<Segment> chain, float[][] profile) {
+        int height = bottom - top + 1, q = Math.max(1, (int) Math.rint(height * .15));
+        float[][] upper = medianRows(a, top + 1, top + q + 1);
+        float[][] lower = medianRows(a, bottom - q, bottom);
+        float[][] observed = profile.clone();
+        boolean changed = false;
+        for (Segment segment : chain) {
+            if (segment.left < right - height * 1.6 || segment.kind != 'N') continue;
+            int lo = Math.max(0, (int) Math.ceil(segment.left)) + q / 2;
+            int hi = Math.min(profile.length, (int) Math.floor(segment.right) - q / 2);
+            if (hi <= lo) continue;
+            float[] ca = medianColumns(upper, lo, hi), cb = medianColumns(lower, lo, hi);
+            if (classify(ca) != 'A' || classify(cb) != 'A' || distance(ca, cb) > 18) continue;
+            if (luma(segment.color) >= .6 * Math.min(luma(ca), luma(cb))) continue;
+            int agrees = 0;
+            for (int x = lo; x < hi; x++) if (distance(upper[x], lower[x]) < 18) agrees++;
+            if (agrees / (double) (hi - lo) < .85) continue;
+            // These RGB observations come from both exposed border rows. The
+            // measured endpoints remain unchanged when the interior is covered.
+            int first = Math.max(0, (int) Math.ceil(segment.left));
+            int end = Math.min(profile.length, (int) Math.ceil(segment.right));
+            for (int x = first; x < end; x++) {
+                observed[x] = new float[3];
+                for (int c = 0; c < 3; c++) observed[x][c] = (upper[x][c] + lower[x][c]) * .5f;
             }
-            int top = centerY;
-            while (top > source.region.top && matches(source.get(x, top - 1), kind)) top--;
-            int bottom = centerY + 1;
-            int regionBottom = source.region.top + source.region.height;
-            while (bottom < regionBottom && matches(source.get(x, bottom), kind)) bottom++;
-            tops[count] = top - source.region.top;
-            bottoms[count] = bottom - source.region.top;
-            heights[count++] = bottom - top;
+            changed = true;
         }
-        if (count == 0) return null;
-        return new int[] {
-                median(Arrays.copyOf(tops, count)),
-                median(Arrays.copyOf(bottoms, count)),
-                median(Arrays.copyOf(heights, count))
-        };
+        return changed ? new MaterialProjection(profileSections(observed, left, right, height,
+                chain.get(chain.size() - 1).edge), observed) : null;
     }
 
-    private static List<Run> findRuns(PixelSource source, int y, int firstX, int lastX,
-                                      int maxGap, int minimum, MaskKind kind) {
-        List<Run> result = new ArrayList<>();
-        int start = -1;
-        int previous = -1;
-        for (int x = firstX; x < lastX; x++) {
-            boolean match = matches(source.get(x, y), kind);
-            if (match) {
-                if (start < 0) start = x;
-                previous = x;
+    private static void classifyRelativeLoss(List<Segment> chain, float[][] profile, int height) {
+        if (chain.size() < 2) return;
+        Segment tail = chain.get(chain.size() - 1);
+        if (tail.kind != 'N' || !tail.valid) return;
+        int inset = Math.max(1, (int) Math.rint(height * .12));
+        double[] neutral = relativeMaterialEvidence(tail, profile, inset);
+        if (neutral == null) return;
+        for (int i = 0; i < chain.size() - 1; i++) {
+            Segment segment = chain.get(i);
+            if (segment.kind != 'N' || !segment.valid) continue;
+            boolean hasNeutralContinuation = true;
+            for (int j = i + 1; j < chain.size(); j++) if (chain.get(j).kind != 'N') {
+                hasNeutralContinuation = false; break;
             }
-            if (start >= 0 && (!match && x - previous > maxGap)) {
-                if (previous + 1 - start >= minimum) result.add(new Run(start, previous + 1));
-                start = -1;
-                previous = -1;
+            if (!hasNeutralContinuation) continue;
+            double[] material = relativeMaterialEvidence(segment, profile, inset);
+            if (material == null) continue;
+            // Distinct plateaus must differ by more than their measured color
+            // variation. The small floors are RGB noise tolerances, not lengths.
+            if (material[0] - neutral[0] > Math.max(2, 3 * Math.hypot(material[2], neutral[2]))
+                    && neutral[1] - material[1] > Math.max(8, 3 * Math.hypot(material[3], neutral[3]))) {
+                segment.kind = 'D';
             }
         }
-        if (start >= 0 && previous + 1 - start >= minimum) {
-            result.add(new Run(start, previous + 1));
-        }
-        return result;
     }
 
-    private static StableBand stableBand(List<Run>[] rows, int target, Run seed) {
-        int initialLength = seed.end - seed.start;
-        int tolerance = Math.max(4, (int) Math.round(initialLength * 0.16));
-        List<Integer> starts = new ArrayList<>();
-        List<Integer> ends = new ArrayList<>();
-        List<Integer> rowNumbers = new ArrayList<>();
-        starts.add(seed.start);
-        ends.add(seed.end);
-        rowNumbers.add(target);
-        int top = target;
-        int bottom = target + 1;
-        for (int direction : new int[] {-1, 1}) {
-            int row = target + direction;
-            int misses = 0;
-            Run reference = seed;
-            while (row >= 0 && row < rows.length && misses <= 1) {
-                Run compatible = compatibleRun(rows[row], reference, seed,
-                        initialLength, tolerance);
-                if (compatible == null) {
-                    misses++;
-                } else {
-                    starts.add(compatible.start);
-                    ends.add(compatible.end);
-                    rowNumbers.add(row);
-                    reference = compatible;
-                    top = Math.min(top, row);
-                    bottom = Math.max(bottom, row + 1);
-                    misses = 0;
-                }
-                row += direction;
-            }
+    private static double[] relativeMaterialEvidence(Segment segment, float[][] profile, int inset) {
+        int start = Math.max(0, (int) Math.ceil(segment.left));
+        int end = Math.min(profile.length, (int) Math.ceil(segment.right));
+        int margin = Math.min(inset, Math.max(0, (end - start - 2) / 2));
+        start += margin; end -= margin;
+        if (end - start < 2) return null;
+        float[] opponent = new float[end - start], light = new float[end - start];
+        for (int i = start; i < end; i++) {
+            float[] color = profile[i];
+            opponent[i - start] = color[1] - (color[0] + color[2]) * .5f;
+            light[i - start] = luma(color);
         }
-        // A translucent background can make one adjacent scenery row look green.
-        // Keep the rectangular core and discard endpoint outliers before using
-        // the band height as our scale ruler.
-        int medianStart = median(toArray(starts));
-        int medianEnd = median(toArray(ends));
-        int tightTolerance = Math.max(2, (int) Math.round(initialLength * 0.07));
-        List<Integer> coreStarts = new ArrayList<>();
-        List<Integer> coreEnds = new ArrayList<>();
-        int coreTop = rows.length;
-        int coreBottom = 0;
-        for (int index = 0; index < starts.size(); index++) {
-            if (Math.abs(starts.get(index) - medianStart) <= tightTolerance
-                    && Math.abs(ends.get(index) - medianEnd) <= tightTolerance) {
-                coreStarts.add(starts.get(index));
-                coreEnds.add(ends.get(index));
-                coreTop = Math.min(coreTop, rowNumbers.get(index));
-                coreBottom = Math.max(coreBottom, rowNumbers.get(index) + 1);
-            }
+        float greenExcess = median(opponent, opponent.length), luminance = median(light, light.length);
+        for (int i = 0; i < opponent.length; i++) {
+            opponent[i] = Math.abs(opponent[i] - greenExcess);
+            light[i] = Math.abs(light[i] - luminance);
         }
-        if (coreStarts.size() >= 3) {
-            return new StableBand(coreTop, coreBottom, toArray(coreStarts), toArray(coreEnds),
-                    top, bottom);
-        }
-        return new StableBand(top, bottom, toArray(starts), toArray(ends), top, bottom);
+        return new double[] {greenExcess, luminance,
+                median(opponent, opponent.length) * 1.4826,
+                median(light, light.length) * 1.4826};
     }
 
-    private static Run compatibleRun(List<Run> choices, Run reference, Run initial,
-                                     int initialLength, int tolerance) {
-        Run best = null;
-        int bestError = Integer.MAX_VALUE;
-        for (Run choice : choices) {
-            int overlap = Math.min(reference.end, choice.end)
-                    - Math.max(reference.start, choice.start);
-            int length = choice.end - choice.start;
-            int referenceLength = reference.end - reference.start;
-            if (overlap <= 0 || overlap < Math.min(initialLength, length) * 0.62
-                    || Math.abs(choice.start - initial.start) > tolerance
-                    || Math.abs(choice.end - initial.end) > tolerance
-                    || length < initialLength * 0.58 || length > initialLength * 1.38) continue;
-            int error = Math.abs(choice.start - reference.start)
-                    + Math.abs(choice.end - reference.end)
-                    + Math.abs(length - referenceLength);
-            if (error < bestError) {
-                bestError = error;
-                best = choice;
+    private static boolean hasAmbiguousEndpoint(Crop crop, Geometry geometry) {
+        return hasTallUniformSurface(crop, geometry, geometry.left, true)
+                || hasTallUniformSurface(crop, geometry, geometry.right, false);
+    }
+
+    private static boolean hasTallUniformSurface(Crop crop, Geometry geometry,
+                                                double endpoint, boolean leftEnd) {
+        int h = geometry.bottom - geometry.top + 1;
+        int x = (int) Math.rint(endpoint);
+        int radius = Math.max(1, (int) Math.rint(h * .2));
+        int upperFirst = Math.max(0, (int) (geometry.top - h * .65));
+        int upperEnd = Math.max(0, (int) (geometry.top - h * .15));
+        int lowerFirst = Math.min(crop.height, (int) (geometry.bottom + h * .15));
+        int lowerEnd = Math.min(crop.height, (int) (geometry.bottom + h * .65));
+        int upperCount = upperEnd - upperFirst;
+        int lowerCount = lowerEnd - lowerFirst;
+        if (upperCount < 2 || lowerCount < 2 || x - radius * 3 < 0
+                || x + radius * 3 >= crop.width) return false;
+
+        int count = upperCount + lowerCount;
+        int[] rows = new int[count + h];
+        for (int i = 0; i < upperCount; i++) rows[i] = upperFirst + i;
+        for (int i = 0; i < lowerCount; i++) rows[upperCount + i] = lowerFirst + i;
+        for (int i = 0; i < h; i++) rows[count + i] = geometry.top + i;
+        float[] rowNoise = new float[count];
+        int upperStrong = 0, lowerStrong = 0;
+        float[] differences = new float[radius * 6 - 1];
+        for (int i = 0; i < count; i++) {
+            int y = rows[i];
+            float[] before = medianRow(crop, y, x - radius, x);
+            float[] after = medianRow(crop, y, x + 1, x + radius + 1);
+            for (int j = 0; j < differences.length; j++) {
+                int column = x - radius * 3 + j;
+                differences[j] = distance(crop.color(y, column + 1), crop.color(y, column));
+            }
+            rowNoise[i] = median(differences, differences.length);
+            if (distance(after, before) > Math.max(5, rowNoise[i] * 4)) {
+                if (i < upperCount) upperStrong++;
+                else lowerStrong++;
+            }
+        }
+        if (upperStrong / (double) upperCount < .75
+                || lowerStrong / (double) lowerCount < .75) return false;
+
+        int outsideColumn = leftEnd ? x - radius : x + radius;
+        float[] center = new float[3], samples = new float[rows.length];
+        for (int channel = 0; channel < 3; channel++) {
+            for (int i = 0; i < rows.length; i++) samples[i] = crop.get(rows[i], outsideColumn, channel);
+            center[channel] = median(samples, samples.length);
+        }
+        float[] deviations = new float[rows.length];
+        for (int i = 0; i < rows.length; i++) {
+            deviations[i] = distance(crop.color(rows[i], outsideColumn), center);
+        }
+        Arrays.sort(deviations);
+        // Require a uniform foreground surface across most observed rows.
+        double position = (deviations.length - 1) * .8;
+        int low = (int) Math.floor(position), high = (int) Math.ceil(position);
+        double dispersion = deviations[low]
+                + (deviations[high] - deviations[low]) * (position - low);
+        return dispersion < Math.max(5, median(rowNoise, rowNoise.length) * 4);
+    }
+
+    private static TailExtension exposedTail(Crop a, int top, int bottom, double right) {
+        int height = bottom - top + 1, q = Math.max(1, (int) Math.rint(height * .15)), width = a.width;
+        float[][] upper = medianRows(a, top + 1, top + q + 1), lower = medianRows(a, bottom - q, bottom);
+        float[][] above = medianRows(a, Math.max(0, top - q), top), below = medianRows(a, bottom + 1, bottom + q + 1);
+        List<Double> upperEdges = steps(upper, height * .7, 14);
+        List<Double> lowerEdges = steps(lower, height * .7, 14);
+        boolean observedEnd = hasNearby(upperEdges, right, Math.max(.8, height * .1))
+                && hasNearby(lowerEdges, right, Math.max(.8, height * .1));
+        TailExtension best = null;
+        for (double x : upperEdges) {
+            // An overlapping middle panel can hide an earlier true endpoint,
+            // just as a foreground icon can hide later exposed track material.
+            // Search both ways, but measure only an agreeing visible crossing.
+            if (!(right - height * 1.6 < x && x < Math.min(width - q - 1, right + height * 1.6))
+                    || Math.abs(x - right) <= height * .15) continue;
+            // Exposed rows can recover an end hidden in the middle. Once those
+            // same rows already show the measured crossing, a later scene edge
+            // is not additional track length.
+            if (x > right && observedEnd) continue;
+            double mate = Double.NaN, nearest = Double.POSITIVE_INFINITY;
+            for (double z : lowerEdges) if (Math.abs(z - x) < Math.max(.8, height * .1) && Math.abs(z - x) < nearest) {
+                mate = z; nearest = Math.abs(z - x);
+            }
+            if (Double.isNaN(mate)) continue;
+            int xi = (int) Math.ceil(x), continuationStart = Math.max(0, (int) Math.ceil(right) + q / 2);
+            int continuationEnd = Math.max(0, xi - q / 2), supporting = 0;
+            for (int i = continuationStart; i < continuationEnd; i++) {
+                if (Math.min(distance(upper[i], above[i]), distance(lower[i], below[i])) > 12) supporting++;
+            }
+            if (continuationEnd > continuationStart && supporting / (double) (continuationEnd - continuationStart) < .8) continue;
+            int inside = Math.max(0, xi - q), outside = Math.min(width, xi + q);
+            float[] ci = medianColumns(upper, inside, xi), cb = medianColumns(lower, inside, xi);
+            float[] co = medianColumns(upper, xi, outside), bo = medianColumns(lower, xi, outside);
+            float[][] backgrounds = new float[(outside - xi) * 2][3];
+            for (int i = xi; i < outside; i++) {
+                backgrounds[i - xi] = above[i]; backgrounds[i - xi + outside - xi] = below[i];
+            }
+            float[] background = medianColumns(backgrounds, 0, backgrounds.length);
+            float[] delta = new float[3];
+            for (int c = 0; c < 3; c++) delta[c] = (ci[c] + cb[c] - co[c] - bo[c]) * .5f;
+            if (distance(ci, cb) > 18 || luma(delta) < 12) continue;
+            if (Math.max(distance(co, background), distance(bo, background)) > 16) continue;
+            if (Math.min(distance(ci, medianColumns(above, inside, xi)), distance(cb, medianColumns(below, inside, xi))) < 15) continue;
+            double measuredRight = (x + mate) * .5;
+            if (best == null || measuredRight > best.right) {
+                float[][] profile = new float[width][3];
+                for (int i = 0; i < width; i++) for (int c = 0; c < 3; c++) profile[i][c] = (upper[i][c] + lower[i][c]) * .5f;
+                best = new TailExtension(measuredRight, profile);
             }
         }
         return best;
     }
-
-    /**
-     * Finds the visible right edge of the track from its two-dimensional border.
-     *
-     * <p>The condition panel can touch the gauge and can even have the same gray
-     * center-line color as an empty part of the track.  Color connectivity alone
-     * therefore joins two different HUD components.  The actual track is still
-     * visible as a horizontal band: pixels immediately above and below it differ
-     * from its interior until the physical right edge.  This method follows that
-     * observed band and stops at its first vertical boundary.  It never predicts
-     * an endpoint from height, a previous frame, or an expected stamina value.</p>
-     */
-    private static Tail findTrackTail(PixelSource source, int left, int colorEnd,
-                                      int localTop, int localBottom, double geometryHeight) {
-        int top = localTop + source.region.top;
-        int bottom = localBottom + source.region.top;
-        int height = bottom - top;
-        int maximum = Math.min(source.region.left + source.region.width,
-                left + (int) Math.round(geometryHeight * 17.0));
-        int minimum = Math.max(left, colorEnd - Math.max(1,
-                (int) Math.round(height * 0.12)));
-        if (maximum - colorEnd < 3) return null;
-
-        int inset = Math.max(1, (int) Math.round(height * 0.22));
-        int firstY = Math.min(bottom - 1, top + inset);
-        int lastY = Math.max(firstY + 1, bottom - inset);
-        // The color mask can begin a few rows inside a translucent track. Sample
-        // a scale-relative band back through each edge so the median lands on the
-        // actually drawn dark outline, rather than on similar scenery beyond it.
-        int borderRows = Math.max(2, (int) Math.round(height * 0.30));
-        int aboveLast = Math.max(source.region.top + 1, top);
-        int aboveFirst = Math.max(source.region.top, aboveLast - borderRows);
-        int belowFirst = Math.min(source.region.top + source.region.height - 1, bottom);
-        int belowLast = Math.min(source.region.top + source.region.height,
-                belowFirst + borderRows);
-        if (aboveLast <= aboveFirst || belowLast <= belowFirst) return null;
-
-        int profileLength = maximum - minimum;
-        double[] support = new double[profileLength];
-        double[] preciseSupport = new double[profileLength];
-        boolean[] neutral = new boolean[profileLength];
-        boolean[] loss = new boolean[profileLength];
-        int[] colors = new int[profileLength];
-        int[] reds = new int[Math.max(lastY - firstY,
-                Math.max(aboveLast - aboveFirst, belowLast - belowFirst))];
-        int[] greens = new int[reds.length];
-        int[] blues = new int[reds.length];
-        int preciseRows = Math.max(1, (int) Math.round(height * 0.10));
-        int preciseAboveFirst = Math.max(source.region.top, top - preciseRows);
-        int preciseAboveLast = Math.max(preciseAboveFirst + 1, top);
-        int preciseBelowFirst = Math.min(source.region.top + source.region.height - 1,
-                bottom);
-        int preciseBelowLast = Math.min(source.region.top + source.region.height,
-                preciseBelowFirst + preciseRows);
-        for (int offset = 0; offset < profileLength; offset++) {
-            int x = minimum + offset;
-            int inside = medianColor(source, x, firstY, lastY, reds, greens, blues);
-            int above = medianColor(source, x, aboveFirst, aboveLast, reds, greens, blues);
-            int below = medianColor(source, x, belowFirst, belowLast, reds, greens, blues);
-            colors[offset] = inside;
-            support[offset] = Math.min(colorVectorDistance(inside, above),
-                    colorVectorDistance(inside, below));
-            int preciseAbove = medianColor(source, x, preciseAboveFirst,
-                    preciseAboveLast, reds, greens, blues);
-            int preciseBelow = medianColor(source, x, preciseBelowFirst,
-                    preciseBelowLast, reds, greens, blues);
-            preciseSupport[offset] = Math.min(colorVectorDistance(inside, preciseAbove),
-                    colorVectorDistance(inside, preciseBelow));
-            neutral[offset] = isNeutralColor(inside);
-            // Bright olive previews and very dark translucent previews occupy
-            // different parts of the same rendered family. Following their
-            // union prevents a hue crossing inside the preview from masquerading
-            // as the physical end of the track.
-            loss[offset] = isLossPreviewColor(inside)
-                    || isDimLossPreviewColor(inside);
+    private static List<Segment> profileSections(float[][] profile, double left, double right, int height, float evidence) {
+        List<Double> boundaries = new ArrayList<>(); boundaries.add(left);
+        for (double x : steps(profile, height * .7, 12)) if (left < x && x < right) boundaries.add(x);
+        boundaries.add(right);
+        List<Segment> result = new ArrayList<>();
+        for (int i = 0; i < boundaries.size() - 1; i++) {
+            double l = boundaries.get(i), r = boundaries.get(i + 1);
+            int first = Math.max(0, (int) Math.ceil(l)), end = Math.min(profile.length, (int) Math.ceil(r));
+            if (end <= first) continue;
+            float[] color = medianColumns(profile, first, end);
+            result.add(new Segment(l, r, color, classify(color), evidence, true));
         }
-
-        int firstTail = clamp(colorEnd - minimum, 0, profileLength);
-        int transition = Math.max(2, (int) Math.round(height * 0.15));
-        int probeWidth = Math.max(3, (int) Math.round(height * 0.20));
-        int probeStart = clamp(firstTail + transition, 0, profileLength);
-        int probeEnd = clamp(probeStart + probeWidth, probeStart, profileLength);
-        int neutralProbe = countTrue(neutral, probeStart, probeEnd);
-        boolean startsWithNeutralTail = probeEnd - probeStart >= 2
-                && neutralProbe * 2 >= probeEnd - probeStart;
-        int lossProbe = countTrue(loss, probeStart, probeEnd);
-        boolean startsWithLossTail = probeEnd - probeStart >= 2
-                && lossProbe * 2 >= probeEnd - probeStart;
-        // Loss previews can be both olive and nearly gray in the same rendered
-        // segment. When both masks agree at the first probe, follow LOSS first;
-        // otherwise the overlapping gray portion is mistaken for a very short
-        // empty tail and truncates the physical track.
-        if (startsWithLossTail) {
-            int lossEnd = findObservedLossEnd(colors, loss, firstTail, height);
-            boolean distinctLoss = lossEnd >= 0 && (!startsWithNeutralTail
-                    || hasDistinctLossEvidence(loss, neutral, firstTail, lossEnd, height));
-            if (distinctLoss) {
-                int neutralStart = clamp(lossEnd + transition, 0, profileLength);
-                int neutralEnd = clamp(neutralStart + probeWidth,
-                        neutralStart, profileLength);
-                boolean continuesAsNeutralTrack = neutralEnd - neutralStart >= 2
-                        && countTrue(neutral, neutralStart, neutralEnd) * 2
-                        >= neutralEnd - neutralStart;
-                if (continuesAsNeutralTrack) {
-                    Tail observedNeutralTail = findObservedNeutralTail(colors, neutral,
-                            lossEnd, height, minimum, colorEnd);
-                    if (observedNeutralTail != null && hasTrackBorderSupport(support,
-                            preciseSupport, neutralStart, neutralEnd,
-                            observedNeutralTail.end - observedNeutralTail.start, height)) {
-                        int observedEnd = refineTrackEndByBorder(support, preciseSupport,
-                                lossEnd, observedNeutralTail.end - minimum, height);
-                        return new Tail(minimum + lossEnd, minimum + observedEnd, true);
-                    }
-                }
-                int observedLossEnd = minimum + lossEnd;
-                return new Tail(observedLossEnd, observedLossEnd, false);
-            }
-        }
-
-        if (startsWithNeutralTail) {
-            Tail observedNeutralTail = findObservedNeutralTail(colors, neutral,
-                    firstTail, height, minimum, colorEnd);
-            if (observedNeutralTail != null && hasTrackBorderSupport(support,
-                    preciseSupport, probeStart, probeEnd,
-                    observedNeutralTail.end - observedNeutralTail.start, height)) {
-                int observedEnd = refineTrackEndByBorder(support, preciseSupport,
-                        firstTail, observedNeutralTail.end - minimum, height);
-                return new Tail(observedNeutralTail.start, minimum + observedEnd, true);
-            }
-        }
-
-        // If the pixels after colorEnd are neither a bordered neutral track nor a
-        // sustained loss segment, colorEnd itself is the last observed gauge edge.
-        return null;
+        return result;
     }
-
-    private static boolean hasDistinctLossEvidence(boolean[] loss, boolean[] neutral,
-                                                   int start, int end, int height) {
-        int minimum = Math.max(2, (int) Math.round(height * 0.25));
-        int run = 0;
-        for (int index = clamp(start, 0, loss.length);
-             index < clamp(end, 0, loss.length); index++) {
-            if (loss[index] && !neutral[index]) {
-                if (++run >= minimum) return true;
-            } else {
-                run = 0;
-            }
+    private static float[][] medianSelectedRows(Crop a, List<Integer> rows) {
+        float[][] result = new float[a.width][3];
+        float[] samples = new float[rows.size()];
+        for (int x = 0; x < a.width; x++) for (int c = 0; c < 3; c++) {
+            for (int i = 0; i < rows.size(); i++) samples[i] = a.get(rows.get(i), x, c);
+            result[x][c] = median(samples, samples.length);
         }
+        return result;
+    }
+    private static float[] blend(float[] background, float[] axis, float fraction) {
+        return new float[] {background[0] + axis[0] * fraction, background[1] + axis[1] * fraction, background[2] + axis[2] * fraction};
+    }
+    private static double value(double edge, Geometry g) { return Math.max(0, Math.min(100, 100 * (edge - g.left) / (g.right - g.left))); }
+    private static boolean allowed(char a, char b) { return a == 'A' || b == 'D' || b == 'N'; }
+    private static char classify(float[] c) {
+        float r = c[0], g = c[1], b = c[2];
+        if (g - Math.min(r, b) > 55 && g > b - 6 && g > r - 18) return 'A';
+        // A warm neutral surface can have little blue without being green.
+        // Require either red/green separation or clear excess over both other
+        // channels; the latter also retains yellow-green loss material.
+        if (g - Math.min(r, b) > 9 && g > Math.max(r, b) - 3
+                && (g - r > 3 || g - (r + b) * .5f > 9)) return 'D';
+        return 'N';
+    }
+    private static boolean isRecoveryMaterial(float[] color) {
+        // Recovery adds a bright neutral component to the green fill. Compare
+        // both other channels with green instead of requiring a particular red
+        // value or green-blue hue that changes with video color conversion.
+        return color[1] >= 200 && Math.min(color[0], color[2]) >= color[1] * .35f;
+    }
+    private static boolean hasSupported(List<Start> starts, int height) {
+        for (Start start : starts) if (supported(start, starts, height)) return true;
         return false;
     }
-
-    /** Refines a gray color run to the first directly observed end of its outline. */
-    private static int refineTrackEndByBorder(double[] broad, double[] precise,
-                                              int start, int end, int height) {
-        start = clamp(start, 0, Math.min(broad.length, precise.length));
-        end = clamp(end, start, Math.min(broad.length, precise.length));
-        int window = Math.max(2, (int) Math.round(height * 0.15));
-        // The color-defined end is already a visible observation. The outline may
-        // only refine its local neighborhood; a distant contrast loss can be a
-        // character or scenery crossing the translucent bar, not the track end.
-        int first = Math.max(Math.max(window, start + window),
-                end - Math.max(window, (int) Math.round(height * 0.75)));
-        int last = Math.min(Math.min(broad.length, precise.length) - window,
-                end + window);
-        if (first > last) return end;
-
-        double[] outline = new double[Math.min(broad.length, precise.length)];
-        for (int index = 0; index < outline.length; index++) {
-            outline[index] = Math.max(broad[index], precise[index]);
-        }
-        Edge best = new Edge(-1e9, end);
-        int bestDistance = Integer.MAX_VALUE;
-        for (int boundary = first; boundary <= last; boundary++) {
-            double before = medianValue(outline, boundary - window, boundary);
-            double after = medianValue(outline, boundary, boundary + window);
-            double drop = before - after;
-            if (before >= 12.0 && after <= Math.max(6.0, before * 0.45)
-                    && drop >= 8.0 && (Math.abs(boundary - end) < bestDistance
-                    || (Math.abs(boundary - end) == bestDistance && drop > best.score))) {
-                best = new Edge(drop, boundary);
-                bestDistance = Math.abs(boundary - end);
-            }
-        }
-        return best.position;
+    private static boolean hasNearby(List<Double> edges, double x, double tolerance) {
+        for (double edge : edges) if (Math.abs(edge - x) < tolerance) return true;
+        return false;
     }
-
-    private static boolean hasTrackBorderSupport(double[] broad, double[] precise,
-                                                 int start, int end,
-                                                 int observedTailLength, int height) {
-        boolean preciseOutline = medianValue(precise, start, end) >= 15.0;
-        boolean broadOutline = medianValue(broad, start, end) >= 15.0;
-        // A long neutral body supplies repeated two-dimensional evidence even if
-        // transparency over a nearly uniform background hides both outline rows.
-        // A short patch next to the gauge must preserve the outline exactly,
-        // otherwise it is the adjacent condition panel. All lengths are compared
-        // with the observed component height, never with device pixels.
-        boolean longObservedBody = observedTailLength >= height * 4.0;
-        return preciseOutline || longObservedBody
-                || (broadOutline && observedTailLength >= height * 1.5);
+    private static boolean supported(Start start, List<Start> starts, int height) {
+        for (Start other : starts) if (Math.abs(start.y - other.y) == 1 && Math.abs(start.x - other.x) < height * .13) return true;
+        return false;
     }
-
-    /** Finds the first directly visible transition out of a sustained loss segment. */
-    private static int findObservedLossEnd(int[] colors, boolean[] loss,
-                                           int firstTail, int height) {
-        int voteWindow = Math.max(3, (int) Math.round(height * 0.22));
-        int first = clamp(firstTail + voteWindow, voteWindow,
-                loss.length - voteWindow);
-        int approximate = -1;
-        for (int boundary = first; boundary <= loss.length - voteWindow; boundary++) {
-            int leftLoss = countTrue(loss, boundary - voteWindow, boundary);
-            int rightLoss = countTrue(loss, boundary, boundary + voteWindow);
-            if (leftLoss * 3 >= voteWindow * 2 && rightLoss * 3 <= voteWindow) {
-                approximate = boundary;
-                break;
-            }
+    private static float[][] medianRows(Crop a, int first, int end) {
+        first = Math.max(0, first); end = Math.min(a.height, end);
+        float[][] result = new float[a.width][3];
+        if (end <= first) return result;
+        float[] samples = new float[end - first];
+        for (int x = 0; x < a.width; x++) for (int c = 0; c < 3; c++) {
+            for (int y = first; y < end; y++) samples[y - first] = a.get(y, x, c);
+            result[x][c] = median(samples, samples.length);
         }
-        if (approximate < 0) return -1;
-
-        int microWindow = Math.max(1, (int) Math.round(height * 0.06));
-        int searchRadius = Math.max(microWindow, voteWindow);
-        int searchStart = Math.max(microWindow, approximate - searchRadius);
-        int searchEnd = Math.min(colors.length - microWindow,
-                approximate + searchRadius);
-        Edge best = new Edge(-1e9, approximate);
-        for (int boundary = searchStart; boundary <= searchEnd; boundary++) {
-            double distance = vectorDistance(
-                    meanChannel(colors, boundary - microWindow, boundary, 16),
-                    meanChannel(colors, boundary - microWindow, boundary, 8),
-                    meanChannel(colors, boundary - microWindow, boundary, 0),
-                    meanChannel(colors, boundary, boundary + microWindow, 16),
-                    meanChannel(colors, boundary, boundary + microWindow, 8),
-                    meanChannel(colors, boundary, boundary + microWindow, 0));
-            if (distance > best.score) best = new Edge(distance, boundary);
-        }
-        return best.position;
+        return result;
     }
-
-    private static Tail findObservedNeutralTail(int[] colors, boolean[] neutral,
-                                                int firstTail, int height,
-                                                int minimum, int colorEnd) {
-        int maxGap = Math.max(1, (int) Math.round(height * 0.14));
-        int minimumRun = Math.max(3, (int) Math.round(height * 0.45));
-        int runStart = -1;
-        int previous = -1;
-        for (int index = firstTail; index <= neutral.length + maxGap; index++) {
-            boolean matches = index < neutral.length && neutral[index];
-            if (matches) {
-                if (runStart < 0) runStart = index;
-                previous = index;
-            }
-            if (runStart >= 0 && (!matches && index - previous > maxGap)) {
-                int end = previous + 1;
-                if (end - runStart >= minimumRun
-                        && runStart - firstTail <= maxGap) {
-                    end = refineNeutralEnd(colors, runStart, end,
-                            minimumRun, height);
-                    return new Tail(colorEnd, minimum + end, true);
+    private static float[][] meanRows(Crop a, int first, int end) {
+        first = Math.max(0, first); end = Math.min(a.height, end);
+        float[][] result = new float[a.width][3];
+        for (int x = 0; x < a.width; x++) for (int c = 0; c < 3; c++) {
+            for (int y = first; y < end; y++) result[x][c] += a.get(y, x, c);
+            result[x][c] /= Math.max(1, end - first);
+        }
+        return result;
+    }
+    private static float[] medianRow(Crop a, int y, int first, int end) {
+        float[] result = new float[3], samples = new float[Math.max(1, end - first)];
+        for (int c = 0; c < 3; c++) {
+            for (int x = first; x < end; x++) samples[x - first] = a.get(y, x, c);
+            result[c] = median(samples, end - first);
+        }
+        return result;
+    }
+    private static float[] medianColumns(float[][] values, int first, int end) {
+        first = Math.max(0, first); end = Math.min(values.length, end);
+        float[] result = new float[3], samples = new float[Math.max(1, end - first)];
+        for (int c = 0; c < 3; c++) {
+            for (int i = first; i < end; i++) samples[i - first] = values[i][c];
+            result[c] = median(samples, end - first);
+        }
+        return result;
+    }
+    private static float medianRange(float[] values, int first, int end) {
+        first = Math.max(0, first); end = Math.min(values.length, end);
+        if (end <= first) return Float.NaN;
+        float[] copy = Arrays.copyOfRange(values, first, end);
+        return median(copy, copy.length);
+    }
+    private static float median(float[] values, int count) {
+        if (count <= 0) return Float.NaN;
+        Arrays.sort(values, 0, count);
+        return count % 2 == 1 ? values[count / 2] : (values[count / 2 - 1] + values[count / 2]) * .5f;
+    }
+    private static float mean(float[] c) { return (c[0] + c[1] + c[2]) / 3f; }
+    private static float luma(float[] c) { return c[0] * .299f + c[1] * .587f + c[2] * .114f; }
+    private static float[] subtract(float[] a, float[] b) { return new float[] {a[0] - b[0], a[1] - b[1], a[2] - b[2]}; }
+    private static float dot(float[] a, float[] b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+    private static float projection(float[] color, float[] origin, float[] axis, float norm) {
+        return ((color[0] - origin[0]) * axis[0] + (color[1] - origin[1]) * axis[1]
+                + (color[2] - origin[2]) * axis[2]) / norm;
+    }
+    private static float distance(float[] a, float[] b) {
+        float d0 = a[0] - b[0], d1 = a[1] - b[1], d2 = a[2] - b[2];
+        return (float) Math.sqrt(d0 * d0 + d1 * d1 + d2 * d2);
+    }
+    private static float maxDifference(float[] a, float[] b) {
+        return Math.max(Math.abs(a[0] - b[0]), Math.max(Math.abs(a[1] - b[1]), Math.abs(a[2] - b[2])));
+    }
+    private static List<int[]> runs(boolean[] mask) {
+        List<int[]> result = new ArrayList<>();
+        int first = -1;
+        for (int i = 0; i <= mask.length; i++) {
+            boolean value = i < mask.length && mask[i];
+            if (value && first < 0) first = i;
+            if (!value && first >= 0) { result.add(new int[] {first, i}); first = -1; }
+        }
+        return result;
+    }
+    private static int[] peaks(float[] values, int count, int separation) {
+        int[] order = descending(values), chosen = new int[Math.min(count, values.length)];
+        int size = 0;
+        for (int value : order) {
+            boolean nearby = false;
+            for (int i = 0; i < size; i++) if (Math.abs(chosen[i] - value) <= separation) { nearby = true; break; }
+            if (!nearby) chosen[size++] = value;
+            if (size >= chosen.length) break;
+        }
+        return Arrays.copyOf(chosen, size);
+    }
+    private static int[] descending(float[] values) {
+        Integer[] order = new Integer[values.length];
+        for (int i = 0; i < order.length; i++) order[i] = i;
+        Arrays.sort(order, (a, b) -> {
+            int result = Float.compare(values[b], values[a]);
+            return result != 0 ? result : Integer.compare(b, a);
+        });
+        int[] result = new int[order.length];
+        for (int i = 0; i < order.length; i++) result[i] = order[i];
+        return result;
+    }
+    private static float[] blur(float[] values, int size) {
+        float[] result = new float[values.length];
+        for (int i = 0; i < values.length; i++) {
+            float sum = 0;
+            for (int j = 0; j < size; j++) {
+                int x = i + j - size / 2;
+                while (x < 0 || x >= values.length) {
+                    if (x < 0) x = -x;
+                    else x = values.length * 2 - x - 2;
                 }
-                runStart = -1;
-                previous = -1;
+                sum += values[x];
             }
-        }
-        return null;
-    }
-
-    private static int countTrue(boolean[] values, int start, int end) {
-        start = clamp(start, 0, values.length);
-        end = clamp(end, start, values.length);
-        int count = 0;
-        for (int index = start; index < end; index++) if (values[index]) count++;
-        return count;
-    }
-
-    private static int refineNeutralEnd(int[] profile, int start, int end,
-                                        int minimumTail, int height) {
-        int window = Math.max(2, (int) Math.round(height * 0.15));
-        int first = Math.max(start + minimumTail, start + window);
-        int last = Math.min(end - window, profile.length - window);
-        Edge best = new Edge(-1e9, end);
-        for (int boundary = first; boundary <= last; boundary++) {
-            double leftR = meanChannel(profile, boundary - window, boundary, 16);
-            double leftG = meanChannel(profile, boundary - window, boundary, 8);
-            double leftB = meanChannel(profile, boundary - window, boundary, 0);
-            double rightR = meanChannel(profile, boundary, boundary + window, 16);
-            double rightG = meanChannel(profile, boundary, boundary + window, 8);
-            double rightB = meanChannel(profile, boundary, boundary + window, 0);
-            double drop = (leftR + leftG + leftB - rightR - rightG - rightB) / 3.0;
-            double distance = vectorDistance(leftR, leftG, leftB, rightR, rightG, rightB);
-            double score = drop + distance * 0.20;
-            if (drop >= 18.0 && score > best.score) best = new Edge(score, boundary);
-        }
-        return best.score >= 24.0 ? best.position : end;
-    }
-
-    private static double meanChannel(int[] colors, int start, int end, int shift) {
-        double sum = 0.0;
-        for (int index = start; index < end; index++) {
-            sum += (colors[index] >>> shift) & 0xff;
-        }
-        return sum / Math.max(1, end - start);
-    }
-
-    private static int medianColor(PixelSource source, int x, int firstY, int lastY,
-                                   int[] reds, int[] greens, int[] blues) {
-        int count = 0;
-        for (int y = firstY; y < lastY; y++) {
-            int color = source.get(x, y);
-            reds[count] = red(color);
-            greens[count] = green(color);
-            blues[count] = blue(color);
-            count++;
-        }
-        Arrays.sort(reds, 0, count);
-        Arrays.sort(greens, 0, count);
-        Arrays.sort(blues, 0, count);
-        int r = reds[count / 2];
-        int g = greens[count / 2];
-        int b = blues[count / 2];
-        return 0xff000000 | (r << 16) | (g << 8) | b;
-    }
-
-    private static double maskDensity(PixelSource source, int left, int right,
-                                      int localTop, int localBottom, MaskKind kind) {
-        int top = localTop + source.region.top;
-        int bottom = localBottom + source.region.top;
-        int matches = 0;
-        int total = Math.max(1, (right - left) * (bottom - top));
-        for (int y = top; y < bottom; y++) {
-            for (int x = left; x < right; x++) if (matches(source.get(x, y), kind)) matches++;
-        }
-        return matches / (double) total;
-    }
-
-    private static double endpointFlatness(int[] starts, int[] ends, int left, int right,
-                                           int height, boolean empty) {
-        double startMad = medianAbsoluteDeviation(starts, left) / Math.max(1.0, height);
-        double endMad = medianAbsoluteDeviation(ends, right) / Math.max(1.0, height);
-        return Math.max(0.0, 1.0 - (startMad + endMad) * 0.55);
-    }
-
-    private static double edgeContrast(PixelSource source, int left, int right,
-                                       int localTop, int localBottom) {
-        int top = localTop + source.region.top;
-        int bottom = localBottom + source.region.top;
-        if (top < source.region.top + 2 || bottom + 1 >= source.region.top + source.region.height) {
-            return 0.0;
-        }
-        double[] values = new double[5];
-        double[] fractions = {0.18, 0.35, 0.55, 0.75, 0.90};
-        for (int index = 0; index < fractions.length; index++) {
-            int x = clamp(left + (int) Math.round((right - left) * fractions[index]),
-                    source.region.left, source.region.left + source.region.width - 1);
-            int inside = source.get(x, (top + bottom - 1) / 2);
-            values[index] = (colorDistance(inside, source.get(x, top - 2))
-                    + colorDistance(inside, source.get(x, bottom + 1))) * 0.5;
-        }
-        Arrays.sort(values);
-        return values[values.length / 2];
-    }
-
-    private static boolean matches(int color, MaskKind kind) {
-        switch (kind) {
-            case GAUGE:
-                return isGaugeColor(color);
-            case LOSS_PREVIEW:
-                return isDimLossPreviewColor(color);
-            case NEUTRAL:
-            default:
-                return isNeutralColor(color);
-        }
-    }
-
-    private static boolean isNeutralColor(int color) {
-        int r = red(color);
-        int g = green(color);
-        int b = blue(color);
-        int maximum = Math.max(r, Math.max(g, b));
-        int minimum = Math.min(r, Math.min(g, b));
-        double light = (r + g + b) / 3.0;
-        return light >= 55 && light <= 125 && maximum - minimum <= 20;
-    }
-
-    private static boolean isLossPreviewColor(int color) {
-        return isLossPreviewColor(red(color), green(color), blue(color));
-    }
-
-    private static boolean isLossPreviewColor(double r, double g, double b) {
-        double maximum = Math.max(r, Math.max(g, b));
-        double minimum = Math.min(r, Math.min(g, b));
-        double light = (r + g + b) / 3.0;
-        // A loss preview is an olive, low-luminance segment. When current stamina
-        // is 100 it reaches the physical right cap, so there is no neutral tail
-        // after it. Treating only gray as track made the bright pre-loss segment
-        // look like an independently full bar and erased the preview entirely.
-        return light >= 48 && light <= 125
-                && g >= 58 && g - b >= 8 && Math.abs(g - r) <= 32
-                && maximum - minimum >= 17 && maximum - minimum <= 55;
-    }
-
-    private static boolean isDimLossPreviewColor(double r, double g, double b) {
-        double maximum = Math.max(r, Math.max(g, b));
-        double minimum = Math.min(r, Math.min(g, b));
-        double light = (r + g + b) / 3.0;
-        // On dark training backgrounds the translucent loss preview can be much
-        // dimmer and less olive than it is over a bright scene. This broader mask
-        // is only used to seed a loss candidate and classify the track head; it is
-        // deliberately not allowed to extend the physical right edge of a track.
-        boolean darkBlueShift = light <= 85 && g - b >= -10;
-        return light >= 38 && light <= 125
-                && g >= 45 && g - r >= 3 && (g - b >= 0 || darkBlueShift)
-                && Math.abs(g - r) <= 40
-                && maximum - minimum >= 10 && maximum - minimum <= 55;
-    }
-
-    private static boolean isDimLossPreviewColor(int color) {
-        return isDimLossPreviewColor(red(color), green(color), blue(color));
-    }
-
-    private static int median(int[] values) {
-        int[] copy = Arrays.copyOf(values, values.length);
-        Arrays.sort(copy);
-        return copy[copy.length / 2];
-    }
-
-    private static int percentile(int[] values, double fraction) {
-        int[] copy = Arrays.copyOf(values, values.length);
-        Arrays.sort(copy);
-        int index = clamp((int) Math.round((copy.length - 1) * fraction), 0, copy.length - 1);
-        return copy[index];
-    }
-
-    /** Returns the outer observed edge after discarding at most one isolated row. */
-    private static int supportedMinimum(int[] values) {
-        int[] copy = Arrays.copyOf(values, values.length);
-        Arrays.sort(copy);
-        return copy[Math.min(1, copy.length - 1)];
-    }
-
-    private static double medianAbsoluteDeviation(int[] values, int center) {
-        int[] deviations = new int[values.length];
-        for (int index = 0; index < values.length; index++) {
-            deviations[index] = Math.abs(values[index] - center);
-        }
-        Arrays.sort(deviations);
-        return deviations[deviations.length / 2];
-    }
-
-    private static int[] toArray(List<Integer> values) {
-        int[] result = new int[values.size()];
-        for (int index = 0; index < values.size(); index++) result[index] = values.get(index);
-        return result;
-    }
-
-    private static Result analyzeProfile(PixelSource source, int screenWidth, int left, int centerY,
-                                         int trackWidth, int trackHeight, int reliableLeft,
-                                         int knownColorEnd, int knownLossStart,
-                                         boolean hasNeutralTail,
-                                         MaskKind candidateKind) {
-        int innerRadius = Math.max(1, (int) Math.round(trackHeight * 0.24));
-        int rowCount = innerRadius * 2 + 1;
-        int[] reds = new int[rowCount];
-        int[] greens = new int[rowCount];
-        int[] blues = new int[rowCount];
-        double[] rawR = new double[trackWidth];
-        double[] rawG = new double[trackWidth];
-        double[] rawB = new double[trackWidth];
-
-        for (int offset = 0; offset < trackWidth; offset++) {
-            int count = 0;
-            for (int y = centerY - innerRadius; y <= centerY + innerRadius; y++) {
-                int color = source.get(Math.max(left + offset, reliableLeft), y);
-                reds[count] = red(color);
-                greens[count] = green(color);
-                blues[count] = blue(color);
-                count++;
-            }
-            Arrays.sort(reds, 0, count);
-            Arrays.sort(greens, 0, count);
-            Arrays.sort(blues, 0, count);
-            rawR[offset] = reds[count / 2];
-            rawG[offset] = greens[count / 2];
-            rawB[offset] = blues[count / 2];
-        }
-
-        int smoothRadius = Math.max(1, (int) Math.round(trackWidth * 0.008));
-        double[] r = smooth(rawR, smoothRadius);
-        double[] g = smooth(rawG, smoothRadius);
-        double[] b = smooth(rawB, smoothRadius);
-        double[] luminance = new double[trackWidth];
-        double[] saturation = new double[trackWidth];
-        for (int index = 0; index < trackWidth; index++) {
-            luminance[index] = (r[index] + g[index] + b[index]) / 3.0;
-            saturation[index] = Math.max(r[index], Math.max(g[index], b[index]))
-                    - Math.min(r[index], Math.min(g[index], b[index]));
-        }
-
-        int headWindow = Math.max(4, (int) Math.round(trackWidth * 0.025));
-        double headR = mean(r, 0, headWindow);
-        double headG = mean(g, 0, headWindow);
-        double headB = mean(b, 0, headWindow);
-        double headLight = (headR + headG + headB) / 3.0;
-        double headSaturation = Math.max(headR, Math.max(headG, headB))
-                - Math.min(headR, Math.min(headG, headB));
-        boolean startsWithGainPreview = headLight >= 125 && headR >= 90
-                && headG - headB >= 20 && headSaturation >= 35;
-        boolean startsWithLossPreview = isDimLossPreviewColor(headR, headG, headB);
-        if (candidateKind == MaskKind.LOSS_PREVIEW && !startsWithLossPreview
-                && knownLossStart < 0) return null;
-
-        int initial = Math.max(4, (int) Math.round(trackWidth * 0.08));
-        double initialSaturation = mean(saturation, 0, initial);
-        double initialGreen = meanDifference(g, b, 0, initial);
-        if (knownLossStart < 0 && initialSaturation < 14 && initialGreen < 7) {
-            return new Result(0, 0, Direction.NONE,
-                    new Anchor(left / (float) screenWidth, centerY / (float) screenWidth), 0.68f);
-        }
-
-        int window = Math.max(3, (int) Math.round(trackWidth * 0.025));
-        int gap = Math.max(1, (int) Math.round(trackWidth * 0.006));
-        int observedProfileStart = clamp(reliableLeft - left, 0, trackWidth);
-        int minBoundary = Math.max(
-                Math.max(window + gap + 1, (int) Math.round(trackWidth * 0.03)),
-                observedProfileStart + window + gap);
-        int maxBoundary = (int) Math.round(trackWidth * 0.94);
-        Edge gain = new Edge(-1e9, -1);
-        Edge loss = new Edge(-1e9, -1);
-        for (int boundary = minBoundary; boundary <= maxBoundary; boundary++) {
-            int leftStart = boundary - gap - window;
-            int leftEnd = boundary - gap;
-            int rightStart = boundary + gap;
-            int rightEnd = boundary + gap + window;
-            if (leftStart < 0 || rightEnd > trackWidth) continue;
-            double leftLight = mean(luminance, leftStart, leftEnd);
-            double rightLight = mean(luminance, rightStart, rightEnd);
-            double leftRed = mean(r, leftStart, leftEnd);
-            double rightRed = mean(r, rightStart, rightEnd);
-            double leftSat = mean(saturation, leftStart, leftEnd);
-            double rightSat = mean(saturation, rightStart, rightEnd);
-            double gainScore = rightLight - leftLight + 0.35 * (rightRed - leftRed);
-            double lossScore = leftLight - rightLight + 0.30 * (leftSat - rightSat);
-            if (gainScore > gain.score) gain = new Edge(gainScore, boundary);
-            if (lossScore > loss.score) loss = new Edge(lossScore, boundary);
-        }
-
-        // A recovery preview can be only about three stamina points wide.  The
-        // old 5.5% minimum skipped that real edge and latched onto the shaded
-        // tail of the track instead.  Keep this just above the smoothing
-        // footprint so it still works on narrow foldable captures.
-        int gainPreviewMin = Math.max(4, (int) Math.round(trackWidth * 0.012));
-        int lossPreviewMin = Math.max(10, (int) Math.round(trackWidth * 0.055));
-        Direction direction = Direction.NONE;
-        int internal = -1;
-        int finalBoundary = hasNeutralTail
-                ? clamp(knownColorEnd, 0, trackWidth) : trackWidth;
-
-        if (knownLossStart >= 0 && knownColorEnd > knownLossStart) {
-            direction = Direction.LOSS;
-            internal = clamp(knownLossStart, 0, trackWidth);
-            finalBoundary = clamp(knownColorEnd, internal, trackWidth);
-            // The loss mask proves that this track contains a preview, but a
-            // translucent gradient may make only the darker latter part satisfy
-            // that absolute mask. Prefer the stronger observed bright-to-dim
-            // discontinuity when it occurs earlier in the same colored span.
-            if (internal > 0 && loss.score >= 24 && loss.position > 0
-                    && loss.position < finalBoundary) {
-                internal = loss.position;
-            }
-        }
-
-        // At either endpoint a preview can be the first and only colored segment:
-        // recovery from zero has no normal fill before it, and consumption to zero
-        // has no normal fill after it. Those states have no internal normal/preview
-        // edge, so classify the short head of the measured track by its absolute
-        // preview color and use the preview-to-neutral edge as the other boundary.
-        if (direction == Direction.NONE && (startsWithGainPreview || startsWithLossPreview)) {
-            direction = startsWithGainPreview ? Direction.GAIN : Direction.LOSS;
-            internal = 0;
-            int minimumPreview = startsWithGainPreview ? gainPreviewMin : lossPreviewMin;
-            Edge neutral = hasNeutralTail
-                    ? findNeutralBoundary(r, g, b, luminance, saturation,
-                    minimumPreview, trackWidth, window, gap)
-                    : new Edge(-1e9, -1);
-            finalBoundary = neutral.score >= 8 ? neutral.position : trackWidth;
-        }
-
-        // A +3 preview can be only four or five source pixels wide. Sampling
-        // after the classifier gap skipped the entire bright segment on low
-        // resolution captures, so inspect immediately to the right of the edge.
-        int gainZoneStart = Math.min(trackWidth, gain.position);
-        int gainZoneEnd = Math.min(trackWidth,
-                gainZoneStart + Math.max(gainPreviewMin, window));
-        double gainZoneLight = mean(luminance, gainZoneStart, gainZoneEnd);
-        double gainZoneSaturation = mean(saturation, gainZoneStart, gainZoneEnd);
-        if (direction == Direction.NONE && gain.score >= 24
-                && gainZoneLight >= 115 && gainZoneSaturation >= 35
-                && trackWidth - gain.position >= gainPreviewMin) {
-            direction = Direction.GAIN;
-            internal = gain.position;
-            Edge tail = new Edge(-1e9, -1);
-            if (hasNeutralTail) {
-                for (int boundary = internal + gainPreviewMin;
-                     boundary <= trackWidth - window - gap; boundary++) {
-                    int leftStart = boundary - gap - window;
-                    int leftEnd = boundary - gap;
-                    int rightStart = boundary + gap;
-                    int rightEnd = boundary + gap + window;
-                    double deltaLight = mean(luminance, rightStart, rightEnd)
-                            - mean(luminance, leftStart, leftEnd);
-                    double deltaSat = mean(saturation, leftStart, leftEnd)
-                            - mean(saturation, rightStart, rightEnd);
-                    double deltaRed = mean(r, leftStart, leftEnd) - mean(r, rightStart, rightEnd);
-                    double score = -deltaLight + 0.25 * deltaSat + 0.15 * deltaRed;
-                    if (score > tail.score) tail = new Edge(score, boundary);
-                }
-            }
-            if (tail.score >= 24) finalBoundary = tail.position;
-        }
-
-        if (direction == Direction.NONE && loss.score >= 24) {
-            int boundary = loss.position;
-            int zoneStart = Math.min(trackWidth, boundary + gap + 2);
-            int zoneEnd = Math.min(trackWidth,
-                    zoneStart + Math.max(lossPreviewMin, window * 2));
-            double rightSat = mean(saturation, zoneStart, zoneEnd);
-            double rightGreen = meanDifference(g, b, zoneStart, zoneEnd);
-            double rightR = mean(r, zoneStart, zoneEnd);
-            double rightG = mean(g, zoneStart, zoneEnd);
-            double rightB = mean(b, zoneStart, zoneEnd);
-            Edge neutral = hasNeutralTail
-                    ? findNeutralBoundary(r, g, b, luminance, saturation,
-                    boundary + lossPreviewMin, trackWidth, window, gap)
-                    : new Edge(-1e9, -1);
-            if (rightSat >= 17 && rightGreen >= 8
-                    && isDimLossPreviewColor(rightR, rightG, rightB)) {
-                direction = Direction.LOSS;
-                internal = boundary;
-                finalBoundary = neutral.score >= 8 ? neutral.position : trackWidth;
-            } else {
-                finalBoundary = boundary;
-            }
-        }
-
-        int classifiedInternal = internal;
-        int classifiedFinal = finalBoundary;
-
-        // The wide windows above are deliberately robust enough to classify a
-        // preview in gradients and bloom.  They also move a short edge several
-        // pixels outwards.  Once its kind is known, relocate each edge with a
-        // small local comparison; this preserves the robust classification but
-        // measures the actual filled length.
-        if (direction == Direction.GAIN) {
-            if (internal > 0) {
-                internal = refineBoundary(r, g, b, luminance, saturation, internal,
-                        trackWidth, BoundaryKind.GAIN_START);
-            }
-            if (finalBoundary < trackWidth) {
-                finalBoundary = refineBoundary(r, g, b, luminance, saturation, finalBoundary,
-                        trackWidth, BoundaryKind.GAIN_END);
-            }
-        } else if (direction == Direction.LOSS) {
-            // The wide windows above classify a dim translucent preview reliably,
-            // but place its first edge several pixels inside the normal fill. Once
-            // LOSS is established, sharpen that edge with a local discontinuity;
-            // restricting the search around the classified edge keeps the normal
-            // in-game gradient from becoming a second candidate.
-            if (internal > 0) {
-                internal = refineBoundary(r, g, b, luminance, saturation, internal,
-                        trackWidth, BoundaryKind.LOSS_START);
-            }
-            if (finalBoundary < trackWidth) {
-                finalBoundary = refineBoundary(r, g, b, luminance, saturation, finalBoundary,
-                        trackWidth, BoundaryKind.LOSS_END);
-            }
-        } else if (finalBoundary < trackWidth) {
-            finalBoundary = refineBoundary(r, g, b, luminance, saturation, finalBoundary,
-                    trackWidth, BoundaryKind.NORMAL_END);
-        }
-
-        // Refinement is allowed to sharpen an observed edge, but never to invert
-        // the two already classified physical boundaries. During a one-frame
-        // animation blend the two local extrema can cross; retain the ordered
-        // coarse observations for that frame instead of reporting an impossible
-        // loss that increases stamina (or a gain that decreases it).
-        if ((direction == Direction.LOSS && internal > finalBoundary)
-                || (direction == Direction.GAIN && internal > finalBoundary)) {
-            internal = classifiedInternal;
-            finalBoundary = classifiedFinal;
-        }
-
-        int currentBoundary;
-        int afterBoundary;
-        if (direction == Direction.GAIN) {
-            currentBoundary = internal;
-            afterBoundary = finalBoundary;
-        } else if (direction == Direction.LOSS) {
-            currentBoundary = finalBoundary;
-            afterBoundary = internal;
-        } else {
-            currentBoundary = finalBoundary;
-            afterBoundary = finalBoundary;
-        }
-        int current = valueForBoundary(currentBoundary, trackWidth);
-        int after = valueForBoundary(afterBoundary, trackWidth);
-        float confidence = (float) Math.min(0.99, 0.72 + Math.max(gain.score, loss.score) / 500.0);
-        return new Result(current, after, direction,
-                new Anchor(left / (float) screenWidth, centerY / (float) screenWidth), confidence);
-    }
-
-    private static Edge findNeutralBoundary(double[] r, double[] g, double[] b,
-                                            double[] luminance, double[] saturation,
-                                            int firstPoint, int trackWidth,
-                                            int window, int gap) {
-        Edge neutral = new Edge(-1e9, -1);
-        int first = Math.max(firstPoint, window + gap);
-        for (int point = first; point <= trackWidth - window - gap; point++) {
-            int leftStart = point - gap - window;
-            int leftEnd = point - gap;
-            int rightStart = point + gap;
-            int rightEnd = point + gap + window;
-            double rightLight = mean(luminance, rightStart, rightEnd);
-            double rightSat = mean(saturation, rightStart, rightEnd);
-            // Pixels beyond the observed track can belong to dark scenery. Such
-            // an edge is not a preview-to-neutral boundary inside the track.
-            if (rightLight < 58 || rightLight > 135 || rightSat > 25
-                    || minimum(luminance, rightStart, rightEnd) < 50) {
-                continue;
-            }
-            double deltaSat = mean(saturation, leftStart, leftEnd) - rightSat;
-            double distance = vectorDistance(
-                    mean(r, leftStart, leftEnd), mean(g, leftStart, leftEnd),
-                    mean(b, leftStart, leftEnd), mean(r, rightStart, rightEnd),
-                    mean(g, rightStart, rightEnd), mean(b, rightStart, rightEnd));
-            double score = deltaSat + 0.20 * distance;
-            if (score > neutral.score) neutral = new Edge(score, point);
-        }
-        return neutral;
-    }
-
-    private static int refineBoundary(double[] r, double[] g, double[] b,
-                                      double[] luminance, double[] saturation,
-                                      int approximate, int trackWidth, BoundaryKind kind) {
-        int microWindow = Math.max(2, (int) Math.round(trackWidth * 0.006));
-        int searchRadius = Math.max(6, (int) Math.round(trackWidth * 0.030));
-        int first = Math.max(microWindow, approximate - searchRadius);
-        int last = Math.min(trackWidth - microWindow, approximate + searchRadius);
-        if (first > last) return approximate;
-
-        Edge best = new Edge(-1e9, approximate);
-        for (int boundary = first; boundary <= last; boundary++) {
-            int leftStart = boundary - microWindow;
-            int rightEnd = boundary + microWindow;
-            double leftLight = mean(luminance, leftStart, boundary);
-            double rightLight = mean(luminance, boundary, rightEnd);
-            double leftSat = mean(saturation, leftStart, boundary);
-            double rightSat = mean(saturation, boundary, rightEnd);
-            double distance = vectorDistance(
-                    mean(r, leftStart, boundary), mean(g, leftStart, boundary),
-                    mean(b, leftStart, boundary), mean(r, boundary, rightEnd),
-                    mean(g, boundary, rightEnd), mean(b, boundary, rightEnd));
-            double deltaLight = rightLight - leftLight;
-            double deltaSat = rightSat - leftSat;
-            double score;
-            switch (kind) {
-                case GAIN_START:
-                    score = deltaLight - 0.25 * deltaSat + 0.10 * distance;
-                    break;
-                case GAIN_END:
-                    score = -deltaLight + 0.15 * deltaSat + 0.10 * distance;
-                    break;
-                case LOSS_START:
-                    score = -deltaLight - 0.25 * deltaSat + 0.10 * distance;
-                    break;
-                case LOSS_END:
-                    score = deltaLight - deltaSat + 0.10 * distance;
-                    break;
-                case NORMAL_END:
-                default:
-                    score = -deltaLight - 0.25 * deltaSat + 0.10 * distance;
-                    break;
-            }
-            if (score > best.score) best = new Edge(score, boundary);
-        }
-        return best.position;
-    }
-
-    private static int valueForBoundary(int boundary, int trackWidth) {
-        return (int) Math.round(clamp(boundary, 0, trackWidth) * 100.0 / trackWidth);
-    }
-
-    private static double[] smooth(double[] values, int radius) {
-        double[] prefix = new double[values.length + 1];
-        for (int index = 0; index < values.length; index++) prefix[index + 1] = prefix[index] + values[index];
-        double[] result = new double[values.length];
-        for (int index = 0; index < values.length; index++) {
-            int start = Math.max(0, index - radius);
-            int end = Math.min(values.length, index + radius + 1);
-            result[index] = (prefix[end] - prefix[start]) / (end - start);
+            result[i] = sum / size;
         }
         return result;
     }
-
-    private static double mean(double[] values, int start, int end) {
-        start = clamp(start, 0, values.length);
-        end = clamp(end, start, values.length);
-        if (end <= start) return 0.0;
-        double sum = 0.0;
-        for (int index = start; index < end; index++) sum += values[index];
-        return sum / (end - start);
-    }
-
-    private static double medianValue(double[] values, int start, int end) {
-        start = clamp(start, 0, values.length);
-        end = clamp(end, start, values.length);
-        if (end <= start) return 0.0;
-        double[] copy = Arrays.copyOfRange(values, start, end);
-        Arrays.sort(copy);
-        return copy[copy.length / 2];
-    }
-
-    private static double minimum(double[] values, int start, int end) {
-        start = clamp(start, 0, values.length);
-        end = clamp(end, start, values.length);
-        if (end <= start) return 0.0;
-        double result = Double.POSITIVE_INFINITY;
-        for (int index = start; index < end; index++) result = Math.min(result, values[index]);
-        return result;
-    }
-
-    private static double meanDifference(double[] left, double[] right, int start, int end) {
-        return mean(left, start, end) - mean(right, start, end);
-    }
-
-    private static boolean isGaugeColor(int color) {
-        int r = red(color);
-        int g = green(color);
-        int b = blue(color);
-        int maximum = Math.max(r, Math.max(g, b));
-        int minimum = Math.min(r, Math.min(g, b));
-        // The translucent HUD inherits a slight green cast from bright scenery.
-        // Real fill colors remain strongly chromatic even in compressed captures.
-        boolean normalFill = g >= 65 && g - r >= 7 && g - b >= -22
-                && maximum - minimum >= 35;
-        // A recovery preview is lime at its first edge but fades through yellow
-        // as it approaches the full cap. Requiring green to stay above red cut
-        // that pale-yellow tail off and made the shortened run look like 100%,
-        // inflating the measured current value. Keep the yellow family narrow:
-        // green may only trail red slightly and must remain well above blue.
-        boolean gainPreview = r >= 90 && g >= 145 && g - r >= -8
-                && g - b >= 35 && maximum - minimum >= 35;
-        return normalFill || gainPreview;
-    }
-
-    private static int red(int color) { return (color >>> 16) & 0xff; }
-    private static int green(int color) { return (color >>> 8) & 0xff; }
-    private static int blue(int color) { return color & 0xff; }
-    private static double brightness(int color) { return (red(color) + green(color) + blue(color)) / 3.0; }
-    private static double colorDistance(int first, int second) {
-        return (Math.abs(red(first) - red(second))
-                + Math.abs(green(first) - green(second))
-                + Math.abs(blue(first) - blue(second))) / 3.0;
-    }
-    private static double colorVectorDistance(int first, int second) {
-        return vectorDistance(red(first), green(first), blue(first),
-                red(second), green(second), blue(second));
-    }
-
-    private static double vectorDistance(double r1, double g1, double b1,
-                                         double r2, double g2, double b2) {
-        double dr = r1 - r2;
-        double dg = g1 - g2;
-        double db = b1 - b2;
-        return Math.sqrt(dr * dr + dg * dg + db * db);
-    }
-
-    private static int clamp(int value, int minimum, int maximum) {
-        return Math.max(minimum, Math.min(maximum, value));
-    }
-
-    private static final class PixelSource {
-        final Region region;
-        final int[] pixels;
-        PixelSource(Region region, int[] pixels) { this.region = region; this.pixels = pixels; }
-        int get(int x, int y) {
-            if (!contains(x, y)) return 0xff000000;
-            return pixels[(y - region.top) * region.width + x - region.left];
+    private static final class Crop {
+        final int screenWidth, x0, width, height;
+        final float[][][] data;
+        Crop(int screenWidth, Region region, int[] pixels) {
+            this.screenWidth = screenWidth;
+            x0 = Math.max(region.left, (int) (screenWidth * SEARCH_LEFT));
+            width = Math.max(0, Math.min(region.left + region.width, (int) Math.ceil(screenWidth * SEARCH_RIGHT)) - x0);
+            height = Math.min(region.height, Math.max(64, (int) Math.ceil(screenWidth * SEARCH_BOTTOM)));
+            data = new float[height][width][3];
+            for (int y = 0; y < height; y++) for (int x = 0; x < width; x++) {
+                int color = pixels[y * region.width + x + x0 - region.left];
+                data[y][x][0] = (color >>> 16) & 255;
+                data[y][x][1] = (color >>> 8) & 255;
+                data[y][x][2] = color & 255;
+            }
         }
-        boolean contains(int x, int y) {
-            return x >= region.left && x < region.left + region.width
-                    && y >= region.top && y < region.top + region.height;
-        }
+        float get(int y, int x, int channel) { return data[y][x][channel]; }
+        float[] color(int y, int x) { return data[y][x]; }
     }
-
-    private static final class Candidate {
+    private static final class Proposal {
         final double score;
-        final int left;
-        final int colorEnd;
-        final int right;
-        final int top;
-        final int bottom;
-        final boolean empty;
-        final boolean hasNeutralTail;
-        final int observedLeft;
-        final MaskKind kind;
-        final int lossStart;
-
-        Candidate(double score, int left, int colorEnd, int right,
-                  int top, int bottom, boolean empty, boolean hasNeutralTail,
-                  int observedLeft, MaskKind kind, int lossStart) {
-            this.score = score;
-            this.left = left;
-            this.colorEnd = colorEnd;
-            this.right = right;
-            this.top = top;
-            this.bottom = bottom;
-            this.empty = empty;
-            this.hasNeutralTail = hasNeutralTail;
-            this.observedLeft = observedLeft;
-            this.kind = kind;
-            this.lossStart = lossStart;
+        final int top, bottom, left, right;
+        Proposal(double score, int top, int bottom, int left, int right) {
+            this.score = score; this.top = top; this.bottom = bottom; this.left = left; this.right = right;
         }
     }
-
-    private static final class Run {
-        final int start;
-        final int end;
-        Run(int start, int end) { this.start = start; this.end = end; }
+    private static final class Segment {
+        double left, right;
+        final float[] color;
+        char kind;
+        boolean edgeBlend;
+        final float edge, luminance;
+        final boolean valid;
+        Segment(double left, double right, float[] color, char kind, float edge, boolean valid) {
+            this.left = left; this.right = right; this.color = color; this.kind = kind;
+            this.edge = edge; this.valid = valid; this.luminance = luma(color);
+        }
+        Segment copy() { Segment copy = new Segment(left, right, color, kind, edge, valid); copy.edgeBlend = edgeBlend; return copy; }
     }
-
-    private static final class StableBand {
-        final int top;
-        final int bottom;
-        final int[] starts;
-        final int[] ends;
-        final int observedTop;
-        final int observedBottom;
-
-        StableBand(int top, int bottom, int[] starts, int[] ends,
-                   int observedTop, int observedBottom) {
-            this.top = top;
-            this.bottom = bottom;
-            this.starts = starts;
-            this.ends = ends;
-            this.observedTop = observedTop;
-            this.observedBottom = observedBottom;
+    private static final class Start {
+        final int y; final double x;
+        Start(int y, double x) { this.y = y; this.x = x; }
+    }
+    private static final class Geometry {
+        final double score, left, right;
+        final int top, bottom, x0;
+        final List<Segment> chain;
+        final float[] headColor;
+        final float[][] profile;
+        Geometry(double score, int top, int bottom, double left, double right,
+                 int x0, List<Segment> chain, float[] headColor, float[][] profile) {
+            this.score = score; this.top = top; this.bottom = bottom; this.left = left;
+            this.right = right; this.x0 = x0; this.chain = chain; this.headColor = headColor; this.profile = profile;
         }
     }
-
-    private static final class Tail {
-        final int start;
-        final int end;
-        final boolean hasNeutral;
-        Tail(int start, int end, boolean hasNeutral) {
-            this.start = start;
-            this.end = end;
-            this.hasNeutral = hasNeutral;
-        }
+    private static final class TailExtension {
+        final double right; final float[][] profile;
+        TailExtension(double right, float[][] profile) { this.right = right; this.profile = profile; }
     }
-
-    private static final class Edge {
-        final double score;
-        final int position;
-        Edge(double score, int position) { this.score = score; this.position = position; }
+    private static final class MaterialProjection {
+        final List<Segment> chain; final float[][] profile;
+        MaterialProjection(List<Segment> chain, float[][] profile) { this.chain = chain; this.profile = profile; }
     }
-
-    private enum MaskKind { GAUGE, LOSS_PREVIEW, NEUTRAL }
-    private enum BoundaryKind { GAIN_START, GAIN_END, LOSS_START, LOSS_END, NORMAL_END }
 }
