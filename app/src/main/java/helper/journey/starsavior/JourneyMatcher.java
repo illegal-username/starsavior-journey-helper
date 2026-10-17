@@ -59,12 +59,12 @@ public final class JourneyMatcher {
             // Choices remain the primary signal. The title bonus only separates
             // events whose choices are equal or nearly equal, so a noisy title
             // cannot overpower an otherwise clear choice group.
-            double rankScore = choiceEvaluation.score + eventScore * 0.12;
+            double rankScore = choiceEvaluation.evidenceScore + eventScore * 0.12;
             double confidence = hasEventSignal
                     ? choiceEvaluation.score * 0.75 + eventScore * 0.25
                     : choiceEvaluation.score;
             ranked.add(new ScoredEvent(event, rankScore, Math.min(1.0, confidence), eventScore,
-                    choiceEvaluation.score, choiceEvaluation.scores));
+                    choiceEvaluation.score, choiceEvaluation.evidenceScore, choiceEvaluation.scores));
         }
 
         ranked.sort(Comparator.comparingDouble((ScoredEvent value) -> value.combined).reversed());
@@ -79,7 +79,7 @@ public final class JourneyMatcher {
 
         boolean closeChoiceCompetitor = second != null
                 && second.choice >= MIN_CHOICE_CONFIDENCE
-                && best.choice - second.choice < CLOSE_CHOICE_MARGIN;
+                && best.choiceEvidence - second.choiceEvidence < CLOSE_CHOICE_MARGIN;
         boolean eventSeparates = second == null
                 || best.event - second.event >= EVENT_SEPARATION_MARGIN;
         boolean combinedSeparates = second == null
@@ -131,7 +131,10 @@ public final class JourneyMatcher {
             double average = total / event.choices.size();
             double coverage = covered / (double) event.choices.size();
             double orderBonus = isMostlyInOrder(bestIndices) ? 0.025 : 0.0;
-            double score = Math.min(1.0, average * 0.78 + coverage * 0.22 + orderBonus);
+            // Preserve the full evidence for ranking and separation. Clipping the
+            // order bonus at 1.0 erases part of an exact group's lead over a group
+            // with a different word. Only the reported confidence is capped.
+            double score = average * 0.78 + coverage * 0.22 + orderBonus;
             // One shared action must not identify an otherwise unrelated screen.
             // A title bonus cannot replace evidence for the other choices.
             if (covered < Math.min(2, event.choices.size())) {
@@ -289,10 +292,12 @@ public final class JourneyMatcher {
 
     private static final class ChoiceEvaluation {
         final double score;
+        final double evidenceScore;
         final List<Double> scores;
 
         ChoiceEvaluation(double score, List<Double> scores) {
-            this.score = score;
+            this.score = Math.min(1.0, score);
+            this.evidenceScore = score;
             this.scores = scores;
         }
     }
@@ -303,15 +308,17 @@ public final class JourneyMatcher {
         final double confidence;
         final double event;
         final double choice;
+        final double choiceEvidence;
         final List<Double> choiceScores;
 
         ScoredEvent(JourneyModels.Event eventData, double combined, double confidence, double event,
-                    double choice, List<Double> choiceScores) {
+                    double choice, double choiceEvidence, List<Double> choiceScores) {
             this.eventData = eventData;
             this.combined = combined;
             this.confidence = confidence;
             this.event = event;
             this.choice = choice;
+            this.choiceEvidence = choiceEvidence;
             this.choiceScores = choiceScores;
         }
     }

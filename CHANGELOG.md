@@ -1,5 +1,15 @@
 # 변경 기록
 
+## 2.2.14 · 2026-10-17
+
+### 한국어
+
+- 문구가 비슷한 일부 여정 이벤트에서 보상이 표시되지 않던 문제를 수정했습니다.
+
+### English
+
+- Fixed missing reward results for some journey events with similar wording.
+
 ## 2.2.13 · 2026-10-08
 
 ### 한국어
