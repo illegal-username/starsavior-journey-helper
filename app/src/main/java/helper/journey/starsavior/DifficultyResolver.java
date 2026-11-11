@@ -13,7 +13,6 @@ import java.util.regex.Pattern;
 /** Resolves a matched event's difficulty from its own per-difficulty conditions. */
 final class DifficultyResolver {
     private static final Pattern NUMBER = Pattern.compile("(?<!\\d)(\\d{1,6})(?!\\d)");
-    private static final Pattern DIFFICULTY_SEPARATOR = Pattern.compile("[/,·\\s]+");
     private static final double MIN_CHOICE_SIMILARITY = 0.46;
     private static final int MAX_NUMBER_DISTANCE = 2;
 
@@ -79,10 +78,7 @@ final class DifficultyResolver {
         Set<String> result = new LinkedHashSet<>();
         for (JourneyModels.Choice choice : event.choices) {
             for (JourneyModels.Outcome outcome : choice.outcomes) {
-                for (String candidate : DIFFICULTY_SEPARATOR.split(outcome.difficulty)) {
-                    String trimmed = candidate.trim();
-                    if (!trimmed.isEmpty()) result.add(trimmed);
-                }
+                result.addAll(JourneyModels.Outcome.difficultyNames(outcome.difficulty));
             }
         }
         return new ArrayList<>(result);
@@ -96,8 +92,8 @@ final class DifficultyResolver {
         for (JourneyModels.Outcome outcome : choice.outcomes) {
             Set<Integer> numbers = numbers(outcome.condition);
             if (numbers.isEmpty()) continue;
-            for (String candidate : DIFFICULTY_SEPARATOR.split(outcome.difficulty)) {
-                Set<Integer> target = result.get(candidate.trim());
+            for (String candidate : JourneyModels.Outcome.difficultyNames(outcome.difficulty)) {
+                Set<Integer> target = result.get(candidate);
                 if (target != null) target.addAll(numbers);
             }
         }

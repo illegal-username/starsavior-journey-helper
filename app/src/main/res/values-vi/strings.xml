@@ -51,7 +51,7 @@
     <string name="update_busy_ellipsis">"Đang cập nhật CSDL…"</string>
     <string name="app_update_required">"Cần cập nhật ứng dụng"</string>
     <string name="get_new_db">"Tải CSDL mới"</string>
-    <string name="update_error_detail">"Dữ liệu mới chưa được áp dụng. CSDL hiện tại được giữ nguyên. Kiểm tra kết nối và máy chủ CSDL rồi thử lại.\n\n"</string>
+    <string name="update_error_detail">"Dữ liệu mới chưa được áp dụng. CSDL hiện tại được giữ nguyên. Kiểm tra kết nối và máy chủ CSDL rồi thử lại."</string>
     <string name="overlay_allowed">"Đã cho phép hiển thị trên ứng dụng khác"</string>
     <string name="overlay_required">"Cần quyền hiển thị trên ứng dụng khác"</string>
     <string name="capture_running">"Đang đọc màn hình"</string>
@@ -118,7 +118,7 @@
     <string name="checking_latest">"Đang kiểm tra phiên bản mới nhất…"</string>
     <string name="reload_failed">"Không thể tải lại CSDL"</string>
     <string name="keep_existing_data">"Tiếp tục dùng dữ liệu hiện có."</string>
-    <string name="overlay_update_error_detail">"CSDL hiện tại được giữ nguyên. Kiểm tra kết nối và máy chủ CSDL rồi thử lại.\n\n"</string>
+    <string name="overlay_update_error_detail">"CSDL hiện tại được giữ nguyên. Kiểm tra kết nối và máy chủ CSDL rồi thử lại."</string>
     <string name="arcana_unknown">"Chưa xác định ảnh Arcana · Hiển thị mọi kết quả"</string>
     <string name="arcana_detected">"Arcana được nhận dạng: %1$s"</string>
     <string name="update_current">"CSDL đã mới nhất. (%1$,d mục · %2$,d lựa chọn)"</string>

@@ -668,11 +668,7 @@ public final class MainActivity extends Activity {
     }
 
     private String friendlyUpdateError(Exception error) {
-        int messageId = JourneyDatabaseUpdater.errorMessageId(error);
-        if (messageId != 0) return getString(messageId);
-        String detail = error.getMessage();
-        if (detail == null || detail.trim().isEmpty()) detail = error.getClass().getSimpleName();
-        return getString(R.string.update_error_detail) + detail;
+        return getString(JourneyDatabaseUpdater.userMessageId(error, R.string.update_error_detail));
     }
 
     private void refreshStatus() {

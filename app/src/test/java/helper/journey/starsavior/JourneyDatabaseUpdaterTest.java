@@ -21,6 +21,20 @@ import static org.junit.Assert.assertTrue;
 
 public class JourneyDatabaseUpdaterTest {
     @Test
+    public void userMessagesAreLocalizedResourcesForEveryFailureKind() {
+        int fallback = R.string.overlay_update_error_detail;
+        assertEquals(R.string.update_metadata_unavailable, JourneyDatabaseUpdater.userMessageId(
+                new JourneyDatabaseUpdater.MetadataUnavailableException(), fallback));
+        assertEquals(R.string.update_validation_failed, JourneyDatabaseUpdater.userMessageId(
+                new JSONException("Downloaded database SHA-256 differs from the manifest."), fallback));
+        // Network and unexpected failures use the caller's localized guidance, never raw text.
+        assertEquals(fallback, JourneyDatabaseUpdater.userMessageId(
+                new java.net.UnknownHostException("starsavior-journey-data.pages.dev"), fallback));
+        assertEquals(fallback, JourneyDatabaseUpdater.userMessageId(
+                new IllegalStateException("unexpected"), fallback));
+    }
+
+    @Test
     public void usesCanonicalPagesDatabaseUrl() {
         assertEquals(
                 "https://starsavior-journey-data.pages.dev/journey_choices.json",

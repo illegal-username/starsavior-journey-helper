@@ -845,15 +845,6 @@ final class StaminaGaugeDetector {
         }
         return result;
     }
-    private static float[][] meanRows(Crop a, int first, int end) {
-        first = Math.max(0, first); end = Math.min(a.height, end);
-        float[][] result = new float[a.width][3];
-        for (int x = 0; x < a.width; x++) for (int c = 0; c < 3; c++) {
-            for (int y = first; y < end; y++) result[x][c] += a.get(y, x, c);
-            result[x][c] /= Math.max(1, end - first);
-        }
-        return result;
-    }
     private static float[] medianRow(Crop a, int y, int first, int end) {
         float[] result = new float[3], samples = new float[Math.max(1, end - first)];
         for (int c = 0; c < 3; c++) {

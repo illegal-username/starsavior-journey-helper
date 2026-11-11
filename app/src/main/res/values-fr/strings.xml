@@ -51,7 +51,7 @@
     <string name="update_busy_ellipsis">"Mise à jour de la base…"</string>
     <string name="app_update_required">"Mise à jour de l’application requise"</string>
     <string name="get_new_db">"Obtenir la nouvelle base"</string>
-    <string name="update_error_detail">"Les nouvelles données n’ont pas été appliquées. Votre base actuelle est conservée. Vérifiez votre connexion et le serveur, puis réessayez.\n\n"</string>
+    <string name="update_error_detail">"Les nouvelles données n’ont pas été appliquées. Votre base actuelle est conservée. Vérifiez votre connexion et le serveur, puis réessayez."</string>
     <string name="overlay_allowed">"Affichage par-dessus les applications autorisé"</string>
     <string name="overlay_required">"Autorisation d’affichage par-dessus les applications requise"</string>
     <string name="capture_running">"Lecture d’écran active"</string>
@@ -118,7 +118,7 @@
     <string name="checking_latest">"Recherche de la dernière version…"</string>
     <string name="reload_failed">"Impossible de recharger la base"</string>
     <string name="keep_existing_data">"Les données actuelles restent utilisées."</string>
-    <string name="overlay_update_error_detail">"Votre base actuelle a été conservée. Vérifiez votre connexion et le serveur, puis réessayez.\n\n"</string>
+    <string name="overlay_update_error_detail">"Votre base actuelle a été conservée. Vérifiez votre connexion et le serveur, puis réessayez."</string>
     <string name="arcana_unknown">"Image Arcana non confirmée · Tous les résultats affichés"</string>
     <string name="arcana_detected">"Arcana détecté : %1$s"</string>
     <string name="update_current">"La base est à jour. (%1$,d entrées · %2$,d choix)"</string>

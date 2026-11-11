@@ -51,7 +51,7 @@
     <string name="update_busy_ellipsis">"正在更新DB…"</string>
     <string name="app_update_required">"需要更新應用程式"</string>
     <string name="get_new_db">"下載新版DB"</string>
-    <string name="update_error_detail">"未套用新資料，目前的DB維持不變。請確認網路連線與DB發布伺服器狀態後重試。\n\n"</string>
+    <string name="update_error_detail">"未套用新資料，目前的DB維持不變。請確認網路連線與DB發布伺服器狀態後重試。"</string>
     <string name="overlay_allowed">"已允許顯示在其他應用程式上層"</string>
     <string name="overlay_required">"需要顯示在其他應用程式上層的權限"</string>
     <string name="capture_running">"正在讀取畫面"</string>
@@ -118,7 +118,7 @@
     <string name="checking_latest">"正在確認最新版本…"</string>
     <string name="reload_failed">"DB重新讀取失敗"</string>
     <string name="keep_existing_data">"將繼續使用原有資料。"</string>
-    <string name="overlay_update_error_detail">"已保留目前的DB。請確認網路連線與DB發布伺服器狀態後重試。\n\n"</string>
+    <string name="overlay_update_error_detail">"已保留目前的DB。請確認網路連線與DB發布伺服器狀態後重試。"</string>
     <string name="arcana_unknown">"無法判別阿爾克那影像 · 顯示所有結果"</string>
     <string name="arcana_detected">"偵測到的阿爾克那：%1$s"</string>
     <string name="update_current">"DB已是最新版本。（%1$,d筆記錄 · %2$,d個選項）"</string>

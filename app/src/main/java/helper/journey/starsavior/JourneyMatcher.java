@@ -69,7 +69,6 @@ public final class JourneyMatcher {
 
         ranked.sort(Comparator.comparingDouble((ScoredEvent value) -> value.combined).reversed());
         ScoredEvent best = ranked.isEmpty() ? null : ranked.get(0);
-        ScoredEvent second = ranked.size() < 2 ? null : ranked.get(1);
 
         if (best == null) {
             return new JourneyModels.Match(null, 0.0, 0.0, 0.0,
@@ -77,16 +76,13 @@ public final class JourneyMatcher {
                     new ArrayList<>(recognizedChoiceLines), List.of());
         }
 
-        boolean closeChoiceCompetitor = second != null
-                && second.choice >= MIN_CHOICE_CONFIDENCE
-                && best.choiceEvidence - second.choiceEvidence < CLOSE_CHOICE_MARGIN;
-        boolean eventSeparates = second == null
-                || best.event - second.event >= EVENT_SEPARATION_MARGIN;
-        boolean combinedSeparates = second == null
-                || best.combined - second.combined >= COMBINED_SEPARATION_MARGIN;
-        boolean strongEventEvidence = best.event >= STRONG_EVENT_SIGNAL
-                && eventSeparates && combinedSeparates;
-        boolean ambiguous = closeChoiceCompetitor && !strongEventEvidence;
+        // Rank uses title evidence, but closeness is a choice property. A third
+        // event with a better-fitting title must not hide a close choice group
+        // ranked below it, so every lower candidate is checked the same way.
+        boolean ambiguous = false;
+        for (int index = 1; index < ranked.size() && !ambiguous; index++) {
+            ambiguous = competes(best, ranked.get(index));
+        }
         boolean eventNameUsed = !eventCandidates.isEmpty() && best.event >= MIN_EVENT_SIGNAL;
 
         List<JourneyModels.MatchCandidate> diagnostics = new ArrayList<>();
@@ -98,6 +94,16 @@ public final class JourneyMatcher {
         return new JourneyModels.Match(best.eventData, best.confidence, best.event, best.choice,
                 eventNameUsed, ambiguous, new ArrayList<>(recognizedEventLines),
                 new ArrayList<>(recognizedChoiceLines), best.choiceScores, diagnostics);
+    }
+
+    /** A close choice group stays ambiguous unless the title clearly separates it. */
+    private static boolean competes(ScoredEvent best, ScoredEvent other) {
+        boolean closeChoice = other.choice >= MIN_CHOICE_CONFIDENCE
+                && best.choiceEvidence - other.choiceEvidence < CLOSE_CHOICE_MARGIN;
+        boolean titleSeparates = best.event >= STRONG_EVENT_SIGNAL
+                && best.event - other.event >= EVENT_SEPARATION_MARGIN
+                && best.combined - other.combined >= COMBINED_SEPARATION_MARGIN;
+        return closeChoice && !titleSeparates;
     }
 
     private ChoiceEvaluation scoreChoices(JourneyModels.Event event, List<Candidate> candidates) {

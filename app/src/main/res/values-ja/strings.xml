@@ -51,7 +51,7 @@
     <string name="update_busy_ellipsis">"DB更新中…"</string>
     <string name="app_update_required">"アプリ更新が必要"</string>
     <string name="get_new_db">"新しいDBを取得"</string>
-    <string name="update_error_detail">"新しいデータは適用していません。現在のDBを保持しています。通信接続と配信サーバーの状態を確認して、再試行してください。\n\n"</string>
+    <string name="update_error_detail">"新しいデータは適用していません。現在のDBを保持しています。通信接続と配信サーバーの状態を確認して、再試行してください。"</string>
     <string name="overlay_allowed">"他のアプリの上への表示を許可済み"</string>
     <string name="overlay_required">"他のアプリの上に表示する権限が必要"</string>
     <string name="capture_running">"画面読み取り中"</string>
@@ -118,7 +118,7 @@
     <string name="checking_latest">"最新バージョンを確認中…"</string>
     <string name="reload_failed">"DBの再読み込みに失敗"</string>
     <string name="keep_existing_data">"既存のデータを引き続き使用します。"</string>
-    <string name="overlay_update_error_detail">"現在のDBを保持しました。通信接続と配信サーバーの状態を確認して、再試行してください。\n\n"</string>
+    <string name="overlay_update_error_detail">"現在のDBを保持しました。通信接続と配信サーバーの状態を確認して、再試行してください。"</string>
     <string name="arcana_unknown">"アルカナ画像を判別できません · 全結果を表示"</string>
     <string name="arcana_detected">"検出したアルカナ：%1$s"</string>
     <string name="update_current">"DBは最新です。（%1$,d件 · 選択肢%2$,d件）"</string>

@@ -33,6 +33,18 @@ import org.robolectric.shadows.ShadowSettings;
 @Config(sdk = {28, 35}, qualifiers = "w960dp-h360dp-land-mdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 public final class OverlayRaidStaminaTest {
+    @Test public void staminaHistoryNeverCrossesAFrameSizeChange() {
+        StaminaGaugeDetector.Result previous = new StaminaGaugeDetector.Result(
+                40, 40, StaminaGaugeDetector.Direction.NONE,
+                new StaminaGaugeDetector.Anchor(.2f, .03f), .5f);
+        OverlayCaptureService.StaminaHistory history =
+                new OverlayCaptureService.StaminaHistory(2400, 1080, previous);
+        assertSame(history, OverlayCaptureService.StaminaHistory.forFrame(history, 2400, 1080));
+        // Rotation or a captured-content resize: prior anchor/value must not apply.
+        assertNull(OverlayCaptureService.StaminaHistory.forFrame(history, 1080, 2400));
+        assertNull(OverlayCaptureService.StaminaHistory.forFrame(history, 2400, 1000));
+    }
+
     @Test public void regionalAndFullRaidRecognitionKeepCurrentAndPreviewStamina() throws Exception {
         for (StaminaGaugeDetector.Direction direction : StaminaGaugeDetector.Direction.values()) {
             OverlayCaptureService service = service();

@@ -74,6 +74,7 @@ class VerifyTest(unittest.TestCase):
     def test_fingerprint_changes_for_new_edited_and_deleted_source(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
             source = root / "new.py"
             with patch.object(verify, "ROOT", root), \
                     patch.object(verify.subprocess, "check_output", return_value=b"new.py\0"):
@@ -85,6 +86,22 @@ class VerifyTest(unittest.TestCase):
                 source.unlink()
                 self.assertEqual(absent, verify.fingerprint())
         self.assertEqual(3, len({absent, first, second}))
+
+    def test_fingerprint_ignores_checkout_line_endings_only(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            (root / ".gitattributes").write_bytes(b"* text=auto\n")
+            source = root / "Source.java"
+            with patch.object(verify, "ROOT", root):
+                source.write_bytes(b"class A {\n}\n")
+                lf = verify.fingerprint()
+                source.write_bytes(b"class A {\r\n}\r\n")
+                crlf = verify.fingerprint()
+                source.write_bytes(b"class B {\r\n}\r\n")
+                edited = verify.fingerprint()
+        self.assertEqual(lf, crlf)
+        self.assertNotEqual(lf, edited)
 
 
 if __name__ == "__main__":

@@ -21,14 +21,28 @@ def git(*arguments: str) -> list[str]:
 
 
 def fingerprint() -> str:
-    paths = subprocess.check_output(
+    """Hash file contents as Git would store them.
+
+    `git hash-object` applies .gitattributes/autocrlf normalization, so a CRLF
+    checkout and an LF checkout of the same commit share one fingerprint.
+    """
+    paths = sorted(set(subprocess.check_output(
         git("ls-files", "--cached", "--others", "--exclude-standard", "-z"), cwd=ROOT
-    ).split(b"\0")
+    ).split(b"\0")) - {b""})
+    existing = [raw for raw in paths if (ROOT / raw.decode("utf-8")).is_file()]
+    blobs = {}
+    if existing:
+        hashed = subprocess.run(
+            git("hash-object", "--stdin-paths"), cwd=ROOT, check=True, capture_output=True,
+            input=b"".join(raw + b"\n" for raw in existing),
+        ).stdout.split()
+        if len(hashed) != len(existing):
+            raise RuntimeError("git hash-object returned an unexpected number of hashes")
+        blobs = dict(zip(existing, hashed))
     digest = hashlib.sha256()
-    for raw in sorted(set(paths) - {b""}):
-        path = ROOT / raw.decode("utf-8")
+    for raw in paths:
         digest.update(raw + b"\0")
-        digest.update(hashlib.sha256(path.read_bytes()).digest() if path.is_file() else b"deleted")
+        digest.update(blobs.get(raw, b"deleted") + b"\0")
     return digest.hexdigest()
 
 

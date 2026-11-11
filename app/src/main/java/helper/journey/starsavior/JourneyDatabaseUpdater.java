@@ -64,6 +64,15 @@ final class JourneyDatabaseUpdater {
         return 0;
     }
 
+    /**
+     * Shows only localized guidance. Exception text is English and technical;
+     * it stays in AppDiagnostics, which the user can copy for a report.
+     */
+    static int userMessageId(Exception error, int fallbackId) {
+        int specific = errorMessageId(error);
+        return specific != 0 ? specific : fallbackId;
+    }
+
     static final class CheckResult {
         final boolean available;
         final boolean incompatible;

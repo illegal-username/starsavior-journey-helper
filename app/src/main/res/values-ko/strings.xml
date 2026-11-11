@@ -51,7 +51,7 @@
     <string name="update_busy_ellipsis">"DB 업데이트 중…"</string>
     <string name="app_update_required">"앱 업데이트 필요"</string>
     <string name="get_new_db">"새 DB 받기"</string>
-    <string name="update_error_detail">"새 데이터는 적용하지 않았으며 현재 DB는 그대로입니다. 인터넷 연결과 DB 배포 서버 상태를 확인한 뒤 다시 시도해 주세요.\n\n"</string>
+    <string name="update_error_detail">"새 데이터는 적용하지 않았으며 현재 DB는 그대로입니다. 인터넷 연결과 DB 배포 서버 상태를 확인한 뒤 다시 시도해 주세요."</string>
     <string name="overlay_allowed">"다른 앱 위에 표시 허용됨"</string>
     <string name="overlay_required">"다른 앱 위에 표시 권한 필요"</string>
     <string name="capture_running">"화면 읽기 실행 중"</string>
@@ -118,7 +118,7 @@
     <string name="checking_latest">"최신 버전을 확인하고 있습니다…"</string>
     <string name="reload_failed">"DB 다시 읽기 실패"</string>
     <string name="keep_existing_data">"기존 데이터를 계속 사용합니다."</string>
-    <string name="overlay_update_error_detail">"현재 DB는 그대로 유지했습니다. 인터넷 연결과 DB 배포 서버 상태를 확인한 뒤 다시 시도해 주세요.\n\n"</string>
+    <string name="overlay_update_error_detail">"현재 DB는 그대로 유지했습니다. 인터넷 연결과 DB 배포 서버 상태를 확인한 뒤 다시 시도해 주세요."</string>
     <string name="arcana_unknown">"아르카나 이미지 판별 실패 · 전체 결과 표시"</string>
     <string name="arcana_detected">"감지된 아르카나: %1$s"</string>
     <string name="update_current">"이미 최신 DB입니다. (레코드 %1$,d개 · 선택지 %2$,d개)"</string>

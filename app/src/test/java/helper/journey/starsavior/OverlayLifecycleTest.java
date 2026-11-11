@@ -53,6 +53,20 @@ public final class OverlayLifecycleTest {
         return service;
     }
 
+    @Test public void rejectedForegroundStartStillEntersForegroundBeforeStopping() throws Exception {
+        OverlayCaptureService service = service();
+        ShadowSettings.setCanDrawOverlays(false);
+        Intent start = new Intent(service, OverlayCaptureService.class)
+                .setAction(OverlayCaptureService.ACTION_START)
+                .putExtra(OverlayCaptureService.EXTRA_RESULT_CODE, Activity.RESULT_OK)
+                .putExtra(OverlayCaptureService.EXTRA_RESULT_DATA, new Intent());
+        // Arrives via startForegroundService(); skipping startForeground() crashes the app.
+        service.onStartCommand(start, 0, 1);
+        assertNotNull(Shadows.shadowOf(service).getLastForegroundNotification());
+        assertTrue(Shadows.shadowOf(service).isStoppedBySelf());
+        service.onDestroy();
+    }
+
     @Test public void pendingBubbleMustNotReappearAfterServiceStop() throws Exception {
         OverlayCaptureService service = service();
         call(service, "showBubble", new Class[]{});
