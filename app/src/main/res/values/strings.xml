@@ -51,7 +51,7 @@
     <string name="update_busy_ellipsis">"Updating DB…"</string>
     <string name="app_update_required">"App update required"</string>
     <string name="get_new_db">"Get new DB"</string>
-    <string name="update_error_detail">"The new data was not applied. Your current DB is unchanged. Check your connection and the DB server, then try again.\n\n"</string>
+    <string name="update_error_detail">"The new data was not applied. Your current DB is unchanged. Check your connection and the DB server, then try again."</string>
     <string name="overlay_allowed">"Display over other apps allowed"</string>
     <string name="overlay_required">"Display over other apps permission needed"</string>
     <string name="capture_running">"Screen reading active"</string>
@@ -118,7 +118,7 @@
     <string name="checking_latest">"Checking for the latest version…"</string>
     <string name="reload_failed">"Could not reload the DB"</string>
     <string name="keep_existing_data">"Continuing with the existing data."</string>
-    <string name="overlay_update_error_detail">"Your current DB was kept. Check your connection and the DB server, then try again.\n\n"</string>
+    <string name="overlay_update_error_detail">"Your current DB was kept. Check your connection and the DB server, then try again."</string>
     <string name="arcana_unknown">"Arcana image unconfirmed · Showing all results"</string>
     <string name="arcana_detected">"Detected Arcana: %1$s"</string>
     <string name="update_current">"The DB is up to date. (%1$,d records · %2$,d choices)"</string>

@@ -51,7 +51,7 @@
     <string name="update_busy_ellipsis">"Actualizando BD…"</string>
     <string name="app_update_required">"Actualización de la aplicación necesaria"</string>
     <string name="get_new_db">"Obtener nueva BD"</string>
-    <string name="update_error_detail">"No se aplicaron los nuevos datos. Se conserva la BD actual. Comprueba la conexión y el servidor de la BD e inténtalo de nuevo.\n\n"</string>
+    <string name="update_error_detail">"No se aplicaron los nuevos datos. Se conserva la BD actual. Comprueba la conexión y el servidor de la BD e inténtalo de nuevo."</string>
     <string name="overlay_allowed">"Superposición sobre otras aplicaciones permitida"</string>
     <string name="overlay_required">"Se necesita permiso para mostrar sobre otras aplicaciones"</string>
     <string name="capture_running">"Lectura de pantalla activa"</string>
@@ -118,7 +118,7 @@
     <string name="checking_latest">"Comprobando la última versión…"</string>
     <string name="reload_failed">"No se pudo recargar la BD"</string>
     <string name="keep_existing_data">"Se siguen usando los datos actuales."</string>
-    <string name="overlay_update_error_detail">"Se conservó la BD actual. Comprueba la conexión y el servidor de la BD e inténtalo de nuevo.\n\n"</string>
+    <string name="overlay_update_error_detail">"Se conservó la BD actual. Comprueba la conexión y el servidor de la BD e inténtalo de nuevo."</string>
     <string name="arcana_unknown">"Imagen de Arcana sin confirmar · Se muestran todos los resultados"</string>
     <string name="arcana_detected">"Arcana detectada: %1$s"</string>
     <string name="update_current">"La BD está actualizada. (%1$,d registros · %2$,d opciones)"</string>

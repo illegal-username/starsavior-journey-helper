@@ -51,7 +51,7 @@
     <string name="update_busy_ellipsis">"Datenbank wird aktualisiert…"</string>
     <string name="app_update_required">"App-Update erforderlich"</string>
     <string name="get_new_db">"Neue Datenbank laden"</string>
-    <string name="update_error_detail">"Die neuen Daten wurden nicht übernommen. Deine aktuelle Datenbank bleibt erhalten. Prüfe die Verbindung und den Datenbankserver und versuche es erneut.\n\n"</string>
+    <string name="update_error_detail">"Die neuen Daten wurden nicht übernommen. Deine aktuelle Datenbank bleibt erhalten. Prüfe die Verbindung und den Datenbankserver und versuche es erneut."</string>
     <string name="overlay_allowed">"Einblenden über anderen Apps erlaubt"</string>
     <string name="overlay_required">"Berechtigung zum Einblenden über anderen Apps erforderlich"</string>
     <string name="capture_running">"Bildschirmlesen aktiv"</string>
@@ -118,7 +118,7 @@
     <string name="checking_latest">"Neueste Version wird geprüft…"</string>
     <string name="reload_failed">"Datenbank konnte nicht neu geladen werden"</string>
     <string name="keep_existing_data">"Die vorhandenen Daten werden weiterverwendet."</string>
-    <string name="overlay_update_error_detail">"Deine aktuelle Datenbank wurde beibehalten. Prüfe die Verbindung und den Datenbankserver und versuche es erneut.\n\n"</string>
+    <string name="overlay_update_error_detail">"Deine aktuelle Datenbank wurde beibehalten. Prüfe die Verbindung und den Datenbankserver und versuche es erneut."</string>
     <string name="arcana_unknown">"Arkana-Bild unbestätigt · Alle Ergebnisse werden angezeigt"</string>
     <string name="arcana_detected">"Erkanntes Arkana: %1$s"</string>
     <string name="update_current">"Die Datenbank ist aktuell. (%1$,d Einträge · %2$,d Optionen)"</string>

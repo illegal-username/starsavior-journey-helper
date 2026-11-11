@@ -104,8 +104,8 @@ public final class OverlayCaptureService extends Service {
     private volatile boolean destroying;
     private Runnable captureTimeout;
     private long lastPermissionRequestAt;
-    private StaminaGaugeDetector.Anchor staminaAnchor;
-    private StaminaGaugeDetector.Result lastStamina;
+    /** Written by the recognition worker; replaced atomically, never mutated. */
+    private volatile StaminaHistory staminaHistory;
 
     public static boolean isRunning() {
         return running;
@@ -206,6 +206,10 @@ public final class OverlayCaptureService extends Service {
         int resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, Activity.RESULT_CANCELED);
         Intent resultData = getProjectionIntent(intent);
         if (resultCode != Activity.RESULT_OK || resultData == null || !Settings.canDrawOverlays(this)) {
+            // ACTION_START arrives through startForegroundService(). Android requires
+            // startForeground() even when the service immediately stops, otherwise
+            // it kills the app (e.g. overlay permission revoked during the prompt).
+            startAsForeground(false);
             stopSelf();
             return START_NOT_STICKY;
         }
@@ -558,8 +562,6 @@ public final class OverlayCaptureService extends Service {
             imageReader = replacement;
             captureWidth = displayWidth;
             captureHeight = displayHeight;
-            staminaAnchor = null;
-            lastStamina = null;
         }
     }
 
@@ -699,13 +701,32 @@ public final class OverlayCaptureService extends Service {
                 full.getWidth(), full.getHeight());
         int[] pixels = new int[region.width * region.height];
         full.getPixels(pixels, 0, region.width, region.left, region.top, region.width, region.height);
+        // History applies only to a frame of the same size. Any resize path
+        // (Android 14 content resize, legacy orientation refresh) changes the
+        // dimensions, so an old HUD position can never rank the new geometry.
+        StaminaHistory history = StaminaHistory.forFrame(
+                staminaHistory, full.getWidth(), full.getHeight());
         StaminaGaugeDetector.Result detected = StaminaGaugeDetector.detect(
-                full.getWidth(), full.getHeight(), region, pixels, staminaAnchor);
+                full.getWidth(), full.getHeight(), region, pixels,
+                history == null ? null : history.result.anchor);
         if (detected == null) return null;
-        detected = detected.stabilize(lastStamina);
-        staminaAnchor = detected.anchor;
-        lastStamina = detected;
+        detected = detected.stabilize(history == null ? null : history.result);
+        staminaHistory = new StaminaHistory(full.getWidth(), full.getHeight(), detected);
         return detected;
+    }
+
+    static final class StaminaHistory {
+        final int width, height;
+        final StaminaGaugeDetector.Result result;
+
+        StaminaHistory(int width, int height, StaminaGaugeDetector.Result result) {
+            this.width = width; this.height = height; this.result = result;
+        }
+
+        static StaminaHistory forFrame(StaminaHistory history, int width, int height) {
+            return history != null && history.width == width && history.height == height
+                    ? history : null;
+        }
     }
 
     private void recognizeRegions(Bitmap eventBitmap, Bitmap choiceBitmap, Bitmap fullBitmap,
@@ -1186,9 +1207,8 @@ public final class OverlayCaptureService extends Service {
     }
 
     private String friendlyUpdateError(Exception error) {
-        String detail = error.getMessage();
-        if (detail == null || detail.trim().isEmpty()) detail = error.getClass().getSimpleName();
-        return getString(R.string.overlay_update_error_detail) + detail;
+        return getString(JourneyDatabaseUpdater.userMessageId(
+                error, R.string.overlay_update_error_detail));
     }
 
     private void showItemEvents(int generation, JourneyModels.Data snapshot, ItemDetails.Item item) {

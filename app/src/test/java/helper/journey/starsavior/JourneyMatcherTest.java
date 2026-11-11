@@ -32,6 +32,32 @@ public class JourneyMatcherTest {
         assertEquals(lines.get(0), JourneyMatcher.displayChoiceText(withAliases.choices.get(0), lines));
     }
 
+    @Test
+    public void betterTitledThirdEventDoesNotHideACloseChoiceGroup() {
+        List<String> choices = List.of("조용히 문을 두드린다", "숲속 깊은 곳으로 향한다");
+        JourneyModels.Event exact = new JourneyModels.Event("낡은 우물가의 소문", "", List.of(
+                new JourneyModels.Choice(choices.get(0), List.of()),
+                new JourneyModels.Choice(choices.get(1), List.of())));
+        // One syllable differs: OCR cannot separate this group from the exact one.
+        JourneyModels.Event close = new JourneyModels.Event("낡은 우물가의 소식", "", List.of(
+                new JourneyModels.Choice(choices.get(0), List.of()),
+                new JourneyModels.Choice("숲속 깊은 곳으로 향했다", List.of())));
+        // Weaker choices but a partly matching title: ranks between the two above.
+        JourneyModels.Event titled = new JourneyModels.Event("시계탑 아래에서 기다린다", "", List.of(
+                new JourneyModels.Choice(choices.get(0), List.of()),
+                new JourneyModels.Choice("숲속 넓은 길으로 향한다", List.of())));
+        List<String> title = List.of("시계탑 아래");
+
+        JourneyModels.Match pair = new JourneyMatcher(List.of(exact, close)).match(title, choices);
+        JourneyModels.Match three = new JourneyMatcher(List.of(exact, titled, close)).match(title, choices);
+
+        assertTrue(pair.ambiguous);
+        assertEquals("the unrelated title must rank between the close groups", 1,
+                three.candidates.get(1).eventIndex);
+        assertTrue(three.ambiguous);
+        assertFalse(three.isConfident());
+    }
+
     private JourneyModels.Event sampleEvent() {
         return new JourneyModels.Event("공개 예제 이벤트", "", List.of(
                 new JourneyModels.Choice("반짝이는 첫 번째 선택", List.of()),

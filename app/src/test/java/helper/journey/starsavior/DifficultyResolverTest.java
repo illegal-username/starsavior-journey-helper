@@ -37,6 +37,27 @@ public class DifficultyResolverTest {
     }
 
     @Test
+    public void multiWordDifficultyNamesStayWhole() {
+        // Generator joins names only with "/"; a localized name may contain a space.
+        JourneyModels.Event event = new JourneyModels.Event("Future event", "", List.of(
+                new JourneyModels.Choice("Try a new approach", List.of(
+                        new JourneyModels.Outcome("", "Very Hard", "Focus 419 required", "A", ""),
+                        new JourneyModels.Outcome("", "Hard", "Focus 263 required", "B", ""),
+                        new JourneyModels.Outcome("", "Easy/Normal", "Focus 58 required", "C", ""))),
+                new JourneyModels.Choice("Rest", List.of(
+                        new JourneyModels.Outcome("", "", "", "D", "")))));
+
+        assertEquals("Very Hard", DifficultyResolver.fromRecognizedLines(
+                event, List.of("Try a new approach", "419", "Rest")));
+        assertEquals("Hard", DifficultyResolver.fromRecognizedLines(
+                event, List.of("Try a new approach", "263", "Rest")));
+        List<JourneyModels.Outcome> veryHard = event.choices.get(0).outcomesForDifficulty("Very Hard");
+        assertEquals(1, veryHard.size());
+        assertEquals("A", veryHard.get(0).success);
+        assertEquals("C", event.choices.get(0).outcomesForDifficulty("Normal").get(0).success);
+    }
+
+    @Test
     public void associatesSameNumberWithTheCorrectChoice() {
         JourneyModels.Event event = event("교차 조건 이벤트",
                 choice("첫 번째 계획", "힘 111 필요", "힘 222 필요", "힘 500 필요"),

@@ -51,7 +51,7 @@
     <string name="update_busy_ellipsis">"Memperbarui DB…"</string>
     <string name="app_update_required">"Pembaruan aplikasi diperlukan"</string>
     <string name="get_new_db">"Dapatkan DB baru"</string>
-    <string name="update_error_detail">"Data baru tidak diterapkan. DB saat ini tetap disimpan. Periksa koneksi dan server DB, lalu coba lagi.\n\n"</string>
+    <string name="update_error_detail">"Data baru tidak diterapkan. DB saat ini tetap disimpan. Periksa koneksi dan server DB, lalu coba lagi."</string>
     <string name="overlay_allowed">"Tampilan di atas aplikasi lain diizinkan"</string>
     <string name="overlay_required">"Izin tampil di atas aplikasi lain diperlukan"</string>
     <string name="capture_running">"Pembacaan layar aktif"</string>
@@ -118,7 +118,7 @@
     <string name="checking_latest">"Memeriksa versi terbaru…"</string>
     <string name="reload_failed">"Tidak dapat memuat ulang DB"</string>
     <string name="keep_existing_data">"Melanjutkan dengan data yang ada."</string>
-    <string name="overlay_update_error_detail">"DB saat ini tetap disimpan. Periksa koneksi dan server DB, lalu coba lagi.\n\n"</string>
+    <string name="overlay_update_error_detail">"DB saat ini tetap disimpan. Periksa koneksi dan server DB, lalu coba lagi."</string>
     <string name="arcana_unknown">"Gambar Arcana belum terkonfirmasi · Menampilkan semua hasil"</string>
     <string name="arcana_detected">"Arcana terdeteksi: %1$s"</string>
     <string name="update_current">"DB sudah terbaru. (%1$,d entri · %2$,d pilihan)"</string>

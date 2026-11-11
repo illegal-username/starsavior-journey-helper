@@ -212,11 +212,22 @@ public final class JourneyModels {
 
         private boolean appliesToDifficulty(String recognizedDifficulty) {
             String expected = recognizedDifficulty.trim();
-            if (expected.isEmpty() || difficulty.isEmpty()) return false;
-            for (String candidate : difficulty.split("[/,·\\s]+")) {
-                if (candidate.equals(expected)) return true;
+            if (expected.isEmpty()) return false;
+            return difficultyNames(difficulty).contains(expected);
+        }
+
+        /**
+         * The generator joins localized difficulty names with "/" only. A name
+         * may itself contain spaces or punctuation in another language.
+         */
+        static List<String> difficultyNames(String difficulty) {
+            List<String> result = new ArrayList<>();
+            if (difficulty == null) return result;
+            for (String candidate : difficulty.split("/")) {
+                String trimmed = candidate.trim();
+                if (!trimmed.isEmpty()) result.add(trimmed);
             }
-            return false;
+            return result;
         }
 
         private boolean belongsToAnyArcana(Set<String> recognizedArcanaIds) {
